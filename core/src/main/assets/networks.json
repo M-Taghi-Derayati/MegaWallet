@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Ethereum",
+    "networkType": "ETHEREUM",
+    "chainId": 1,
+    "derivationPath": "m/44'/60'/0'/0/0"
+  },
+  {
+    "name": "Binance Smart Chain",
+    "networkType": "BSC",
+    "chainId": 56,
+    "derivationPath": "m/44'/60'/0'/0/0"
+  }
+]
