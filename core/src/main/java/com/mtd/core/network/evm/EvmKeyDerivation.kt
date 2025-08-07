@@ -6,16 +6,26 @@ import org.web3j.utils.Numeric
 object EvmKeyDerivation {
 
     // تبدیل mnemonic به seed و ساخت master key pair
-    fun deriveKeyPairFromMnemonic(mnemonic: String, derivationPath: String = "m/44'/60'/0'/0/0"): Bip32ECKeyPair {
-        val seed = MnemonicUtils.generateSeed(mnemonic, null)
-        val masterKeypair = Bip32ECKeyPair.generateKeyPair(seed)
+    fun deriveKeyPairFromMnemonic(mnemonic: String, derivationPath: String = "m/44'/60'/0'/0/0"): ECKeyPair {
+        // ۱. ابتدا seed را از mnemonic می‌سازیم
+        val seed = MnemonicUtils.generateSeed(mnemonic, null) // null for no passphrase
 
+        // ۲. یک master keypair از روی seed می‌سازیم
+        val masterKeyPair = Bip32ECKeyPair.generateKeyPair(seed)
+
+        // ۳. مسیر استخراج را پارس می‌کنیم
         val path = parseDerivationPath(derivationPath)
-        return Bip32ECKeyPair.deriveKeyPair(masterKeypair, path)
+
+        // ۴. کلید فرزند را با استفاده از مسیر استخراج می‌کنیم
+        val childKeyPair = Bip32ECKeyPair.deriveKeyPair(masterKeyPair, path)
+
+        // ۵. آبجکت ECKeyPair را برمی‌گردانیم (به جای Bip32ECKeyPair)
+        return childKeyPair
     }
 
+
     // گرفتن Credentials از Bip32ECKeyPair
-    fun getCredentialsFromKeyPair(keyPair: Bip32ECKeyPair): Credentials {
+    fun getCredentialsFromKeyPair(keyPair: ECKeyPair): Credentials {
         return Credentials.create(keyPair)
     }
 

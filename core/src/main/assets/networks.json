@@ -1,14 +1,91 @@
 [
   {
-    "name": "Ethereum",
-    "networkType": "ETHEREUM",
+    "id": "evm_1",
+    "name": "ETHEREUM",
+    "networkType": "EVM",
     "chainId": 1,
-    "derivationPath": "m/44'/60'/0'/0/0"
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrls": [
+      "https://eth.drpc.org",
+      "https://cloudflare-eth.com"
+    ],
+    "currencySymbol": "ETH",
+    "blockExplorerUrl": "https://etherscan.io",
+    "explorers": [
+      "https://eth.blockscout.com/"
+    ]
   },
   {
-    "name": "Binance Smart Chain",
-    "networkType": "BSC",
-    "chainId": 56,
-    "derivationPath": "m/44'/60'/0'/0/0"
+    "id": "evm_11155111",
+    "name": "SEPOLIA",
+    "networkType": "EVM",
+    "chainId": 11155111,
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrls": [
+      "https://sepolia.drpc.org"
+    ],
+    "explorers": [
+      "https://eth-sepolia.blockscout.com/"
+    ],
+    "currencySymbol": "SepoliaETH",
+    "blockExplorerUrl": "https://eth-sepolia.blockscout.com"
+  },
+  {
+    "id": "evm_97",
+    "name": "BSCTESTNET",
+    "networkType": "EVM",
+    "chainId": 97,
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrls": [
+      "https://bsc-testnet-rpc.publicnode.com"
+    ],
+    "explorers": [
+      "https://api-testnet.bscscan.com/"
+    ],
+    "currencySymbol": "tBNB",
+    "blockExplorerUrl": "https://testnet.bscscan.com"
+  }
+  ,
+  {
+    "id": "evm_137",
+    "name": "POLYGON",
+    "networkType": "EVM",
+    "chainId": 137,
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrls": [
+      "https://polygon-rpc.com"
+    ],
+    "explorers": [
+      "https://api.etherscan.io/api",
+      "https://eth.blockscout.com/api/v2"
+    ],
+    "currencySymbol": "MATIC",
+    "blockExplorerUrl": "https://polygonscan.com"
+  },
+  {
+    "id": "bitcoin_mainnet",
+    "name": "BITCOIN",
+    "networkType": "BITCOIN",
+    "chainId": 0,
+    "derivationPath": "m/44'/0'/0'/0/0",
+    "rpcUrls": [],
+    "explorers": [
+      "https://blockstream.info/api/"
+    ],
+    "currencySymbol": "BTC",
+    "blockExplorerUrl": "https://mempool.space"
+  },
+  {
+    "id": "bitcoin_testnet",
+    "name": "BITCOINTESTNET",
+    "networkType": "BITCOIN",
+    "chainId": 1,
+    "derivationPath": "m/44'/1'/0'/0/0",
+    "rpcUrls": [],
+    "explorers": [
+      "https://blockstream.info/testnet/api/"
+    ],
+    "currencySymbol": "BTC",
+    "blockExplorerUrl": "https://mempool.space/testnet"
   }
 ]

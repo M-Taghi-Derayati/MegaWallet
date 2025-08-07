@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.android.hilt)
+    alias(libs.plugins.android.ksp)
 }
 
 android {
@@ -8,8 +10,8 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        minSdk = 24
 
+        minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
@@ -24,19 +26,39 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
+    }
+    packaging {
+        resources {
+            pickFirsts.add("META-INF/INDEX.LIST")
+            pickFirsts.add("META-INF/LICENSE.md")
+            pickFirsts.add("META-INF/LICENSE-notice.md")
+            pickFirsts.add("META-INF/DEPENDENCIES")
+            pickFirsts.add("META-INF/FastDoubleParser-LICENSE")
+            pickFirsts.add("META-INF/FastDoubleParser-NOTICE")
+            pickFirsts.add("META-INF/io.netty.versions.properties")
+        }
+
     }
 }
 
 dependencies {
+    implementation(project(":core"))
+
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    implementation(libs.dagger.hilt)
+    ksp(libs.dagger.hilt.compiler)
+
+
+    implementation(libs.coroutines)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

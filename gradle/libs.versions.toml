@@ -1,5 +1,6 @@
 [versions]
 agp = "8.9.1"
+desugar_jdk_libs = "1.1.5"
 kotlin = "2.0.21"
 coreKtx = "1.16.0"
 junit = "4.13.2"
@@ -7,8 +8,9 @@ junitVersion = "1.2.1"
 espressoCore = "3.6.1"
 appcompat = "1.7.0"
 material = "1.12.0"
-
-webCore="4.12.3-android"
+firebase_plugin="4.4.3"
+firebase-auth="24.0.0"
+webCore="4.14.0"
 security-crypto="1.1.0"
 bitcoinj-core="0.17"
 
@@ -29,15 +31,24 @@ multidex = "2.0.1"
 constraintlayout = "2.2.1"
 navigation = "2.9.0"
 utilcodex   = "1.31.0"
+viewmodel="2.9.2"
+coroutines-test="1.8.1"
+mockk="1.13.5"
+hilt-testing="2.56.2"
+play-credentials = "1.5.0"
+play-identity = "1.1.1"
+google-auth = "1.37.1"
+google-auth2 = "21.4.0"
+google-api-client = "2.8.0"
+google-api-service = "v3-rev20220815-2.0.0"
+google-coroutines="1.10.2"
 
 
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-junit = { group = "junit", name = "junit", version.ref = "junit" }
-androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
-androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+desugar_jdk_libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar_jdk_libs" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 #///////////////// Core ////////////////////////#
 
@@ -62,6 +73,7 @@ gson-converter = { module = "com.squareup.retrofit2:converter-gson", version.ref
 
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 framgnet  ={module="androidx.fragment:fragment-ktx",version.ref="fragment"}
+viewModel  ={module="androidx.lifecycle:lifecycle-viewmodel-ktx",version.ref="viewmodel"}
 
 viewpager2 = { module = "androidx.viewpager2:viewpager2", version.ref = "viewpager2" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
@@ -75,11 +87,39 @@ ssp = { module = "com.intuit.ssp:ssp-android", version.ref = "sdp" }
 navFragment = { module="androidx.navigation:navigation-fragment-ktx",version.ref="navigation" }
 navUi  = { module="androidx.navigation:navigation-ui-ktx",version.ref="navigation" }
 utilcodex  = { module = "com.blankj:utilcodex", version.ref = "utilcodex" }
+#///////////////////DATA///////////////#
+
+google-credentials = { module = "androidx.credentials:credentials", version.ref = "play-credentials" }
+google-credentials-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "play-credentials" }
+google-identity = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "play-identity" }
+google-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "google-coroutines" }
+
+google-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "google-auth2" }
+google-auth2 = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "google-auth" }
+google-api-client = { module = "com.google.api-client:google-api-client-android", version.ref = "google-api-client" }
+google-api-services-drive = { module = "com.google.apis:google-api-services-drive", version.ref = "google-api-service" }
 
 
+
+
+
+#///////////////////TEST///////////////#
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+coroutines-test={ group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines-test" }
+mockk={ group = "io.mockk", name = "mockk", version.ref = "mockk" }
+hilt-test={ group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt-testing" }
+
+
+
+
+#///////////////////////////////////////#
 
 [bundles]
 coil = ["coil", "coil-svg"]
+google-auth=["google-credentials","google-coroutines","google-credentials-auth","google-api-client","google-auth","google-auth2","google-api-services-drive","google-identity"]
+web3=["web3-core","web3-crypto","web3-utils"]
 coroutines = ["coroutines", "coroutines-android"]
 okhttp = ["okhttp", "okhttp-logging"]
 sdp = ["sdp", "ssp"]

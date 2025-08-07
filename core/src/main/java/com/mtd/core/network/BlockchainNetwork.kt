@@ -1,12 +1,18 @@
 package com.mtd.core.network
 
+import com.mtd.core.model.NetworkName
 import com.mtd.core.model.NetworkType
 import com.mtd.core.model.WalletKey
 
 interface BlockchainNetwork {
+    val id: String
     val networkType: NetworkType
-    val name: String
-
+    val name: NetworkName
+    val chainId: Long?
+    val defaultRpcUrls: List<String>
+    val currencySymbol: String
+    val blockExplorerUrl: String?
+    val explorers: List<String>
     /**
      * تولید کلید از روی mnemonic (عبارت بازیابی)
      */
@@ -16,4 +22,6 @@ interface BlockchainNetwork {
      * تولید کلید از روی private key
      */
     fun deriveKeyFromPrivateKey(privateKey: String): WalletKey
+
+
 }

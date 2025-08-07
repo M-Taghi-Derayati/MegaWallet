@@ -29,9 +29,11 @@ object CryptoModule {
         }
     }
 
-    @Provides
-    @Singleton
-    fun provideKeyManager(registry: BlockchainRegistry): KeyManager {
-        return KeyManager(registry)
+
+
+        @Provides
+        @Singleton
+        fun provideKeyManager(registry: BlockchainRegistry): KeyManager {
+            return KeyManager(registry)
+        }
     }
-}

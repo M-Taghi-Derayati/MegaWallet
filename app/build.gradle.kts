@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.android.hilt)
+    alias(libs.plugins.android.ksp)
 }
 
 android {
@@ -9,11 +11,11 @@ android {
 
     defaultConfig {
         applicationId = "com.mtd.megawallet"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
+        multiDexEnabled=true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -27,23 +29,57 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
+    }
+    buildFeatures {
+        dataBinding= true
+        viewBinding=true
+        buildConfig= true
+    }
+    packaging {
+        resources {
+            pickFirsts.add("META-INF/INDEX.LIST")
+            pickFirsts.add("META-INF/LICENSE.md")
+            pickFirsts.add("META-INF/LICENSE-notice.md")
+            pickFirsts.add("META-INF/DEPENDENCIES")
+            pickFirsts.add("META-INF/FastDoubleParser-LICENSE")
+            pickFirsts.add("META-INF/FastDoubleParser-NOTICE")
+            pickFirsts.add("META-INF/io.netty.versions.properties")
+        }
     }
 }
 
 dependencies {
 
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
     implementation(project(":data"))
     implementation(project(":domain"))
     implementation(project(":common_ui"))
     implementation(project(":core"))
+
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
+
+    implementation(libs.dagger.hilt)
+    ksp(libs.dagger.hilt.compiler)
+
+
+    implementation(libs.multidex)
+    implementation(libs.activity)
+    implementation(libs.framgnet)
+    implementation(libs.viewpager2)
+    implementation(libs.constraintlayout)
+
+
+    implementation(libs.viewModel)
+
+
+    implementation(libs.bundles.coroutines)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

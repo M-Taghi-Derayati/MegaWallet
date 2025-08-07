@@ -16,12 +16,21 @@ class SecureStorage @Inject constructor(
     fun putEncrypted(keyName: String, value: String) {
         val encrypted = AESGCMCipher.encrypt(value, key)
         val base64 = Base64.encodeToString(encrypted, Base64.NO_WRAP)
-        prefs.edit() { putString(keyName, base64) }
+        prefs.edit { putString(keyName, base64) }
     }
 
     fun getDecrypted(keyName: String): String? {
         val base64 = prefs.getString(keyName, null) ?: return null
         val encrypted = Base64.decode(base64, Base64.NO_WRAP)
         return AESGCMCipher.decrypt(encrypted, key)
+    }
+
+
+    fun putCustomRpc(chainId: Long, rpcUrl: String) {
+        putEncrypted("custom_rpc_$chainId", rpcUrl)
+    }
+
+    fun getCustomRpc(chainId: Long): String? {
+        return getDecrypted("custom_rpc_$chainId")
     }
 }
