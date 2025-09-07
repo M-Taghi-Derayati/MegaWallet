@@ -5,10 +5,11 @@ import com.mtd.core.model.NetworkConfig
 import com.mtd.core.model.WalletKey
 import com.mtd.core.network.BlockchainNetwork
 import org.bitcoinj.base.LegacyAddress
-import org.bitcoinj.base.ScriptType
+import org.bitcoinj.base.SegwitAddress
 import org.bitcoinj.core.NetworkParameters
 import org.bitcoinj.crypto.ECKey
 import org.bitcoinj.crypto.HDPath
+import org.bitcoinj.script.ScriptBuilder
 import org.bitcoinj.wallet.DeterministicKeyChain
 import org.bitcoinj.wallet.DeterministicSeed
 
@@ -18,8 +19,12 @@ abstract class AbstractUtxoNetwork(
 ) : BlockchainNetwork {
 
     override val id = config.id
-    override val chainId: Long? = null // شبکه‌های UTXO معمولاً chainId ندارند
+    override val chainId: Long? = config.chainId // شبکه‌های UTXO معمولاً chainId ندارند
     override val defaultRpcUrls = config.rpcUrls
+    override val decimals=config.decimals
+    override val iconUrl=config.iconUrl
+    override val webSocketUrl=config.webSocketUrl
+    override val phoenixContractAddress=config.phoenixContractAddress
     override val currencySymbol = config.currencySymbol
     override val blockExplorerUrl = config.blockExplorerUrl
     override val explorers = config.explorers
@@ -32,14 +37,33 @@ abstract class AbstractUtxoNetwork(
         val keyChain = DeterministicKeyChain.builder().seed(seed).build()
 
         // ۳. پارس کردن مسیر استخراج از کانفیگ
-        val keyPath = HDPath.parsePath(config.derivationPath)
+        val compatiblePath = config.derivationPath.replace("'", "H")
+        val keyPath = HDPath.parsePath(compatiblePath)
 
         // ۴. استخراج کلید نهایی
         val deterministicKey = keyChain.getKeyByPath(keyPath, true)
 
+        // ۵. تولید آدرس بر اساس نوع مسیر استخراج (این بخش هوشمند شده)
+        val address = when {
+            // BIP84: Native SegWit (P2WPKH) -> آدرس‌های bc1... یا tb1...
+            config.derivationPath.startsWith("m/84'") -> {
+                SegwitAddress.fromKey(params, deterministicKey).toString()
+            }
+            // BIP49: Nested SegWit (P2SH-P2WPKH) -> آدرس‌های 3... یا 2...
+            config.derivationPath.startsWith("m/49'") -> {
+                // این نوع آدرس در bitcoinj کمی متفاوت ساخته میشه
+                val script = ScriptBuilder.createP2WPKHOutputScript(deterministicKey)
+                val p2shScript = ScriptBuilder.createP2SHOutputScript(script)
+                LegacyAddress.fromScriptHash(params, p2shScript.program).toString()
+            }
+            // BIP44: Legacy (P2PKH) -> آدرس‌های 1... یا m.../n...
+            else -> {
+                LegacyAddress.fromKey(params, deterministicKey).toString()
+            }
+        }
+
         val privateKeyHex = deterministicKey.privKeyBytes.toHexString()
         val publicKeyHex = deterministicKey.pubKey.toHexString()
-        val address = LegacyAddress.fromKey(params, deterministicKey).toString()
 
         return WalletKey(
             networkName = name,
@@ -53,8 +77,27 @@ abstract class AbstractUtxoNetwork(
     }
 
     override fun deriveKeyFromPrivateKey(privateKey: String): WalletKey {
+        // ۱. ساخت کلید ECKey از هگز کلید خصوصی
         val key = ECKey.fromPrivate(privateKey.hexToBytes())
-        val address = LegacyAddress.fromKey(params, key).toString()
+
+        // --- بخش اصلاح شده ---
+        // ۲. تولید آدرس بر اساس نوع مسیر استخراج تعریف شده در کانفیگ شبکه
+        val address = when {
+            // اگر کانفیگ شبکه BIP84 (Native SegWit) را مشخص کرده باشد
+            config.derivationPath.startsWith("m/84'") -> {
+                SegwitAddress.fromKey(params, key).toString()
+            }
+            // اگر کانفیگ شبکه BIP49 (Nested SegWit) را مشخص کرده باشد
+            config.derivationPath.startsWith("m/49'") -> {
+                val script = ScriptBuilder.createP2WPKHOutputScript(key)
+                val p2shScript = ScriptBuilder.createP2SHOutputScript(script)
+                LegacyAddress.fromScriptHash(params, p2shScript.program).toString()
+            }
+            // در غیر این صورت (یا اگر کانفیگ BIP44 باشد)، آدرس Legacy بساز
+            else -> {
+                LegacyAddress.fromKey(params, key).toString()
+            }
+        }
         val publicKeyHex = key.pubKey.toHexString()
 
         return WalletKey(
@@ -67,6 +110,8 @@ abstract class AbstractUtxoNetwork(
             publicKeyHex = publicKeyHex
         )
     }
+
+
 }
 
 // توابع کمکی برای تبدیل هگز

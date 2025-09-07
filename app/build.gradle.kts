@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.android.hilt)
     alias(libs.plugins.android.ksp)
+    alias (libs.plugins.android.navsafeArgs)
 }
 
 android {
@@ -67,13 +68,15 @@ dependencies {
     implementation(libs.dagger.hilt)
     ksp(libs.dagger.hilt.compiler)
 
-
+    implementation(libs.utilcodex)
+    implementation(libs.recyclerview)
+    implementation(libs.flexbox)
     implementation(libs.multidex)
     implementation(libs.activity)
     implementation(libs.framgnet)
     implementation(libs.viewpager2)
     implementation(libs.constraintlayout)
-
+    implementation(libs.bundles.navigation)
 
     implementation(libs.viewModel)
 

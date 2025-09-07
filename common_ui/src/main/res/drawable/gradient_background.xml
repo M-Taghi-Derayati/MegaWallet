@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Base diagonal gradient -->
+    <item>
+        <shape android:shape="rectangle">
+           <!-- <gradient
+                android:type="linear"
+                android:angle="45"
+                android:startColor="@color/kraken_bg_start"
+                android:centerColor="#18133B"
+                android:endColor="@color/kraken_bg_end"
+                android:useLevel="false"/>-->
+            <solid android:color="#18133B"/>
+        </shape>
+    </item>
+
+    <!-- Cool blue-violet glow (top-right) -->
+    <item>
+        <shape android:shape="rectangle">
+            <size android:width="950dp" android:height="950dp"/>
+            <gradient
+                android:type="radial"
+                android:centerX="0.05"
+                android:centerY="0.02"
+                android:gradientRadius="300dp"
+                android:startColor="@color/kraken_bg_start"
+                android:endColor="#000216F0"/>
+        </shape>
+    </item>
+
+    <!-- Very subtle warm glow (bottom-left) -->
+    <item>
+        <shape android:shape="rectangle">
+            <size android:width="1100dp" android:height="1100dp"/>
+            <gradient
+                android:type="radial"
+                android:centerX="0.52"
+                android:centerY="0.95"
+                android:gradientRadius="300dp"
+                android:startColor="@color/kraken_bg_start"
+                android:endColor="#007B3EF2"/>
+        </shape>
+    </item>
+
+    <!-- Light vignette for depth -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:centerX="0.5"
+                android:centerY="0.5"
+                android:gradientRadius="1000dp"
+                android:startColor="#00000000"
+                android:endColor="@color/kraken_vignette_edge"/>
+        </shape>
+    </item>
+
+</layer-list>

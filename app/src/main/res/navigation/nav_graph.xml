@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/splashFragment">
+
+    <fragment
+        android:id="@+id/splashFragment"
+        android:name="com.mtd.megawallet.ui.welcome.splash.SplashFragment"
+        android:label="SplashFragment"
+        tools:layout="@layout/fragment_splash">
+        <action
+            android:id="@+id/action_splash_to_home"
+            app:destination="@id/homeFragment"
+            app:popUpTo="@id/splashFragment"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_splash_to_onboarding"
+            app:destination="@id/onboarding_graph"
+            app:popUpTo="@id/splashFragment"
+            app:popUpToInclusive="true" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/homeFragment"
+        android:name="com.mtd.megawallet.ui.welcome.home.HomeFragment"
+        android:label="HomeFragment"
+        tools:layout="@layout/fragment_home" >
+        <action
+            android:id="@+id/action_homeFragment_to_receiveBottomSheet"
+            app:destination="@id/receiveBottomSheetFragment" />
+        <action
+            android:id="@+id/action_home_to_send_graph"
+            app:destination="@id/send_graph" />
+        <action
+            android:id="@+id/action_homeFragment_to_swapFragment"
+            app:destination="@id/swapFragment" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/swapFragment"
+        android:name="com.mtd.megawallet.ui.swap.SwapFragment"
+        android:label="SwapFragment"
+        tools:layout="@layout/fragment_swap"/>
+
+    <dialog
+        android:id="@+id/receiveBottomSheetFragment"
+        android:name="com.mtd.megawallet.ui.transaction.deposit.ReceiveBottomSheetFragment"
+        android:label="ReceiveBottomSheetFragment"
+        tools:layout="@layout/fragment_receive" >
+        <action
+            android:id="@+id/action_receiveBottomSheetFragment_to_qrCodeBottomSheetFragment"
+            app:destination="@id/qrCodeBottomSheetFragment" />
+    </dialog>
+
+    <dialog
+        android:id="@+id/qrCodeBottomSheetFragment"
+        android:name="com.mtd.megawallet.ui.transaction.deposit.QrCodeBottomSheetFragment"
+        android:label="QrCodeBottomSheetFragment"
+        tools:layout="@layout/bottom_sheet_qr_code">
+        <argument
+            android:name="address"
+            app:argType="string" />
+        <argument
+            android:name="networkName"
+            app:argType="string" />
+    </dialog>
+
+    <!-- === گراف ناوبری جریان ارسال (Send Flow) === -->
+    <navigation
+        android:id="@+id/send_graph"
+        app:startDestination="@id/enterAddressFragment">
+
+        <dialog
+            android:id="@+id/enterAddressFragment"
+            android:name="com.mtd.megawallet.ui.transaction.withdraw.EnterAddressFragment"
+            android:label="EnterAddressFragment"
+            tools:layout="@layout/fragment_enter_address">
+
+        </dialog>
+
+
+
+    </navigation>
+
+    <navigation
+        android:id="@+id/onboarding_graph"
+        app:startDestination="@id/welcomeFragment">
+
+        <action
+            android:id="@+id/action_global_homeFragment"
+            app:destination="@id/homeFragment" />
+
+        <fragment
+            android:id="@+id/welcomeFragment"
+            android:name="com.mtd.megawallet.ui.welcome.WelcomeFragment"
+            android:label="WelcomeFragment"
+            tools:layout="@layout/fragment_welcome">
+            <action
+                android:id="@+id/action_welcome_to_import_options"
+                app:destination="@id/importOptionsFragment" />
+        </fragment>
+
+        <fragment
+            android:id="@+id/importOptionsFragment"
+            android:name="com.mtd.megawallet.ui.importoption.ImportOptionsFragment"
+            android:label="ImportOptionsFragment"
+            tools:layout="@layout/fragment_import_options">
+            <action
+                android:id="@+id/action_import_options_to_import_seed"
+                app:destination="@id/importSeedFragment" />
+            <action
+                android:id="@+id/action_import_options_to_import_backup"
+                app:destination="@id/importBackupFragment" />
+        </fragment>
+
+        <fragment
+            android:id="@+id/importSeedFragment"
+            android:name="com.mtd.megawallet.ui.importoption.ImportSeedPhraseFragment"
+            android:label="ImportSeedFragment"
+            tools:layout="@layout/fragment_import_seed_phrase" />
+
+        <action
+            android:id="@+id/action_import_seed_to_select_wallets"
+            app:destination="@id/selectWalletsFragment"
+            app:popUpTo="@id/importOptionsFragment"
+            app:popUpToInclusive="false" />
+        <fragment
+            android:id="@+id/importBackupFragment"
+            android:name="com.mtd.megawallet.ui.importoption.ImportBackupFragment"
+            android:label="ImportBackupFragment"
+            tools:layout="@layout/fragment_import_backup" />
+
+        <fragment
+            android:id="@+id/selectWalletsFragment"
+            android:name="com.mtd.megawallet.ui.importoption.SelectWalletsFragment"
+            android:label="SelectWalletsFragment"
+            tools:layout="@layout/fragment_select_wallets">
+            <!-- تعریف آرگومان برای دریافت عبارت بازیابی -->
+            <argument
+                android:name="mnemonic"
+                app:argType="string" />
+            <argument
+                android:name="privateKey"
+                app:argType="string" />
+        </fragment>
+
+
+    </navigation>
+
+
+
+</navigation>

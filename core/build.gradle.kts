@@ -70,7 +70,13 @@ dependencies {
 
     implementation(libs.security.crypto)
     api(libs.bitcoinj)
+    api(libs.bitcoin.kmp)
+    api(libs.bitcoin.jni)
     api(libs.bundles.gson)
+    api(libs.socket)
+    {
+        exclude(group = "org.json", module = "json")
+    }
     implementation(libs.material)
 
     implementation(libs.dagger.hilt)
@@ -78,6 +84,10 @@ dependencies {
     ksp(libs.dagger.hilt.compiler)
 
     testImplementation(libs.junit)
+    androidTestImplementation(libs.bundles.web3) {
+        exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+        exclude(group = "org.bouncycastle", module = "bcprov-jdk18on")
+    }
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

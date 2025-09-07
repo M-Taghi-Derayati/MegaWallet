@@ -16,5 +16,5 @@ enum class NetworkName {
     BSCTESTNET,
     BITCOINTESTNET,
     BITCOIN,
-    POLYGON
+    POLTESTNET
 }

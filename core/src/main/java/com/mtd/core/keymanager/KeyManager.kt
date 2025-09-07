@@ -35,6 +35,8 @@ class KeyManager @Inject constructor (
         val result = mutableListOf<WalletKey>()
         val networks = registry.getAllNetworks()
 
+
+
         networks.forEach { network ->
             val walletKey = network.deriveKeyFromPrivateKey(privateKey)
             result.add(walletKey)

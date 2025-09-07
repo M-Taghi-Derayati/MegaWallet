@@ -1,6 +1,7 @@
 package com.mtd.data.service
 
 import com.google.gson.annotations.SerializedName
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -12,26 +13,95 @@ import java.math.BigInteger
 // --- اینترفیس Retrofit ---
 interface BlockcypherApiService {
 
-    @GET("addrs/{address}?unspentOnly=true&includeScript=true")
+    // 📌 گرفتن UTXO ها (لیست خروجی‌های خرج‌نشده) برای یک آدرس
+    @GET("address/{address}/utxo")
     suspend fun getUtxos(
-        @Path("address") address: String,
-    ): Response<AddressFullDto>
+        @Path("address") address: String
+    ): Response<List<MempoolUtxoDto>>
 
-    @GET("addrs/{address}/full")
-    suspend fun getTransactionHistory(
-        @Path("address") address: String,
-    ): Response<AddressFullDto>
-
-
-    // ارسال یک تراکنش امضا شده
-    @POST("{chain}/txs/push")
+    // 📌 ارسال تراکنش به شبکه
+    @POST("tx")
     suspend fun broadcastTransaction(
-        @Body tx: PushTxDto
-    ): Response<PushTxResponseDto>
+        @Body txHex: RequestBody
+    ): Response<String>
+
+    // 📌 گرفتن جزئیات کامل یک آدرس (برای مشاهده تراکنش‌ها و موجودی)
+    @GET("address/{address}")
+    suspend fun getAddressDetails(
+        @Path("address") address: String
+    ): Response<MempoolAddressDto>
+
+    // 📌 گرفتن تاریخچه تراکنش‌های تأیید شده برای یک آدرس
+    @GET("address/{address}/txs")
+    suspend fun getConfirmedTransactions(
+        @Path("address") address: String
+    ): Response<List<MempoolTxDto>>
+
+    // 📌 گرفتن نرخ‌های کارمزد پیشنهادی شبکه
+    @GET("v1/fees/recommended")
+    suspend fun getRecommendedFees(): Response<MempoolFeeRecommendationDto>
+
 
 }
 
+data class MempoolUtxoDto(
+    val txid: String,
+    val vout: Int,
+    val value: Long,
+    val status: MempoolStatusDto
+)
+
+data class MempoolStatusDto(
+    val confirmed: Boolean,
+    val block_height: Long?,
+    val block_hash: String?,
+    val block_time: Long?
+)
+
+data class MempoolAddressDto(
+    val address: String,
+    val chain_stats: MempoolAddressStatsDto,
+    val mempool_stats: MempoolAddressStatsDto
+)
+data class MempoolAddressStatsDto(
+    val funded_txo_count: Int,
+    val funded_txo_sum: Long,
+    val spent_txo_count: Int,
+    val spent_txo_sum: Long,
+    val tx_count: Int
+)
+data class MempoolTxDto(
+    val txid: String,
+    val fee: Long?,
+    val status: MempoolStatusDto,
+    val vin: List<MempoolVinDto>,
+    val vout: List<MempoolVoutDto>
+)
+data class MempoolVinDto(
+    val prevout: MempoolVoutDto?
+)
+data class MempoolVoutDto(
+    val scriptpubkey_address: String?,
+    val value: Long
+)
+data class MempoolFeeRecommendationDto(
+    val fastestFee: Int,
+    val halfHourFee: Int,
+    val hourFee: Int,
+    val economyFee: Int,
+    val minimumFee: Int,
+)
+
+/*
+
 // --- مدل‌های داده (DTOs) ---
+// یک DTO جدید برای پاسخ getChainInfo اضافه می‌کنیم
+data class ChainInfoDto(
+    @SerializedName("name") val name: String,
+    @SerializedName("high_fee_per_kb") val highFeePerKb: Long,
+    @SerializedName("medium_fee_per_kb") val mediumFeePerKb: Long,
+    @SerializedName("low_fee_per_kb") val lowFeePerKb: Long
+)
 
 data class AddressFullDto(
     @SerializedName("address") val address: String,
@@ -75,4 +145,4 @@ data class PushTxDto(
 
 data class PushTxResponseDto(
     @SerializedName("tx") val tx: TxDto
-)
+)*/

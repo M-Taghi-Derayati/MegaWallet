@@ -6,17 +6,19 @@ import com.mtd.core.di.CryptoModule
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.data.GoogleAuthManager
 import com.mtd.data.datasource.GoogleDriveDataSource
+import com.mtd.data.datasource.ICloudDataSource
 import com.mtd.data.datasource.RemoteDataSource
 import com.mtd.data.repository.BackupRepositoryImpl
 import com.mtd.data.repository.IBackupRepository
-import com.mtd.data.datasource.ICloudDataSource
 import com.mtd.data.repository.IWalletRepository
 import com.mtd.data.repository.MarketDataRepositoryImpl
+import com.mtd.data.repository.SwapRepositoryImpl
 import com.mtd.data.repository.UserPreferencesRepositoryImpl
 import com.mtd.data.repository.WalletRepositoryImpl
 import com.mtd.domain.model.IUserPreferencesRepository
 import com.mtd.domain.repository.IAuthManager
 import com.mtd.domain.repository.IMarketDataRepository
+import com.mtd.domain.repository.ISwapRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -41,6 +43,11 @@ abstract class DataModule {
     abstract fun bindUserPreferencesRepository(
         userPreferencesRepositoryImpl: UserPreferencesRepositoryImpl
     ): IUserPreferencesRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSwapRepository(impl: SwapRepositoryImpl): ISwapRepository
+
 
     @Binds
     abstract fun bindBackupRepository(

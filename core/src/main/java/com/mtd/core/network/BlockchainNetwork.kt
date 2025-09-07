@@ -9,8 +9,12 @@ interface BlockchainNetwork {
     val networkType: NetworkType
     val name: NetworkName
     val chainId: Long?
+    val decimals: Int
+    val iconUrl:String
+    val webSocketUrl: String?
     val defaultRpcUrls: List<String>
     val currencySymbol: String
+    val phoenixContractAddress: String?
     val blockExplorerUrl: String?
     val explorers: List<String>
     /**

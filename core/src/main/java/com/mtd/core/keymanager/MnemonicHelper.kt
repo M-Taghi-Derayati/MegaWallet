@@ -17,7 +17,6 @@ object MnemonicHelper {
     fun isValidMnemonic(mnemonic: String): Boolean {
         return try {
             MnemonicUtils.validateMnemonic(mnemonic)
-            true
         } catch (e: Exception) {
             false
         }

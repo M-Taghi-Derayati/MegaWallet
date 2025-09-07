@@ -8,8 +8,11 @@ import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.network.bitcoin.BitcoinNetwork
 import com.mtd.core.network.evm.GenericEvmNetwork
 import com.mtd.core.utils.loadNetworkConfigs
+import fr.acinq.bitcoin.Base58
+import org.bitcoinj.base.exceptions.AddressFormatException
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
+import org.web3j.crypto.WalletUtils
 import javax.inject.Inject
 
 
@@ -39,6 +42,10 @@ class BlockchainRegistry @Inject constructor() {
         return networks.values.flatMap { it.values }.find { it.name==name }
     }
 
+    fun getNetworkById(id: String): BlockchainNetwork? {
+        return networks.values.flatMap { it.values }.find { it.id==id }
+    }
+
 
     fun getNetworkByChainId(chainId: Long): BlockchainNetwork? {
         return networksByChainId[chainId]
@@ -51,6 +58,39 @@ class BlockchainRegistry @Inject constructor() {
 
     fun getNetworkByType(type: NetworkType): BlockchainNetwork? {
         return networksByType[type]
+    }
+
+
+
+    fun getNetworkTypeForAddress(address: String): NetworkType? {
+        // ۱. بررسی آدرس‌های سازگار با EVM (مثل اتریوم)
+        if (WalletUtils.isValidAddress(address)) {
+            return NetworkType.EVM
+        }
+
+        // ۲. بررسی آدرس‌های بیت‌کوین (Base58 Legacy/SegWit-in-P2SH و Bech32 Native SegWit)
+        try {
+            // کتابخانه bitcoinj خودش هر دو فرمت mainnet و testnet را مدیریت می‌کند.
+            // اگر آدرس قابل پارس کردن باشد، یعنی یک آدرس بیت‌کوین معتبر است.
+            Base58.decode(address) // این یک چک سریع برای فرمت Base58 است.
+            // یک اعتبارسنجی کامل‌تر می‌تواند شامل پارس کردن با NetworkParameters باشد.
+            return NetworkType.BITCOIN
+        } catch (e: AddressFormatException) {
+            // این آدرس Base58 بیت‌کوین نیست.
+        } catch (e: Exception) {
+            // خطاهای دیگر
+        }
+
+        // Bech32 check for Native SegWit (bc1..., tb1...)
+        if (address.startsWith("bc1", true) || address.startsWith("tb1", true)) {
+            // TODO: افزودن یک کتابخانه اعتبارسنجی Bech32 برای دقت بیشتر
+            return NetworkType.BITCOIN
+        }
+
+        // TODO: در آینده، بلاک‌های بررسی برای شبکه‌های دیگر (Solana, Tron, ...) اینجا اضافه می‌شوند.
+
+        // ۳. اگر هیچکدام از موارد بالا نبود، آدرس ناشناخته است.
+        return null
     }
 
 

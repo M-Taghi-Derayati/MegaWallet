@@ -7,22 +7,22 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
-import  com.mtd.data.repository.IWalletRepository
+import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.data.datasource.ChainDataSourceFactory
-import com.mtd.data.di.NetworkModule.Companion.httpLoggingInterceptorProvider
-import com.mtd.data.di.NetworkModule.Companion.provideGson
-import com.mtd.data.di.NetworkModule.Companion.provideOkHttpClient
-import com.mtd.data.di.NetworkModule.Companion.provideRetrofitBuilder
+import com.mtd.data.di.NetworkConnectionInterceptor
+import com.mtd.data.di.NetworkModule.httpLoggingInterceptorProvider
+import com.mtd.data.di.NetworkModule.provideGson
+import com.mtd.data.di.NetworkModule.provideOkHttpClient
+import com.mtd.data.di.NetworkModule.provideRetrofitBuilder
+import com.mtd.data.repository.IWalletRepository
 import com.mtd.data.repository.WalletRepositoryImpl
-import com.mtd.domain.model.IUserPreferencesRepository
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.wallet.ActiveWalletManager
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import okhttp3.OkHttpClient
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,11 +51,12 @@ class AssetFetchingIntegrationTest {
         val walletKeys = keyManager.generateWalletKeysFromMnemonic(TEST_MNEMONIC)
         keyManager.loadKeysIntoCache(walletKeys)
 
-        val okHttpClient = provideOkHttpClient(httpLoggingInterceptorProvider())
+        val okHttpClient = provideOkHttpClient(httpLoggingInterceptorProvider(),NetworkConnectionInterceptor(context))
         val gson = provideGson()
         val retrofitBuilder = provideRetrofitBuilder(okHttpClient, gson)
-        val activeWalletManager= ActiveWalletManager()
-        val dataSourceFactory = ChainDataSourceFactory(blockchainRegistry, retrofitBuilder,okHttpClient)
+        val activeWalletManager= ActiveWalletManager(keyManager)
+        val assetRegistry=AssetRegistry()
+        val dataSourceFactory = ChainDataSourceFactory(blockchainRegistry, retrofitBuilder,assetRegistry,okHttpClient)
 
         walletRepository = WalletRepositoryImpl(
             keyManager,

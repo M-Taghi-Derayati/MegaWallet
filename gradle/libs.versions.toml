@@ -13,14 +13,16 @@ firebase-auth="24.0.0"
 webCore="4.14.0"
 security-crypto="1.1.0"
 bitcoinj-core="0.17"
-
-
+recyclerview="1.4.0"
+qrgen="2.6.0"
+socket    = "2.1.0"
 dagger-hilt = "2.56.2"
 android-ksp = "2.0.21-1.0.26"
 okhttp = "4.10.0"
 gson = "2.10.1"
 retrofit = "2.9.0"
 fragment = "1.8.6"
+rxbinding = "4.0.0"
 activity = "1.10.1"
 viewpager2 = "1.1.0"
 timber = "5.0.1"
@@ -30,8 +32,14 @@ coil = "2.4.0"
 multidex = "2.0.1"
 constraintlayout = "2.2.1"
 navigation = "2.9.0"
+navigation-hilt = "1.2.0"
 utilcodex   = "1.31.0"
+bitcoin-kmp="0.25.1"
+bitcoin-jni="0.18.0"
+slidetoact="0.11.0"
+
 viewmodel="2.9.2"
+flexbox="3.0.0"
 coroutines-test="1.8.1"
 mockk="1.13.5"
 hilt-testing="2.56.2"
@@ -57,7 +65,10 @@ web3-core={group="org.web3j",name="core",version.ref="webCore"}
 web3-crypto={group="org.web3j",name="crypto",version.ref="webCore"}
 web3-utils={group="org.web3j",name="utils",version.ref="webCore"}
 bitcoinj={group="org.bitcoinj",name="bitcoinj-core",version.ref="bitcoinj-core"}
+bitcoin-kmp={group="fr.acinq.bitcoin",name="bitcoin-kmp",version.ref="bitcoin-kmp"}
+bitcoin-jni={group="fr.acinq.secp256k1",name="secp256k1-kmp-jni-android",version.ref="bitcoin-jni"}
 security-crypto={group="androidx.security",name="security-crypto",version.ref="security-crypto"}
+
 
 #//////////////////////////////////////////////////#
 dagger-hilt = { group = "com.google.dagger", name = "hilt-android", version.ref = "dagger-hilt" }
@@ -69,13 +80,16 @@ timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 
 multidex = { module = "androidx.multidex:multidex", version.ref = "multidex" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
-gson-converter = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
-
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
+gson-converter = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
+scalars-converter = { module = "com.squareup.retrofit2:converter-scalars", version.ref = "retrofit" }
 framgnet  ={module="androidx.fragment:fragment-ktx",version.ref="fragment"}
 viewModel  ={module="androidx.lifecycle:lifecycle-viewmodel-ktx",version.ref="viewmodel"}
+recyclerview  ={module="androidx.recyclerview:recyclerview",version.ref="recyclerview"}
+qrgen  ={module="com.github.kenglxn.qrgen:android",version.ref="qrgen"}
 
 viewpager2 = { module = "androidx.viewpager2:viewpager2", version.ref = "viewpager2" }
+flexbox = { module = "com.google.android.flexbox:flexbox", version.ref = "flexbox" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 coil = { module = "io.coil-kt:coil", version.ref = "coil" }
@@ -86,7 +100,12 @@ sdp = { module = "com.intuit.sdp:sdp-android", version.ref = "sdp" }
 ssp = { module = "com.intuit.ssp:ssp-android", version.ref = "sdp" }
 navFragment = { module="androidx.navigation:navigation-fragment-ktx",version.ref="navigation" }
 navUi  = { module="androidx.navigation:navigation-ui-ktx",version.ref="navigation" }
+navUi-hitl  = { module="androidx.hilt:hilt-navigation-fragment",version.ref="navigation-hilt" }
 utilcodex  = { module = "com.blankj:utilcodex", version.ref = "utilcodex" }
+rxbinding  = { module = "com.jakewharton.rxbinding4:rxbinding", version.ref = "rxbinding" }
+slidetoact  = { module = "com.ncorti:slidetoact", version.ref = "slidetoact" }
+socket     = { module = "io.socket:socket.io-client",version.ref="socket"}
+
 #///////////////////DATA///////////////#
 
 google-credentials = { module = "androidx.credentials:credentials", version.ref = "play-credentials" }
@@ -123,8 +142,8 @@ web3=["web3-core","web3-crypto","web3-utils"]
 coroutines = ["coroutines", "coroutines-android"]
 okhttp = ["okhttp", "okhttp-logging"]
 sdp = ["sdp", "ssp"]
-gson = ["gson", "gson-converter"]
-navigation=["navFragment","navUi"]
+gson = ["gson", "gson-converter","scalars-converter"]
+navigation=["navFragment","navUi","navUi-hitl"]
 
 
 [plugins]

@@ -1,6 +1,7 @@
 // در :domain/wallet/ActiveWalletManager.kt
 package com.mtd.domain.wallet
 
+import com.mtd.core.keymanager.KeyManager
 import com.mtd.domain.model.Wallet
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -8,24 +9,43 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ActiveWalletManager @Inject constructor() {
+class ActiveWalletManager @Inject constructor(
+    private val keyManager: KeyManager
+) {
 
     private val _activeWallet = MutableStateFlow<Wallet?>(null)
     val activeWallet = _activeWallet.asStateFlow()
 
+
     /**
-     * کیف پول فعال را در حافظه تنظیم می‌کند (معمولاً پس از ورود یا باز کردن قفل).
+     * کیف پول را "باز" می‌کند.
+     * Mnemonic یا Private Key را دریافت کرده، کلیدها را در کش KeyManager بارگذاری می‌کند
+     * و آبجکت Wallet را برای دسترسی عمومی تنظیم می‌کند.
+     * این متد باید بعد از احراز هویت کاربر (مثلاً وارد کردن رمز عبور) فراخوانی شود.
      */
-    fun setActiveWallet(wallet: Wallet) {
+    fun unlockWallet(wallet: Wallet) {
+        // ۱. کلیدها را در کش KeyManager بارگذاری کن
+        keyManager.loadKeysIntoCache(wallet.keys)
+
+        // ۲. آبجکت Wallet را در StateFlow قرار بده
         _activeWallet.value = wallet
     }
 
     /**
-     * اطلاعات کیف پول فعال را پاک می‌کند (هنگام قفل شدن یا خروج).
+     * کیف پول را "قفل" می‌کند.
+     * کش کلیدهای خصوصی را پاک کرده و اطلاعات عمومی کیف پول را هم پاک می‌کند.
+     * این متد باید هنگام خروج یا قفل شدن اپ فراخوانی شود.
      */
-    fun clearActiveWallet() {
+    fun lockWallet() {
+        // ۱. کش KeyManager را پاک کن
+        keyManager.clearCache()
+
+        // ۲. StateFlow را پاک کن
         _activeWallet.value = null
     }
+
+
+
 
     /**
      * آدرس کاربر را برای یک شبکه خاص از کیف پول فعال برمی‌گرداند.

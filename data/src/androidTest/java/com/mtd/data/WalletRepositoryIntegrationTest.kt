@@ -7,21 +7,21 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.model.NetworkName
+import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.data.datasource.ChainDataSourceFactory
-import com.mtd.data.di.NetworkModule.Companion.provideGson
-import com.mtd.data.di.NetworkModule.Companion.provideOkHttpClient
-import com.mtd.data.di.NetworkModule.Companion.provideRetrofitBuilder
+import com.mtd.data.di.NetworkModule.provideGson
+import com.mtd.data.di.NetworkModule.provideRetrofitBuilder
 import com.mtd.data.repository.IWalletRepository
 import com.mtd.data.repository.WalletRepositoryImpl
-import com.mtd.domain.model.IUserPreferencesRepository
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.Wallet
 import com.mtd.domain.wallet.ActiveWalletManager
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,8 +53,11 @@ class WalletRepositoryIntegrationTest {
 
         val gson = provideGson()
         val retrofitBuilder = provideRetrofitBuilder(okHttpClient, gson)
-        val chainDataSourceFactory= ChainDataSourceFactory(blockchainRegistry,retrofitBuilder,okHttpClient)
-        val activeWalletManager= ActiveWalletManager()
+
+        val assetRegistry=AssetRegistry()
+        val chainDataSourceFactory = ChainDataSourceFactory(blockchainRegistry, retrofitBuilder,assetRegistry,okHttpClient)
+
+        val activeWalletManager= ActiveWalletManager(keyManager)
         keyManager = KeyManager(blockchainRegistry)
 
         // نمونه واقعی از Repository را با وابستگی‌های واقعی می‌سازیم

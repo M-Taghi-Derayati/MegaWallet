@@ -3,6 +3,7 @@ package com.mtd.core.di
 import android.content.Context
 import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
+import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import dagger.Module
 import dagger.Provides
@@ -30,10 +31,17 @@ object CryptoModule {
     }
 
 
+    @Provides
+    @Singleton
+    fun provideKeyManager(registry: BlockchainRegistry): KeyManager {
+        return KeyManager(registry)
+    }
 
-        @Provides
-        @Singleton
-        fun provideKeyManager(registry: BlockchainRegistry): KeyManager {
-            return KeyManager(registry)
+    @Provides
+    @Singleton
+    fun provideAssetRegistry(@ApplicationContext context: Context): AssetRegistry {
+        return AssetRegistry().apply {
+            loadAssetsFromAssets(context)
         }
     }
+}

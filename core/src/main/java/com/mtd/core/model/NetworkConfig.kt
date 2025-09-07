@@ -8,6 +8,10 @@ data class NetworkConfig(
     val derivationPath: String,
     val rpcUrls: List<String>,
     val currencySymbol: String,
+    val webSocketUrl: String?,
+    val decimals: Int,
+    val iconUrl: String,
+    val phoenixContractAddress: String?,
     val blockExplorerUrl: String?, // URL برای مشاهده در مرورگر
     val explorers: List<String> // لیست Base URL های API اکسپلوررها
 )

@@ -1,0 +1,93 @@
+<resources>
+    <style name="KrakenButton">
+        <item name="android:minHeight">@dimen/_35sdp</item>
+        <item name="android:height">@dimen/_42sdp</item>
+        <item name="android:paddingLeft">@dimen/_20sdp</item>
+        <item name="android:paddingRight">@dimen/_20sdp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">@dimen/_14ssp</item>
+        <item name="android:textAppearance">@style/Regular2</item>
+        <item name="android:elevation">@dimen/_5sdp</item> <!-- سایه لطیف -->
+    </style>
+
+    <style name="KrakenButton.Primary" parent="KrakenButton">
+        <item name="android:background">@drawable/bg_btn_kraken_primary_selector</item>
+        <item name="android:textColor">@color/kraken_text_on_primary</item>
+    </style>
+
+    <style name="KrakenButton.Glass" parent="KrakenButton">
+        <item name="android:background">@drawable/bg_btn_kraken_glass_selector</item>
+        <item name="android:textColor">@color/kraken_text_on_glass</item>
+    </style>
+    <style name="megawalletButton" parent="Widget.Material3.Button.Icon">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">@dimen/_35sdp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="backgroundTint">@color/surface_1</item>
+        <item name="cornerRadius">@dimen/_40sdp</item>
+        <item name="iconGravity">top</item>
+        <item name="iconTint">@color/text_primary</item>
+    </style>
+
+
+    <!--region TextView Styles-->
+
+    <style name="TextViewLight1" parent="Widget.AppCompat.TextView">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Light1</item>
+    </style>
+
+    <style name="TextViewLight2" parent="Widget.AppCompat.TextView">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Light2</item>
+    </style>
+
+
+    <style name="TextViewLight3" parent="Widget.AppCompat.TextView">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Light3</item>
+    </style>
+
+    <style name="textViewRegular1">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Regular1</item>
+    </style>
+
+    <style name="textViewRegular2">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Regular2</item>
+    </style>
+
+    <style name="textViewRegular3">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Regular3</item>
+    </style>
+
+    <style name="textViewBold1" parent="Widget.AppCompat.TextView">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Bold1</item>
+    </style>
+
+    <style name="textViewBold2" parent="Widget.AppCompat.TextView">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Bold2</item>
+    </style>
+
+    <style name="textViewBold3" parent="Widget.AppCompat.TextView">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Bold3</item>
+    </style>
+
+
+    <!--endregion-->
+</resources>

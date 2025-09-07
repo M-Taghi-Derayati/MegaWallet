@@ -3,6 +3,7 @@ package com.mtd.data.datasource
 
 import com.mtd.core.model.NetworkName.BITCOINTESTNET
 import com.mtd.core.model.NetworkType
+import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import okhttp3.OkHttpClient
 import org.bitcoinj.params.MainNetParams
@@ -17,6 +18,7 @@ import javax.inject.Singleton
 class ChainDataSourceFactory @Inject constructor(
     private val blockchainRegistry: BlockchainRegistry,
     private val retrofitBuilder: Retrofit.Builder,
+    private val assetRegistry: AssetRegistry,
     private val okHttpClient: OkHttpClient
 ) {
     // یک کش ساده برای جلوگیری از ساخت مکرر DataSource ها
@@ -44,7 +46,7 @@ class ChainDataSourceFactory @Inject constructor(
                 val web3j = Web3j.build(httpService)
 
                 // ۳. ساخت EvmDataSource با تمام وابستگی‌هایش
-                EvmDataSource(network , web3j,retrofitBuilder)
+                EvmDataSource(network , web3j,retrofitBuilder,assetRegistry)
             }
             NetworkType.BITCOIN -> {
                 val networkParams= if (network.name==BITCOINTESTNET){

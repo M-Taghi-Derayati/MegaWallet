@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand & Accent Colors -->
+    <color name="brand_primary">#7434EA</color>
+    <color name="brand_secondary">#2575FC</color> <!-- برای گرادینت -->
+
+    <!-- Background & Surface Colors -->
+    <color name="background_dark">#1A0A32</color>
+    <color name="surface_1">#2C2948</color> <!-- برای کارت‌ها و چیپ‌ها -->
+    <color name="button_secondary_background">#3E3A5A</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B0B3C4</color>
+    <color name="text_on_brand">#FFFFFF</color>
+
+    <!-- Semantic Colors -->
+    <color name="semantic_error">#FF6B6B</color>
+    <color name="semantic_success">#25C992</color>
+    <color name="semantic_warning">#FFB800</color>
+
+    <!-- Component Specific Colors -->
+    <color name="chip_border">#5A5580</color>
+    <!-- Background gradient -->
+    <color name="kraken_bg_start">#2B0057</color>       <!-- top-left -->
+    <color name="kraken_bg_mid">#1B143E</color>         <!-- middle -->
+    <color name="kraken_bg_end">#4B0082</color>         <!-- bottom-right -->
+
+    <!-- Subtle glows -->
+    <color name="kraken_highlight_cool_20">#333B45B8</color> <!-- 20% alpha -->
+    <color name="kraken_highlight_warm_12">#1F7B3EF2</color> <!-- 12% alpha -->
+    <color name="kraken_vignette_edge">#12000000</color>     <!-- 7% black -->
+
+    <!-- Brand accent (logo / primary btn) -->
+    <color name="kraken_brand_purple">#8C5BFF</color>
+    <color name="kraken_brand_purple_dark">#6F42FF</color>
+
+    <!-- Purple brand -->
+    <color name="kraken_purple_dark">#7639F6</color>
+    <color name="kraken_purple_light">#8A54FF</color>
+
+    <!-- Glass button -->
+    <color name="kraken_glass_fill_top">#26FFFFFF</color>   <!-- 15% سفید -->
+    <color name="kraken_glass_fill_bottom">#12FFFFFF</color>
+    <color name="kraken_glass_stroke">#66FFFFFF</color>    <!-- 40% سفید -->
+    <color name="kraken_ripple_light">#33FFFFFF</color>    <!-- ریپل روشن -->
+
+    <!-- Text -->
+    <color name="kraken_text_on_primary">#FFFFFFFF</color>
+    <color name="kraken_text_on_glass">#FFFFFFFF</color>
+
+    <!-- Disabled states -->
+    <color name="kraken_purple_disabled">#556A35FF</color>  <!-- 33% شفاف -->
+    <color name="kraken_glass_disabled">#10FFFFFF</color>
+</resources>

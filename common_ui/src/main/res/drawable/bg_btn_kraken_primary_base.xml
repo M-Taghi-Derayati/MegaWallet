@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- گرادیان بنفش -->
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/_40sdp"/>
+            <gradient
+                android:type="linear"
+                android:angle="0"
+                android:startColor="@color/kraken_purple_dark"
+                android:endColor="@color/kraken_purple_light"/>
+        </shape>
+    </item>
+
+    <!-- های‌لایت خیلی لطیف بالا چپ -->
+    <item android:gravity="top|left">
+        <shape android:shape="rectangle">
+            <size android:width="@dimen/_150sdp" android:height="@dimen/_70sdp"/>
+            <corners android:radius="@dimen/_17sdp"/>
+            <gradient
+                android:type="radial"
+                android:centerX="0.2"
+                android:centerY="0.0"
+                android:gradientRadius="@dimen/_40sdp"
+                android:startColor="#33FFFFFF"
+                android:endColor="#00FFFFFF"/>
+        </shape>
+    </item>
+</layer-list>

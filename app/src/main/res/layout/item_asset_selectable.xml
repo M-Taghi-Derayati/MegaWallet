@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:paddingHorizontal="24dp"
+    android:paddingVertical="12dp">
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/image_asset_icon"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:src="@mipmap/ic_launcher"
+        tools:ignore="ContentDescription" />
+
+    <TextView
+        android:id="@+id/text_asset_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/_12ssp"
+        android:textStyle="bold"
+        style="@style/textViewRegular2"
+        app:layout_constraintStart_toEndOf="@id/image_asset_icon"
+        app:layout_constraintTop_toTopOf="@id/image_asset_icon"
+        tools:text="Bitcoin" />
+
+
+    <TextView
+        android:id="@+id/text_network_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_secondary"
+        android:textSize="@dimen/_10ssp"
+        style="@style/textViewRegular2"
+        app:layout_constraintEnd_toStartOf="@id/text_balance_usd"
+        app:layout_constraintStart_toStartOf="@id/text_asset_name"
+        app:layout_constraintTop_toBottomOf="@id/text_asset_name"
+        tools:text="on Bitcoin" />
+
+    <TextView
+        android:id="@+id/text_balance_usd"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/_13ssp"
+        style="@style/textViewRegular2"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/text_asset_name"
+        tools:text="$30,000.00" />
+
+    <TextView
+        android:id="@+id/text_balance"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_secondary"
+        android:textSize="@dimen/_12ssp"
+        style="@style/TextViewLight1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/text_balance_usd"
+        tools:text="0.5 BTC" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

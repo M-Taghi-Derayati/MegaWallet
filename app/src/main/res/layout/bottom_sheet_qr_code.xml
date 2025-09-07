@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet"
+    android:padding="@dimen/_10sdp">
+
+    <com.google.android.material.bottomsheet.BottomSheetDragHandleView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+
+
+    <TextView
+        android:id="@+id/text_network_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        style="@style/textViewRegular2"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/_18ssp"
+        tools:text="آدرس اتریوم" />
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="24dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp">
+
+        <ImageView
+            android:id="@+id/image_qr_code"
+            android:layout_width="@dimen/_200sdp"
+            android:layout_height="@dimen/_200sdp"
+            android:background="@android:color/white"
+            android:padding="@dimen/_5sdp"
+            tools:src="@mipmap/ic_launcher"
+            tools:ignore="ContentDescription" />
+
+    </com.google.android.material.card.MaterialCardView>
+
+    <TextView
+        android:id="@+id/text_full_address"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/_20sdp"
+        android:gravity="start"
+        style="@style/textViewRegular2"
+        android:textColor="@color/text_secondary"
+        android:textSize="@dimen/_16ssp"
+        android:textIsSelectable="true"
+        tools:text="0xb4be1f1ef9574259538db0d924488082f2b2156f81c218830305d2ce0f76fba7" />
+
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/button_copy"
+        style="@style/KrakenButton.Primary"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/_42sdp"
+        android:layout_marginTop="@dimen/_30sdp"
+        android:layout_marginHorizontal="@dimen/_10sdp"
+        android:text="کپی"
+      />
+
+    <!-- دکمه وارد کردن کیف پول (دکمه ثانویه) -->
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/button_share"
+        style="@style/KrakenButton.Glass"
+        android:layout_marginTop="@dimen/_10sdp"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/_42sdp"
+        android:layout_marginHorizontal="@dimen/_10sdp"
+        android:text="اشتراک گذاری"
+        />
+</androidx.appcompat.widget.LinearLayoutCompat>

@@ -48,7 +48,13 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
+    api(libs.bundles.sdp)
+    api(libs.bundles.coil)
+    api(libs.qrgen)
+    api(libs.rxbinding)
+    api(libs.slidetoact)
     implementation(libs.material)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

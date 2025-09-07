@@ -14,7 +14,9 @@ interface BSCscanApiService {
         @Query("action") action: String = "txlist",
         @Query("address") address: String,
         @Query("sort") sort: String = "desc",
-        @Query("apikey") apiKey: String="X2AY1AXDYB91YR96WDXAQ8IR95DZXHJRRN"
+        @Query("apikey") apiKey: String="X2AY1AXDYB91YR96WDXAQ8IR95DZXHJRRN",
+        @Query("page") page: Int = 1,
+        @Query("offset") offset: Int = 30
     ): Response<BSCscanResponse>
 }
 

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.welcome.home.HomeFragment">
+
+    <!-- ۱. بخش بالایی (محتوای ثابت) -->
+    <include
+        android:id="@+id/main_content"
+        layout="@layout/partial_home_main_content" />
+
+    <FrameLayout
+        android:id="@+id/bottom_sheet"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_bottom_sheet"
+        app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
+
+        <!-- این include شامل تمام محتوای داخلی BottomSheet خواهد بود -->
+        <include
+            android:id="@+id/bottom_sheet_content"
+            layout="@layout/partial_home_bottom_sheet_content" />
+
+    </FrameLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

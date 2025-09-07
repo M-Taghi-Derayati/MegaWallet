@@ -1,16 +1,19 @@
 package com.mtd.data
 
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.mtd.data.di.DataModule
-import com.mtd.data.di.NetworkModule.Companion.httpLoggingInterceptorProvider
-import com.mtd.data.di.NetworkModule.Companion.provideGson
-import com.mtd.data.di.NetworkModule.Companion.provideOkHttpClient
+import com.mtd.data.di.NetworkConnectionInterceptor
+import com.mtd.data.di.NetworkModule.httpLoggingInterceptorProvider
+import com.mtd.data.di.NetworkModule.provideGson
+import com.mtd.data.di.NetworkModule.provideOkHttpClient
 import com.mtd.data.repository.MarketDataRepositoryImpl
 import com.mtd.data.service.CoinGeckoApiService
 import com.mtd.domain.model.ResultResponse
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,8 +30,8 @@ class MarketDataRepositoryIntegrationTest {
     fun setUp() {
         // --- ساخت تمام وابستگی‌ها به صورت واقعی برای تست ---
         // ما از Hilt استفاده نمی‌کنیم و همه چیز را به صورت دستی می‌سازیم
-
-        val okHttpClient = provideOkHttpClient(httpLoggingInterceptorProvider())
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val okHttpClient = provideOkHttpClient(httpLoggingInterceptorProvider(),NetworkConnectionInterceptor(context))
         val gson = provideGson()
 
         // ساخت Retrofit و سرویس API به صورت واقعی
@@ -43,6 +46,8 @@ class MarketDataRepositoryIntegrationTest {
         // ساخت ریپازیتوری با سرویس API واقعی
         marketDataRepository = MarketDataRepositoryImpl(coinGeckoApi)
     }
+
+
 
     @Test
     fun getLatestPrices_withRealApiCall_shouldReturnValidData() = runTest {

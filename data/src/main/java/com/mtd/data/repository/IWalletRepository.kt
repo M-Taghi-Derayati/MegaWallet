@@ -1,12 +1,10 @@
 package com.mtd.data.repository
 
 import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.Wallet
-import java.math.BigInteger
 
 
 interface IWalletRepository {
@@ -75,6 +73,8 @@ interface IWalletRepository {
     suspend fun getAssets(networkName: NetworkName): ResultResponse<List<Asset>>
 
     suspend fun getTransactionHistory( networkName: NetworkName, userAddress: String): ResultResponse<List<TransactionRecord>>
+
+    suspend fun getActiveAddressForNetwork(networkId: String): String?
 
 }
 

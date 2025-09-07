@@ -4,24 +4,21 @@ import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.keymanager.MnemonicHelper
 import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
 import com.mtd.core.registry.BlockchainRegistry
-import com.mtd.data.datasource.RemoteDataSource
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.domain.model.Asset
-import com.mtd.domain.model.Wallet
-import javax.inject.Inject
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionRecord
+import com.mtd.domain.model.Wallet
 import com.mtd.domain.wallet.ActiveWalletManager
-import java.math.BigInteger
+import javax.inject.Inject
 
 class   WalletRepositoryImpl @Inject constructor(
     private val keyManager: KeyManager,
     private val secureStorage: SecureStorage,
     private val activeWalletManager: ActiveWalletManager,
     private val blockchainRegistry: BlockchainRegistry,
-    private val dataSourceFactory: ChainDataSourceFactory
+     var dataSourceFactory: ChainDataSourceFactory
 ) : IWalletRepository {
     private companion object {
         const val MNEMONIC_STORAGE_KEY = "wallet_mnemonic_phrase"
@@ -39,7 +36,7 @@ class   WalletRepositoryImpl @Inject constructor(
 
             val keys = keyManager.generateWalletKeysFromMnemonic(mnemonic)
             val wallet = Wallet(mnemonic = mnemonic, keys = keys)
-            activeWalletManager.setActiveWallet(wallet)
+            activeWalletManager.unlockWallet(wallet)
             ResultResponse.Success(wallet)
         } catch (e: Exception) {
             ResultResponse.Error(e)
@@ -56,7 +53,7 @@ class   WalletRepositoryImpl @Inject constructor(
 
             val keys = keyManager.generateWalletKeysFromMnemonic(mnemonic)
             val wallet = Wallet(mnemonic = mnemonic, keys = keys)
-            activeWalletManager.setActiveWallet(wallet)
+            activeWalletManager.unlockWallet(wallet)
             ResultResponse.Success(wallet)
         } catch (e: Exception) {
             ResultResponse.Error(e)
@@ -87,12 +84,12 @@ class   WalletRepositoryImpl @Inject constructor(
             val privateKey = secureStorage.getDecrypted(PRIVATE_KEY_STORAGE_KEY)
 
             val wallet = when {
-                mnemonic != null -> {
+                mnemonic.isNullOrEmpty() == false -> {
                     val keys = keyManager.generateWalletKeysFromMnemonic(mnemonic)
                     Wallet(mnemonic = mnemonic, keys = keys)
                 }
 
-                privateKey != null -> {
+                privateKey.isNullOrEmpty() == false -> {
                     val keys = keyManager.generateWalletKeysFromPrivateKey(privateKey)
                     Wallet(mnemonic = null, keys = keys)
                 }
@@ -101,7 +98,7 @@ class   WalletRepositoryImpl @Inject constructor(
             }
             wallet.let {
                 if (it!=null){
-                    activeWalletManager.setActiveWallet(it)
+                    activeWalletManager.unlockWallet(it)
                     ResultResponse.Success(wallet)
                 }else{
                     ResultResponse.Error(Exception( "Not Wallet Found"))
@@ -114,10 +111,28 @@ class   WalletRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getActiveAddressForNetwork(networkId: String): String? {
+        // ابتدا کیف پول فعال فعلی را بارگذاری می‌کنیم
+        val walletResult = loadExistingWallet()
+
+        if (walletResult is ResultResponse.Success && walletResult.data != null) {
+            val wallet = walletResult.data
+
+            // اطلاعات شبکه را از رجیستری می‌گیریم تا نام آن را به دست آوریم
+            val networkInfo = blockchainRegistry.getNetworkById(networkId)
+            if (networkInfo != null) {
+                // در لیست کلیدهای کیف پول، به دنبال کلیدی می‌گردیم که نام شبکه‌اش مطابقت دارد
+                return wallet?.keys?.find { it.networkName == networkInfo.name }?.address
+            }
+        }
+       return null
+    }
+
+
     override suspend fun hasWallet(): Boolean {
         // اگر هر کدام از کلیدهای ذخیره‌سازی وجود داشته باشد، یعنی کیف پول داریم
-        return secureStorage.getDecrypted(MNEMONIC_STORAGE_KEY) != null ||
-                secureStorage.getDecrypted(PRIVATE_KEY_STORAGE_KEY) != null
+        return secureStorage.getDecrypted(MNEMONIC_STORAGE_KEY).isNullOrEmpty() == false ||
+                secureStorage.getDecrypted(PRIVATE_KEY_STORAGE_KEY).isNullOrEmpty() == false
     }
 
     override suspend fun getSavedMnemonic(): ResultResponse<String?> {

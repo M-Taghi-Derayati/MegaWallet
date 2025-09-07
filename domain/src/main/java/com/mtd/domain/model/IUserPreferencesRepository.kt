@@ -1,7 +1,5 @@
 package com.mtd.domain.model
 
-import com.mtd.domain.model.RpcConfig
-
 
 interface IUserPreferencesRepository {
 
