@@ -13,4 +13,6 @@ interface IAuthManager {
      * نتیجه Intent را پردازش کرده و در صورت موفقیت، AuthCode را برمی‌گرداند.
      */
     suspend fun processSignInResult(data: Intent?): ResultResponse<String> // String -> AuthCode
+
+    fun signOut()
 }

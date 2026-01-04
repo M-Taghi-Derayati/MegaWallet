@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<androidx.appcompat.widget.AppCompatTextView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/textViewRegular2"
+    android:layout_width="match_parent"
+    android:layout_height="?attr/dropdownListPreferredItemHeight"
+    android:paddingHorizontal="@dimen/_10sdp"
+    android:ellipsize="marquee"
+    android:gravity="start|center"
+    android:textSize="@dimen/_10ssp"
+    android:textColor="@color/text_color_default"
+    app:autoSizeMaxTextSize="@dimen/_10sdp"
+    app:autoSizeMinTextSize="@dimen/_8sdp"
+    app:autoSizeTextType="uniform" />

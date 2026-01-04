@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Adding the first item: A ring shape -->
+    <item>
+        <!-- Create a ring shape using the "ring" attribute.
+        To make the ring appear with color code "#DDD", set android:useLevel="false". -->
+        <shape
+            android:shape="ring"
+            android:thicknessRatio="10"
+            android:useLevel="false">
+            <solid android:color="#DDD" />
+        </shape>
+    </item>
+    <!-- Adding the second item: A rotating ring -->
+    <item>
+        <!-- Rotate the ring from 270 degrees to 270 degrees -->
+        <rotate
+            android:fromDegrees="270"
+            android:toDegrees="270">
+            <!-- Use android:useLevel="true" in the shape tag to enable rotation.
+            Add a gradient to set the startColor and endColor of the ring. -->
+            <shape
+                android:shape="ring"
+                android:thicknessRatio="10"
+                android:useLevel="true">
+                <solid
+                    android:color="@color/kraken_brand_purple"
+
+                    />
+            </shape>
+        </rotate>
+    </item>
+</layer-list>

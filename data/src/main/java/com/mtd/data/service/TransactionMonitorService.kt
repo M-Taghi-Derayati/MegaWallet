@@ -1,8 +1,12 @@
 package com.mtd.data.service
 
+import android.Manifest
+import androidx.annotation.RequiresPermission
 import com.mtd.core.di.ApplicationScope
 import com.mtd.core.model.NetworkType
 import com.mtd.core.network.BlockchainNetwork
+import com.mtd.core.notification.NotificationService
+import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.socket.IWebSocketClient
 import com.mtd.core.utils.GlobalEvent
@@ -36,12 +40,15 @@ class TransactionMonitorService @Inject constructor(
     private val walletRepository: IWalletRepository,
     private val blockchainRegistry: BlockchainRegistry,
     private val globalEventBus: GlobalEventBus,
+    private val notificationService: NotificationService,
+    private val assetRegistry: AssetRegistry,
     @ApplicationScope private val externalScope: CoroutineScope,
     private val webSocketClientFactory: @JvmSuppressWildcards () -> IWebSocketClient
 ) {
     private val activeSockets = ConcurrentHashMap<String, NetworkSocketController>()
     private val TAG = "TransactionMonitor"
 
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     fun startMonitoring() {
         if (activeSockets.isNotEmpty()) {
             Timber.tag(TAG).d("Monitoring is already active.")
@@ -86,6 +93,7 @@ class TransactionMonitorService @Inject constructor(
         private val messageQueue = ArrayDeque<String>() // فقط برای rawClient
         private var isConnecting = false
 
+        @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
         fun start() {
             connect()
         }
@@ -105,6 +113,7 @@ class TransactionMonitorService @Inject constructor(
             Timber.tag(TAG).d("Stopped monitor for ${network.name.name}")
         }
 
+        @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
         private fun connect() {
             if (isConnecting) return
             isConnecting = true
@@ -124,6 +133,7 @@ class TransactionMonitorService @Inject constructor(
             }
         }
 
+        @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
         private fun connectEvm() {
             val wsService = WebSocketService(url, false)
             wsService.connect()
@@ -137,7 +147,6 @@ class TransactionMonitorService @Inject constructor(
                 val blockHeader = notification.params.result
                 val blockNumberHex = blockHeader.number ?: return@subscribe
                 val blockNumber = BigInteger(blockNumberHex.removePrefix("0x"), 16)
-                Timber.tag(TAG).v("New block notification on ${network.name.name}: #${blockNumber}")
                 checkNativeTransactionsInBlock(blockNumber)
                 checkErc20TransactionsInBlock(blockNumber)
             }, { error ->
@@ -152,8 +161,9 @@ class TransactionMonitorService @Inject constructor(
             Timber.tag(TAG).d("Subscribed to new blocks (Native ETH) for ${network.name.name}")
         }
 
+        @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
         private fun checkErc20TransactionsInBlock(blockNumber: BigInteger) {
-            externalScope.launch(Dispatchers.IO) {
+            externalScope.launch(Dispatchers.IO) @androidx.annotation.RequiresPermission(android.Manifest.permission.POST_NOTIFICATIONS) {
                 try {
                     val web3 = web3j ?: return@launch
                     // آدرس کاربر را برای جستجو در لاگ‌ها آماده می‌کنیم (باید 64 کاراکتر باشد)
@@ -174,9 +184,21 @@ class TransactionMonitorService @Inject constructor(
                     val logs = web3.ethGetLogs(filter).send()
 
                     // اگر لیستی که برگردانده خالی نبود، یعنی یک تراکنش ERC20 پیدا شده
-                    if (logs.logs.isNotEmpty()) {
+                    if (logs.logs.isNullOrEmpty()==false) {
                         Timber.tag(TAG)
                             .i("✅ ERC20 Transfer detected for $userAddress in block #$blockNumber on ${network.name.name}")
+                        // ما آدرس قرارداد را از لاگ استخراج می‌کنیم تا نماد توکن را پیدا کنیم
+                        val firstLog = logs.logs.first().get() as? org.web3j.protocol.core.methods.response.Log
+                        val contractAddress = firstLog?.address
+                        val assetConfig = assetRegistry.getAllAssets().find {
+                            it.contractAddress.equals(contractAddress, ignoreCase = true)
+                        }
+                        val symbol = assetConfig?.symbol ?: "Token"
+
+                        notificationService.showTradeNotification(
+                            "دریافت وجه جدید",
+                            "شما مقداری $symbol در شبکه ${network.name.name} دریافت کردید."
+                        )
                         notifyUiToRefresh()
                     }
 
@@ -186,17 +208,45 @@ class TransactionMonitorService @Inject constructor(
             }
         }
 
-
+        @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
         private fun checkNativeTransactionsInBlock(blockNumber: BigInteger) {
             externalScope.launch(Dispatchers.IO) {
                 try {
                     val web3 = web3j ?: return@launch
-                    val block = web3.ethGetBlockByNumber(DefaultBlockParameterNumber(blockNumber), true).send()
-                    val foundTx = block.block.transactions.any { txResult ->
-                        (txResult.get() as? Transaction)?.to?.equals(userAddress, ignoreCase = true) == true || (txResult.get() as? Transaction)?.from?.equals(userAddress, ignoreCase = true) == true
+                    val blockResponse = web3.ethGetBlockByNumber(DefaultBlockParameterNumber(blockNumber), true).send()
+
+                    val block = blockResponse?.block
+                    val transactions = block?.transactions
+
+                    if (transactions == null) {
+                        return@launch
                     }
-                    if (foundTx) {
+
+                    val foundTxResult = transactions.find { txResult ->
+                        val tx = (txResult?.get() as? Transaction)
+                        tx?.to?.equals(userAddress, ignoreCase = true) == true || tx?.from?.equals(userAddress, ignoreCase = true) == true
+                    }
+                    val foundTx = (foundTxResult?.get() as? Transaction)
+                    /*val foundTx = block?.block?.transactions?.find { txResult ->
+                        (txResult.get() as? Transaction)?.to?.equals(userAddress, ignoreCase = true) == true || (txResult.get() as? Transaction)?.from?.equals(userAddress, ignoreCase = true) == true
+                    }*/
+                    if (foundTx!=null) {
                         Timber.tag(TAG).i("Native transaction detected for $userAddress in block #$blockNumber on ${network.name.name}")
+
+                        if (foundTx.from?.equals(userAddress, ignoreCase = true) == true){
+                            notificationService.showTradeNotification(
+                                "ارسال وجه جدید",
+                                "شما مقداری ${network.currencySymbol} در شبکه ${network.name.name} ارسال کردید."
+                            )
+                        }else{
+                            notificationService.showTradeNotification(
+                                "دریافت وجه جدید",
+                                "شما مقداری ${network.currencySymbol} در شبکه ${network.name.name} دریافت کردید."
+                            )
+                        }
+
+
+
                         notifyUiToRefresh()
                     }
                 } catch (e: Exception) {
@@ -210,6 +260,7 @@ class TransactionMonitorService @Inject constructor(
             rawClient?.connect(url, createRawListener())
         }
 
+        @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
         private fun scheduleReconnect() {
             // فقط در صورتی زمان‌بندی کن که از قبل در حال اتصال نباشیم
             if (isConnecting) return
@@ -229,6 +280,7 @@ class TransactionMonitorService @Inject constructor(
             }
         }
 
+
         private fun createRawListener(): WebSocketListener {
             return object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -239,6 +291,7 @@ class TransactionMonitorService @Inject constructor(
                     subscribe()
                 }
 
+                @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     Timber.tag(TAG).d("Raw message from ${network.name.name}: $text")
                     // Handle non-EVM messages (e.g., Bitcoin)
@@ -246,43 +299,51 @@ class TransactionMonitorService @Inject constructor(
                         try {
                             val json = JSONObject(text)
 
-                            // مرحله ۱: بررسی کنید که آیا این پیام، یک پیام تراکنش است یا نه.
-                            // اکثر APIها برای تراکنش یک کلید مشخص دارند. فرض می‌کنیم اینجا کلید "x" است.
-                            // شما باید این را با مستندات API خود چک کنید.
-                            if (json.has("x")) {
-                                val txObject = json.getJSONObject("x")
+                            // --- مرحله ۱: بررسی تراکنش‌های جدید در ممپول (تأیید نشده) ---
+                            val mempoolTxs = json.optJSONArray("address-transactions")
+                            if (mempoolTxs != null && mempoolTxs.length() > 0) {
+                                for (i in 0 until mempoolTxs.length()) {
+                                    val tx = mempoolTxs.getJSONObject(i)
+                                    // چک می‌کنیم آیا این تراکنش تأیید نشده به ما مربوط است یا نه
+                                    if (isTransactionRelevant(tx, userAddress)) {
+                                        Timber.tag(TAG).i("PENDING Bitcoin transaction detected for $userAddress in Mempool. TxID: ${tx.optString("txid")}")
+                                        // TODO: در اینجا می‌توانید یک رویداد جداگانه برای UI بفرستید
+                                        // مثلاً: notifyUiTransactionPending(tx.optString("txid"))
 
-                                // مرحله ۲ (بسیار مهم): بررسی کنید که آیا این تراکنش به آدرس ما مربوط است یا نه.
-                                // سرور باید فقط تراکنش‌های ما را بفرستد، اما همیشه بهتر است خودمان هم چک کنیم.
-                                // ما باید خروجی‌های (outputs) تراکنش را بگردیم.
-                                val outputs = txObject.optJSONArray("out")
-                                var isRelevant = false
-                                if (outputs != null) {
-                                    for (i in 0 until outputs.length()) {
-                                        val output = outputs.getJSONObject(i)
-                                        // آیا آدرس این خروجی با آدرس کاربر ما یکی است؟
-                                        if (output.optString("addr") == userAddress) {
-                                            isRelevant = true
-                                            break // یک خروجی مرتبط پیدا شد، جستجو کافی است
-                                        }
+                                        notificationService.showTradeNotification("دریافت تراکنش جدید","شما یک تراکنش جدید ${network.currencySymbol} در شبکه ${network.name.name} دریافت کردید.")
+
+
+                                    }
+                                }
+                            }
+
+                            // --- مرحله ۲: بررسی تراکنش‌های تأیید شده در بلاک‌ها ---
+                            val blockTxs = json.optJSONArray("block-transactions")
+                            if (blockTxs != null && blockTxs.length() > 0) {
+                                var confirmedTxFound = false
+                                for (i in 0 until blockTxs.length()) {
+                                    val tx = blockTxs.getJSONObject(i)
+                                    if (isTransactionRelevant(tx, userAddress)) {
+                                        Timber.tag(TAG).i("✅ CONFIRMED Bitcoin transaction detected for $userAddress. TxID: ${tx.optString("txid")}")
+                                        confirmedTxFound = true
+                                        break // اولین تراکنش تأیید شده کافی است
                                     }
                                 }
 
-                                if (isRelevant) {
-                                    Timber.tag(TAG).i("✅ Relevant Bitcoin transaction detected for $userAddress")
+                                if (confirmedTxFound) {
+                                    // حالا که یک تراکنش تأیید شده داریم، UI را برای آپدیت موجودی با خبر می‌کنیم
+                                    notificationService.showTradeNotification(
+                                        "دریافت وجه جدید",
+                                        "شما مقداری ${network.currencySymbol} در شبکه ${network.name.name} دریافت کردید."
+                                    )
                                     notifyUiToRefresh()
-                                } else {
-                                    Timber.tag(TAG).d("Received a Bitcoin transaction message, but it was not for our address.")
                                 }
-
-                            } else {
-                                // این یک پیام از نوع دیگر است (مثل قیمت). آن را نادیده می‌گیریم.
-                                Timber.tag(TAG).d("Ignoring non-transaction Bitcoin message (e.g., price update).")
                             }
 
                         } catch (e: org.json.JSONException) {
                             Timber.tag(TAG).e(e, "Error parsing Bitcoin WebSocket message")
                         }
+
                     }
                 }
 
@@ -291,6 +352,7 @@ class TransactionMonitorService @Inject constructor(
                     stopRawPing()
                 }
 
+                @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     Timber.tag(TAG).e("❌ Raw WebSocket failed for ${network.name.name}: ${t.message}")
                     stopRawPing()
@@ -346,8 +408,12 @@ class TransactionMonitorService @Inject constructor(
         private fun subscribeToBitcoinAddress() {
             // این بخش به شدت وابسته به سرویس‌دهنده شماست
             // مطمئن شوید این فرمت پیام صحیح است
-            sendMessage(JSONObject().put("action", "want").put("data", JSONArray(arrayOf("address-transactions"))).toString())
-            sendMessage(JSONObject().put("address", userAddress).toString())
+            sendMessage(JSONObject().put("action", "want").put("data", JSONArray(arrayOf("address-transactions", "block-transactions"))).toString())
+            // ۲. سپس آدرسی را که می‌خواهیم ردیابی کنیم، برای سرور ارسال می‌کنیم.
+            sendMessage(JSONObject().put("track-address", userAddress).toString())
+
+
+
             Timber.tag(TAG).d("Subscribed to Bitcoin address transactions for $userAddress")
         }
 
@@ -373,6 +439,25 @@ class TransactionMonitorService @Inject constructor(
         private fun stopEvmKeepAlive() {
             keepAliveTimer?.cancel()
             keepAliveTimer = null
+        }
+
+        /**
+         * یک تابع کمکی تمیز برای بررسی اینکه آیا یک تراکنش به آدرس ما مربوط است یا نه.
+         * @param tx آبجکت JSON تراکنش
+         * @param address آدرس کاربر
+         * @return true اگر تراکنش مرتبط باشد، در غیر این صورت false
+         */
+        private fun isTransactionRelevant(tx: JSONObject, address: String): Boolean {
+            val outputs = tx.optJSONArray("vout")
+            if (outputs != null) {
+                for (i in 0 until outputs.length()) {
+                    val output = outputs.getJSONObject(i)
+                    if (output.optString("scriptpubkey_address") == address) {
+                        return true // پیدا شد!
+                    }
+                }
+            }
+            return false
         }
     }
 

@@ -1,45 +1,47 @@
 package com.mtd.megawallet.ui.welcome.home
 
 
+import android.os.Bundle
 import android.util.TypedValue
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.view.isVisible
-import androidx.fragment.app.viewModels
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.mtd.common_ui.StartActivity
 import com.mtd.common_ui.mClick
 import com.mtd.common_ui.setTextColorAnim
 import com.mtd.core.utils.Easings
-import com.mtd.core.utils.GlobalEvent
-import com.mtd.core.utils.GlobalEventBus
 import com.mtd.core.utils.Interpolators
 import com.mtd.megawallet.R
 import com.mtd.megawallet.core.BaseFragment
 import com.mtd.megawallet.databinding.FragmentHomeBinding
 import com.mtd.megawallet.event.HomeUiState
+import com.mtd.megawallet.event.HomeUiState.DisplayCurrency
+import com.mtd.megawallet.ui.swap.TradeActivity
 import com.mtd.megawallet.ui.welcome.home.adapter.ActivityAdapter
 import com.mtd.megawallet.ui.welcome.home.adapter.AssetsAdapter
 import com.mtd.megawallet.viewbinding.viewBinding
 import com.mtd.megawallet.viewmodel.HomeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 
 @AndroidEntryPoint
 class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>(R.layout.fragment_home) {
 
-    override val viewModel: HomeViewModel by viewModels()
+    override val viewModel: HomeViewModel by activityViewModels()
     override val binding by viewBinding(FragmentHomeBinding::bind)
 
-    @Inject
-    lateinit var globalEventBus: GlobalEventBus
+
     // ViewBinding های تو در تو برای دسترسی راحت
 
     private val mainContentBinding by lazy { binding.mainContent }
@@ -49,6 +51,13 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>(R.layout.f
     private val assetsAdapter = AssetsAdapter()
     private val activityAdapter = ActivityAdapter()
 
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        return view ?: inflater.inflate(R.layout.fragment_home, container, false)
+    }
 
     override fun setupViews() {
 
@@ -68,7 +77,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>(R.layout.f
         bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
 
         bottomSheetBehavior.isFitToContents = false
-        bottomSheetBehavior.halfExpandedRatio = 0.6f
+        bottomSheetBehavior.halfExpandedRatio = 0.61f
         val topPaddingPx = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             80f,
@@ -137,7 +146,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>(R.layout.f
         }
 
         mainContentBinding.buttonSwap.mClick {
-            findNavController().navigate(R.id.action_homeFragment_to_swapFragment)
+            StartActivity(TradeActivity::class.java)
+
+          //  findNavController().navigate(R.id.action_homeFragment_to_swapFragment)
         }
 
         mainContentBinding.txtMenuApps.mClick {
@@ -145,6 +156,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>(R.layout.f
         }
         mainContentBinding.txtMenuHistory.mClick {
             mAnimBasketVisualSelect(mainContentBinding.txtMenuHistory)
+        }
+        mainContentBinding.iconSettings.mClick {
+            viewModel.toggleDisplayCurrency()
         }
         // ... بقیه کلیک‌ها
     }
@@ -155,13 +169,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>(R.layout.f
                 launch {
                     viewModel.uiState.collect { state ->
                         handleUiState(state)
-                    }
-                }
-                launch {
-                    globalEventBus.events.collect { event ->
-                        if (event is GlobalEvent.WalletNeedsRefresh) {
-                            viewModel.refreshData()
-                        }
                     }
                 }
             }
@@ -178,8 +185,19 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>(R.layout.f
 
         when (state) {
             is HomeUiState.Success -> {
+                val balanceText = when (state.displayCurrency) {
+                    DisplayCurrency.IRR -> {
+                        mainContentBinding.textTotalUsdt.text = "تومان"
+                        state.totalBalanceIrr
+                    }
+                    DisplayCurrency.USDT -> {
+                        mainContentBinding.textTotalUsdt.text = "تتر"
+                        state.totalBalanceUsdt
+                    }
+                }
+                mainContentBinding.textTotalBalance.text = balanceText
+
                 // آپدیت کردن بخش بالایی (موجودی کل)
-                mainContentBinding.textTotalBalance.text = state.totalBalanceUsd
 
                 // ارسال لیست به آداپترها
                 assetsAdapter.submitList(state.assets)
@@ -199,7 +217,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>(R.layout.f
             }
         }
     }
-
 
     private fun mAnimBasketVisualSelect(view: AppCompatTextView) {
         operator.translateLeftRight(mainContentBinding.vSelectMenu, view.x, 500)

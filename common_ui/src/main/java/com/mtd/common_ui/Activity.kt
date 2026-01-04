@@ -30,6 +30,7 @@ import androidx.appcompat.widget.AppCompatEditText
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.appcompat.widget.LinearLayoutCompat
+import androidx.core.app.ComponentActivity
 import androidx.core.content.res.ResourcesCompat
 import androidx.fragment.app.Fragment
 import coil.load
@@ -447,6 +448,11 @@ fun View.mClick(debounceTime: Long = 500L, action: () -> Unit): Disposable {
 
 
 fun AppCompatActivity.StartActivity(cls: Class<*>, intent: ((Intent) -> Unit)? = null) {
+    val int = Intent(this, cls)
+    intent?.invoke(int)
+    this.startActivity(int)
+}
+fun ComponentActivity.StartActivity(cls: Class<*>, intent: ((Intent) -> Unit)? = null) {
     val int = Intent(this, cls)
     intent?.invoke(int)
     this.startActivity(int)

@@ -64,6 +64,11 @@
         <item name="android:textAppearance">@style/Regular2</item>
     </style>
 
+    <style name="CircularDeterminateProgressBar">
+        <item name="android:indeterminateOnly">false</item>
+        <item name="android:progressDrawable">@drawable/circle</item>
+    </style>
+
     <style name="textViewRegular3">
         <item name="android:textAllCaps">false</item>
         <item name="android:textColor">@color/text_primary</item>

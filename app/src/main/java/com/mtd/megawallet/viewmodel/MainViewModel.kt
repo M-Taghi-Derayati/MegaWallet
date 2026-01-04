@@ -1,19 +1,18 @@
 package com.mtd.megawallet.viewmodel
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.mtd.data.repository.IWalletRepository
+import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.megawallet.event.MainNavigationEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val walletRepository: IWalletRepository
-) : ViewModel() {
+    private val walletRepository: IWalletRepository,
+    errorManager: com.mtd.core.manager.ErrorManager
+) : BaseViewModel(errorManager) {
 
     // استفاده از StateFlow برای نگهداری وضعیت ناوبری اولیه
     private val _navigationState = MutableStateFlow<MainNavigationEvent>(MainNavigationEvent.Loading)
@@ -26,7 +25,7 @@ class MainViewModel @Inject constructor(
     }
 
     private fun checkWalletStatus() {
-        viewModelScope.launch {
+        launchSafe {
             if (walletRepository.hasWallet()) {
                 _navigationState.value = MainNavigationEvent.NavigateToHome
             } else {
@@ -37,5 +36,4 @@ class MainViewModel @Inject constructor(
 
 
 }
-
 

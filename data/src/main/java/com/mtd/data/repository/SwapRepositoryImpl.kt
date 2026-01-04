@@ -1,18 +1,22 @@
 package com.mtd.data.repository
 
-import android.util.Log
-import com.mtd.core.model.ExecuteSwapRequest
-import com.mtd.domain.model.Quote
+import com.mtd.data.service.SwapApiService
+import com.mtd.core.model.ExecuteNativeRequest
+import com.mtd.domain.model.ExecuteRequest
+import com.mtd.core.model.NativeQuoteResponse
+import com.mtd.domain.model.QuoteRequest
+import com.mtd.core.model.QuoteResponse
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.SwapPair
 import com.mtd.domain.repository.ISwapRepository
+import com.mtd.data.utils.safeApiCall
 import kotlinx.coroutines.delay
-import java.math.BigDecimal
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class SwapRepositoryImpl @Inject constructor() : ISwapRepository {
+class SwapRepositoryImpl @Inject constructor(private val swapApiService: SwapApiService) :
+    ISwapRepository {
     // فعلاً اینها رو خالی میذاریم چون تمرکز ما روی امضا کردنه
     override suspend fun getAvailablePairs(): ResultResponse<List<SwapPair>> {
 
@@ -65,50 +69,94 @@ class SwapRepositoryImpl @Inject constructor() : ISwapRepository {
                 toNetworkName = "Sepolia",
                 toNetworkIconUrl = "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png"
             )
-            // ... می‌تونید جفت‌ارزهای بیشتری اضافه کنید
         )
         return ResultResponse.Success(pairs)
 
        }
-    override suspend fun getQuote(
-        fromAssetId: String,
-        toAssetId: String,
-        amount: String
-    ): ResultResponse<Quote> {
-        delay(300)
-        val amountIn = amount.toBigDecimalOrNull() ?: return ResultResponse.Error(Exception("Invalid amount"))
 
-        // --- قیمت‌گذاری هاردکد ---
-        val rate = if (fromAssetId.startsWith("USDT")) BigDecimal("0.0005") else BigDecimal("1950.5") // 1 USDT = 0.0005 ETH | 1 ETH = 1950.5 USDT
-        val feeRate = BigDecimal("0.001") // کارمزد ۱٪
-
-        val amountOut = amountIn * rate * (BigDecimal.ONE - feeRate)
-        val feeAmount = amountIn * feeRate
-
-        return ResultResponse.Success(
-            Quote(
-                quoteId = "fake-quote-${System.currentTimeMillis()}",
-                fromAssetId = fromAssetId,
-                fromAmount = amount,
-                fromAssetSymbol = fromAssetId.split("-").first(),
-                toAssetId = toAssetId,
-                receiveAmount = amountOut.toPlainString(),
-                receiveAssetSymbol = toAssetId.split("-").first(),
-                feeAmount = feeAmount.toPlainString(),
-                feeAssetSymbol = fromAssetId.split("-").first()
+    override suspend fun getErc20Quote(
+        fromAssetSymbol: String,
+        fromNetworkId: String,
+        toAssetSymbol: String,
+        toNetworkId: String?,
+        amount: Double,
+        recipientAddress: String?
+    ): ResultResponse<QuoteResponse> {
+        return safeApiCall {
+            val request = QuoteRequest(
+                fromAssetSymbol = fromAssetSymbol,
+                fromNetworkId = fromNetworkId.lowercase(),
+                toAssetSymbol = toAssetSymbol,
+                amount = amount,
+                recipientAddress = recipientAddress,
+                toNetworkId = toNetworkId?.lowercase()
             )
-        )
+            val response = swapApiService.getErc20Quote(request)
 
-
-
+            if (response.isSuccessful && response.body() != null) {
+                response.body()!!
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                throw Exception("API Error ${response.code()}: $errorBody")
+            }
+        }
     }
 
-    override suspend fun executeSwap(request: ExecuteSwapRequest): ResultResponse<String> {
 
+    override suspend fun executeErc20Swap(request: ExecuteRequest): ResultResponse<String> {
+        return safeApiCall {
+            val response = swapApiService.executeErc20Swap(request)
 
+            if (response.isSuccessful && response.body() != null) {
+                response.body()!!.tradeId
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                throw Exception("API Error ${response.code()}: $errorBody")
+            }
+        }
+    }
 
-        delay(1500)
-        Log.d("FakeSwapRepository", "Execute request received: $request")
-        return ResultResponse.Success("fake-trade-id-${System.currentTimeMillis()}")
+    override suspend fun getNativeQuote(
+        fromAssetSymbol: String,
+        fromNetworkId: String,
+        toAssetSymbol: String,
+        toNetworkId: String?,
+        amount: Double,
+        userAddress: String,
+        recipientAddress: String?
+    ): ResultResponse<NativeQuoteResponse> {
+        return safeApiCall {
+            val request = QuoteRequest(
+                fromAssetSymbol = fromAssetSymbol,
+                fromNetworkId = fromNetworkId,
+                toAssetSymbol = toAssetSymbol,
+                amount = amount,
+                recipientAddress = recipientAddress,
+                toNetworkId = toNetworkId,
+                userAddress = userAddress
+            )
+            val response = swapApiService.getNativeQuote(request)
+
+            if (response.isSuccessful && response.body() != null) {
+                response.body()!!
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                throw Exception("API Error ${response.code()}: $errorBody")
+            }
+        }
+    }
+
+    override suspend fun executeNativeSwap(request: ExecuteNativeRequest): ResultResponse<String> {
+        return safeApiCall {
+            val response = swapApiService.executeNativeSwap(request)
+
+            if (response.isSuccessful && response.body() != null) {
+                response.body()!!.tradeId
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                throw Exception("API Error ${response.code()}: $errorBody")
+            }
+        }
+
     }
 }

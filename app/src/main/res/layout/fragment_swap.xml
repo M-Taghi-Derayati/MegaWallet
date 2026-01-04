@@ -6,27 +6,20 @@
     android:layout_height="match_parent"
     tools:context=".ui.swap.SwapFragment">
 
+
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
-        android:layout_width="0dp"
-        android:layout_marginTop="@dimen/_15sdp"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_width="match_parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        android:gravity="center"
+        android:layout_height="?attr/actionBarSize"
         app:title="تبدیل"
-        app:titleTextColor="@android:color/white">
-
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/iv_settings"
-            android:layout_width="@dimen/_35sdp"
-            android:layout_height="@dimen/_35sdp"
-            android:layout_gravity="end"
-            android:padding="@dimen/_5sdp"
-            android:src="@drawable/ic_setting" />
-    </com.google.android.material.appbar.MaterialToolbar>
-
+        android:layout_marginTop="@dimen/_10sdp"
+        app:navigationIcon="@drawable/ic_baseline_arrow_back_24"
+        app:navigationIconTint="@color/text_primary"
+        app:titleCentered="true"
+        app:titleTextColor="@color/text_primary" />
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/card_from"
@@ -76,7 +69,7 @@
                 android:layout_height="wrap_content"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
-                android:text="SOL"
+                android:text="انتخاب ارز پرداختی"
                 android:textColor="@android:color/white"
                 android:textSize="18sp"
                 app:iconPadding="8dp"
@@ -140,8 +133,7 @@
                 android:textStyle="bold"
                 app:layout_constraintEnd_toStartOf="@+id/btn_asset_to"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                tools:text="0.175576" />
+                app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
                 android:id="@+id/tv_amount_usd_to"
@@ -160,7 +152,7 @@
                 android:layout_height="wrap_content"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
-                android:text="USDT"
+                android:text="انتخاب ارز دریافتی"
                 android:textColor="@android:color/white"
                 android:textSize="18sp"
                 app:iconPadding="8dp"
@@ -183,57 +175,155 @@
     </com.google.android.material.card.MaterialCardView>
 
 
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/layout_quote_details"
+    <ScrollView
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:orientation="vertical"
-        android:visibility="gone"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/_20sdp"
+        app:layout_constraintBottom_toTopOf="@+id/btn_swap_action"
         app:layout_constraintEnd_toEndOf="@id/card_to"
         app:layout_constraintStart_toStartOf="@id/card_to"
-        app:layout_constraintTop_toBottomOf="@id/card_to"
-        tools:visibility="visible">
+        app:layout_constraintTop_toBottomOf="@id/card_to">
 
-        <RelativeLayout
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/layout_quote_details"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingVertical="8dp">
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
 
-            <TextView
-                android:layout_width="wrap_content"
+            <RelativeLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_alignParentStart="true"
-                android:text="نرخ تبدیل"
+                android:paddingVertical="8dp">
+
+                <TextView
+                    style="@style/textViewRegular2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:text="نرخ اختلاف"
+                    android:textColor="#8A8A9E" />
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/tv_slip_page"
+                    style="@style/TextAppearance.MaterialComponents.Body1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentStart="true"
+                    android:layout_marginLeft="@dimen/_30sdp"
+                    android:text="1 - 2 %"
+                    android:textColor="@android:color/white" />
+
+                <ProgressBar
+                    android:id="@+id/progress_bar"
+                    style="@style/CircularDeterminateProgressBar"
+                    android:layout_width="@dimen/_25sdp"
+                    android:layout_height="@dimen/_25sdp"
+                    android:max="30"
+                    android:progress="0"
+                    android:rotation="-90"
+                    tools:progress="60" />
+            </RelativeLayout>
+
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingVertical="8dp">
+
+                <TextView
+                    style="@style/textViewRegular2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:text="نام صرافی"
+                    android:textColor="#8A8A9E" />
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/tv_exchange"
+                    style="@style/TextAppearance.MaterialComponents.Body1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentStart="true"
+                    android:textColor="@android:color/white"
+                    tools:text="Intex" />
+            </RelativeLayout>
+
+
+            <!-- نرخ تبدیل -->
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingVertical="8dp">
+
+                <TextView
+                    style="@style/textViewRegular2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:text="نرخ تبدیل"
+                    android:textColor="#8A8A9E" />
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/tv_rate"
+                    style="@style/TextAppearance.MaterialComponents.Body1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentStart="true"
+                    android:textColor="@android:color/white"
+                    tools:text="1 ETH ≈ 4300.00 USDT" />
+            </RelativeLayout>
+
+            <!-- کارمزد پردازش (صرافی + ما) -->
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingVertical="8dp">
+
+                <TextView
+                    style="@style/textViewRegular2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:text="کارمزد پردازش"
+                    android:textColor="#8A8A9E" />
+
+                <TextView
+                    android:id="@+id/tv_processing_fee"
+                    style="@style/TextAppearance.MaterialComponents.Body1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentStart="true"
+                    android:textColor="@android:color/white"
+                    tools:text="0.1308 USDT" />
+            </RelativeLayout>
+
+            <!-- عنوان لیست شبکه‌های دریافت -->
+            <TextView
+                android:id="@+id/tv_network_options_title"
+                style="@style/textViewRegular2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="انتخاب شبکه دریافت"
                 android:textColor="#8A8A9E" />
 
-            <TextView
-                android:id="@+id/tv_rate"
-                android:layout_width="wrap_content"
+            <!-- RecyclerView برای نمایش گزینه‌های دریافت -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_receiving_options"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:textColor="@android:color/white"
-                tools:text="1 SOL ≈ 196.69 USDT" />
-        </RelativeLayout>
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingVertical="8dp">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="کارمزد معامله"
-                android:textColor="#8A8A9E"
-                android:layout_alignParentStart="true"/>
-            <TextView
-                android:id="@+id/tv_fee"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@android:color/white"
-                android:layout_alignParentEnd="true"
-                tools:text="19.5 USDT (1%)" />
-        </RelativeLayout>
-    </androidx.appcompat.widget.LinearLayoutCompat>
+                android:layout_marginTop="8dp"
+                android:nestedScrollingEnabled="false"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                tools:itemCount="3"
+                tools:listitem="@layout/list_item_network_option" />
+
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+    </ScrollView>
+
 
     <!-- دکمه اصلی -->
     <androidx.appcompat.widget.AppCompatButton

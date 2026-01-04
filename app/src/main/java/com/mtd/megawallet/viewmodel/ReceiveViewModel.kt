@@ -1,44 +1,47 @@
 package com.mtd.megawallet.viewmodel
 
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.mtd.core.model.NetworkName
 import com.mtd.core.model.NetworkType
 import com.mtd.core.registry.BlockchainRegistry
-import com.mtd.data.repository.IWalletRepository
-import com.mtd.domain.model.ResultResponse
+import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.megawallet.event.ReceiveUiState
 import com.mtd.megawallet.event.ReceiveUiState.AddressGroup
 import com.mtd.megawallet.event.ReceiveUiState.AddressItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class ReceiveViewModel @Inject constructor(
-    private val walletRepository: IWalletRepository,
-    private val blockchainRegistry: BlockchainRegistry
-) : ViewModel() {
+    private val blockchainRegistry: BlockchainRegistry,
+    private val activeWalletManager: com.mtd.domain.wallet.ActiveWalletManager,
+    errorManager: com.mtd.core.manager.ErrorManager
+) : BaseViewModel(errorManager) {
 
     private val _uiState = MutableStateFlow<ReceiveUiState>(ReceiveUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
     init {
-        loadReceiveAddresses()
+        observeActiveWallet()
     }
 
-    private fun loadReceiveAddresses() {
-        _uiState.value = ReceiveUiState.Loading
-        viewModelScope.launch {
-            val walletResult = walletRepository.loadExistingWallet()
-            if (walletResult !is ResultResponse.Success || walletResult.data == null) {
-                _uiState.value = ReceiveUiState.Error("کیف پول پیدا نشد.")
-                return@launch
+    private fun observeActiveWallet() {
+        launchSafe {
+            activeWalletManager.activeWallet.collect { wallet ->
+                if (wallet != null) {
+                    loadReceiveAddresses(wallet)
+                } else {
+                    _uiState.value = ReceiveUiState.Error("کیف پول پیدا نشد.")
+                }
             }
-            val activeWallet = walletResult.data!!
+        }
+    }
+
+    private fun loadReceiveAddresses(activeWallet: com.mtd.domain.model.Wallet) {
+        _uiState.value = ReceiveUiState.Loading
+        launchSafe {
 
             val addressGroups = mutableListOf<AddressGroup>()
 

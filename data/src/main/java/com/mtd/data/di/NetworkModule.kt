@@ -2,8 +2,9 @@ package com.mtd.data.di
 
 import android.content.Context
 import com.google.gson.Gson
-import com.mtd.core.socket.UnsafeTrustManager
 import com.mtd.data.service.CoinGeckoApiService
+import com.mtd.data.service.SwapApiService
+import com.mtd.data.service.USDTApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,12 +18,22 @@ import retrofit2.converter.scalars.ScalarsConverterFactory
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
+import javax.inject.Qualifier
 import javax.inject.Singleton
-import javax.net.ssl.X509TrustManager
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ForWebSocket
+
 
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
+
+    val serverIp="195.78.49.45"
+//    val serverIp="10.0.2.2"
+//    val serverIp="localhost"
+    //val serverIp="127.0.0.1"
 
 
     @Provides
@@ -41,12 +52,11 @@ object NetworkModule {
                 Timber.log(Timber.treeCount, message)
                 Timber.tag("Network").e(message)
             })).apply {
-                level = //if (BuildConfig.BUILD_TYPE=="debug")
+                level /*= if (BuildConfig.DEBUG)*/
                     HttpLoggingInterceptor.Level.BODY
-                //else
-                // HttpLoggingInterceptor.Level.NONE
-
-            }
+                /*else
+                    HttpLoggingInterceptor.Level.NONE
+*/            }
         }
 
         // --- ارائه‌دهنده‌های شبکه ---
@@ -59,9 +69,9 @@ object NetworkModule {
             return OkHttpClient.Builder()
                 .addInterceptor(networkConnectionInterceptor)
                 .addInterceptor(httpLoggingInterceptor)
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .writeTimeout(20, TimeUnit.SECONDS)
-                .readTimeout(20, TimeUnit.SECONDS)
+                .connectTimeout(35, TimeUnit.SECONDS)
+                .writeTimeout(35, TimeUnit.SECONDS)
+                .readTimeout(35, TimeUnit.SECONDS)
                 .build()
         }
 
@@ -97,14 +107,69 @@ object NetworkModule {
     @Named("WebSocketClient") // از Named Qualifier برای تمایز استفاده می‌کنیم
     fun provideWebSocketOkHttpClient(): OkHttpClient {
         return OkHttpClient.Builder()
-            .sslSocketFactory( UnsafeTrustManager.sslSocketFactory,
-                UnsafeTrustManager.trustAllCerts[0] as X509TrustManager)
-            .hostnameVerifier { _, _ -> true }
             .readTimeout(0, TimeUnit.MILLISECONDS) // برای سوکت‌ها تایم‌اوت نمی‌خواهیم
             .pingInterval(20, TimeUnit.SECONDS) // ارسال پینگ خودکار
             .build()
     }
 
+   /* @Provides
+    @Singleton
+    @SwapApiRetrofit
+    fun provideSwapApiService(okHttpClient: OkHttpClient, gson: Gson): Retrofit  {
+        return Retrofit.Builder()
+            .baseUrl("http://localhost:3000/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+    }*/
 
+
+    @Provides
+    @Singleton
+    fun provideSwapApiService(
+        retrofitBuilder: Retrofit.Builder,
+        gson: Gson
+    ): SwapApiService {
+        return retrofitBuilder
+            .baseUrl("http://${serverIp}:3000/") // Base URL مخصوص CoinGecko
+            .addConverterFactory(ScalarsConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(SwapApiService::class.java)
+    }
+
+
+    @Provides
+    @Singleton
+    @ForWebSocket // استفاده از Qualifier
+    fun provideWebSocketOrderOkHttpClient(): OkHttpClient {
+        return OkHttpClient.Builder()
+            .readTimeout(0, TimeUnit.SECONDS) // برای سوکت‌ها تایم‌اوت نمی‌خواهیم
+            .pingInterval(30, TimeUnit.SECONDS) // OkHttp به صورت خودکار هر ۳۰ ثانیه پینگ می‌فرستد
+            .build()
+    }
+
+//    /**
+//     * سرویس SwapApiService را با استفاده از نمونه Retrofit مخصوص خودش می‌سازد.
+//     */
+//    @Provides
+//    @Singleton
+//    fun provideSwapApiService(@SwapApiRetrofit retrofit: Retrofit): SwapApiService {
+//        return retrofit.create(SwapApiService::class.java)
+//    }
+
+    @Provides
+    @Singleton
+    fun provideUSDTApiService(
+        retrofitBuilder: Retrofit.Builder,
+        gson: Gson
+    ): USDTApiService {
+        return retrofitBuilder
+            .baseUrl("https://api.nobitex.ir/")
+            .addConverterFactory(ScalarsConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(USDTApiService::class.java)
+    }
 
 }

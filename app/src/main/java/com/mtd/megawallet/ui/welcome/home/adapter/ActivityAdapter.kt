@@ -8,8 +8,9 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.mtd.common_ui.loaded
 import com.mtd.megawallet.databinding.ItemActivityBinding
-import com.mtd.megawallet.event.HomeUiState.ActivityItem
-import com.mtd.megawallet.event.HomeUiState.ActivityType
+import com.mtd.megawallet.event.ActivityItem
+import com.mtd.megawallet.event.ActivityType
+
 import com.mtd.common_ui.R as commonUiR
 
 class ActivityAdapter : ListAdapter<ActivityItem, ActivityAdapter.ViewHolder>(DiffCallback()) {

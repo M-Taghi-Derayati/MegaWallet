@@ -1,7 +1,5 @@
 package com.mtd.megawallet.viewmodel
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.mtd.core.model.NetworkType
 import com.mtd.core.model.WalletKey
 import com.mtd.core.registry.AssetRegistry
@@ -16,8 +14,9 @@ import com.mtd.domain.model.Asset
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.UiAsset
 import com.mtd.domain.repository.IMarketDataRepository
-import com.mtd.megawallet.event.HomeUiState.AssetItem
-import com.mtd.megawallet.event.HomeUiState.FeeOption
+import com.mtd.megawallet.core.BaseViewModel
+import com.mtd.megawallet.event.AssetItem
+import com.mtd.megawallet.event.FeeOption
 import com.mtd.megawallet.event.SendUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -26,7 +25,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.datatypes.Address
 import org.web3j.abi.datatypes.Function
@@ -44,10 +42,12 @@ class SendViewModel @Inject constructor(
     private val marketDataRepository: IMarketDataRepository,
     private val dataSourceFactory: ChainDataSourceFactory,
     private val assetRegistry: AssetRegistry,
-    private val globalEventBus: GlobalEventBus
-) : ViewModel() {
+    private val globalEventBus: GlobalEventBus,
+    private val activeWalletManager: com.mtd.domain.wallet.ActiveWalletManager,
+    errorManager: com.mtd.core.manager.ErrorManager
+) : BaseViewModel(errorManager) {
 
-    private val _uiState = MutableStateFlow<SendUiState>(SendUiState.EnteringAddress())
+    val _uiState = MutableStateFlow<SendUiState>(SendUiState.EnteringAddress())
     val uiState = _uiState.asStateFlow()
 
     private var allCompatibleAssets = listOf<AssetItem>()
@@ -68,7 +68,7 @@ class SendViewModel @Inject constructor(
         if (!currentState.isValid) return
 
         _uiState.value = SendUiState.Loading("در حال یافتن دارایی‌های قابل ارسال...")
-        viewModelScope.launch {
+        launchSafe {
             // --- بخش اصلی و بازنویسی شده ---
             when (val assetsResult = fetchCompatibleAndFundedAssets(currentState.address)) {
                 is ResultResponse.Success -> {
@@ -92,19 +92,18 @@ class SendViewModel @Inject constructor(
      * متد جدید و بهینه: فقط دارایی‌های سازگار و با موجودی را دریافت می‌کند.
      */
     private suspend fun fetchCompatibleAndFundedAssets(address: String): ResultResponse<List<AssetItem>> {
-        try {
+
             // ۱. تشخیص نوع شبکه مقصد
             val targetNetworkType =
                 blockchainRegistry.getNetworkTypeForAddress(address) ?: return ResultResponse.Error(
                     Exception("نوع شبکه آدرس مقصد نامشخص است.")
                 )
 
-            // ۲. بارگذاری کیف پول فعال
-            val walletResult = walletRepository.loadExistingWallet()
-            if (walletResult !is ResultResponse.Success || walletResult.data == null) {
-                return ResultResponse.Error(Exception("کیف پول پیدا نشد."))
+            // ۲. بارگذاری کیف پول فعال از ActiveWalletManager
+            val activeWallet = activeWalletManager.activeWallet.value
+            if (activeWallet == null) {
+                return ResultResponse.Error(Exception("کیف پول فعال پیدا نشد."))
             }
-            val activeWallet = walletResult.data!!
 
             // ۳. **فقط** کلیدهای سازگار با شبکه مقصد را انتخاب کن
             val compatibleKeys = activeWallet.keys.filter { it.networkType == targetNetworkType }
@@ -150,7 +149,7 @@ class SendViewModel @Inject constructor(
                     networkId = asset.networkName,
                     iconUrl = asset.iconUrl,
                     balance = BalanceFormatter.formatBalance(asset.balance, asset.decimals),
-                    balanceUsd = BalanceFormatter.formatUsdValue(balanceUsd),
+                    balanceUsdt = BalanceFormatter.formatUsdValue(balanceUsd),
                     balanceRaw = balanceDecimal,
                     priceChange24h = priceInfo?.priceChanges24h?.toDouble() ?: 0.0,
                     priceUsdRaw = priceInfo?.priceUsd ?: BigDecimal.ZERO,
@@ -162,14 +161,11 @@ class SendViewModel @Inject constructor(
             }
 
             return ResultResponse.Success(finalAssetItems.sortedByDescending {
-                it.balanceUsd.removePrefix(
+                it.balanceUsdt.removePrefix(
                     "$"
                 ).replace(",", "").toDouble()
             })
 
-        } catch (e: Exception) {
-            return ResultResponse.Error(e)
-        }
     }
 
     /**
@@ -255,11 +251,11 @@ class SendViewModel @Inject constructor(
      */
     fun onAmountChanged(amountStr: String) {
         val currentState = _uiState.value as? SendUiState.EnteringDetails ?: return
-        val selectedAsset = currentState.selectedAsset
+        val selectedAsset = currentState.selectedAsset!!
         val selectedFee = currentState.selectedFee ?: return
 
         val amountDecimal = amountStr.toBigDecimalOrNull() ?: BigDecimal.ZERO
-        val amountUsd = amountDecimal * selectedAsset.priceUsdRaw
+        val amountUsd = amountDecimal * (selectedAsset.priceUsdRaw)
 
         // --- منطق جدید اعتبارسنجی ---
         val validationError = validateSendAmount(amountDecimal, selectedAsset, selectedFee)
@@ -339,12 +335,12 @@ class SendViewModel @Inject constructor(
      */
     fun onMaxButtonClicked() {
         val currentState = _uiState.value as? SendUiState.EnteringDetails ?: return
-        val selectedAsset = currentState.selectedAsset
+        val selectedAsset = currentState.selectedAsset!!
         val selectedFee = currentState.selectedFee ?: return
 
         // پیدا کردن موجودی توکن اصلی شبکه (مثلاً ETH برای شبکه Sepolia)
         val nativeAsset = allCompatibleAssets.find {
-            it.networkId == selectedAsset.networkId && it.isNativeToken
+            it.networkId == selectedAsset?.networkId && it.isNativeToken
         }
 
         if (nativeAsset == null) {
@@ -428,7 +424,8 @@ class SendViewModel @Inject constructor(
             contractAddress = if (asset.isNativeToken) null else asset.contractAddress, // <-- نیاز به این فیلدها در AssetItem داریم
             balance = BigInteger.ZERO // موجودی در اینجا مهم نیست
         )
-        var address = walletRepository.getActiveAddressForNetwork(asset.networkId)
+        val address = networkInfo.chainId?.let { activeWalletManager.getAddressForNetwork(it) }
+            ?: return emptyList()
         // فراخوانی متد قدرتمند DataSource
         val feeResult = dataSource.getFeeOptions(
             fromAddress = address,
@@ -478,7 +475,7 @@ class SendViewModel @Inject constructor(
         }
 
         // ساخت State برای صفحه تایید نهایی
-        val asset = currentState.selectedAsset
+        val asset = currentState.selectedAsset!!
         val fee = currentState.selectedFee!!
         val amountDecimal = currentState.amount.toBigDecimal()
 
@@ -494,7 +491,9 @@ class SendViewModel @Inject constructor(
             amountDisplay = "${currentState.amount} ${asset.symbol}",
             amountUsd = currentState.amountUsd,
             recipientAddress = currentState.recipientAddress,
-            fromAddress = walletRepository.getActiveAddressForNetwork(asset.networkId)?:"", // <-- needs a new repo method
+            fromAddress = blockchainRegistry.getNetworkById(asset.networkId)?.chainId?.let { 
+                activeWalletManager.getAddressForNetwork(it) 
+            } ?: "",
             fee = fee,
             totalDebit = BalanceFormatter.formatUsdValue(totalDebitUsd),
             totalDebitAsset = "${totalDebitDecimal.toPlainString()} ${asset.symbol}"
@@ -506,7 +505,7 @@ class SendViewModel @Inject constructor(
 
         _uiState.value = SendUiState.Sending // ۱. نمایش وضعیت "در حال ارسال" به UI
 
-        viewModelScope.launch {
+        launchSafe {
             val asset = currentState.asset
             val fee = currentState.fee
 
@@ -514,7 +513,7 @@ class SendViewModel @Inject constructor(
             val networkInfo = blockchainRegistry.getNetworkById(asset.networkId)
             if (networkInfo == null) {
                 _uiState.value = SendUiState.Error("اطلاعات شبکه یافت نشد.")
-                return@launch
+                return@launchSafe
             }
 
 
@@ -560,7 +559,7 @@ class SendViewModel @Inject constructor(
                         }
                         else->{
                             _uiState.value = SendUiState.Error("نوع شبکه پشتیبانی نمی‌شود.")
-                            return@launch
+                            return@launchSafe
                         }
                     }
                 }
@@ -579,7 +578,7 @@ class SendViewModel @Inject constructor(
                 }
                 else -> {
                     _uiState.value = SendUiState.Error("نوع شبکه پشتیبانی نمی‌شود.")
-                    return@launch
+                    return@launchSafe
                 }
             }
 
@@ -620,7 +619,7 @@ class SendViewModel @Inject constructor(
     fun onAssetSelected(asset: AssetItem) {
         val currentState = _uiState.value as? SendUiState.SelectingAsset ?: return
         _uiState.value = SendUiState.Loading("در حال دریافت اطلاعات کارمزد...")
-        viewModelScope.launch {
+        launchSafe {
             // آدرس گیرنده رو به متد پاس میدیم
             val feeOptions = fetchFeeOptionsForAsset(asset, currentState.recipientAddress)
             _uiState.value = SendUiState.EnteringDetails(

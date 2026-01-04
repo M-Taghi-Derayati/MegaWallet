@@ -1,31 +1,20 @@
 package com.mtd.megawallet.ui.welcome
 
-import android.os.Bundle
-import androidx.fragment.app.Fragment
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.widget.Toast
-import androidx.fragment.app.activityViewModels
 import androidx.hilt.navigation.fragment.hiltNavGraphViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
-import androidx.navigation.navGraphViewModels
 import com.mtd.megawallet.R
 import com.mtd.megawallet.core.BaseFragment
-import com.mtd.megawallet.databinding.FragmentHomeBinding
-import com.mtd.megawallet.databinding.FragmentHomeBinding.bind
 import com.mtd.megawallet.databinding.FragmentWelcomeBinding
 import com.mtd.megawallet.event.OnboardingNavigationEvent
 import com.mtd.megawallet.event.OnboardingUiState
 import com.mtd.megawallet.viewbinding.viewBinding
-import com.mtd.megawallet.viewmodel.MainViewModel
 import com.mtd.megawallet.viewmodel.OnboardingViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import kotlin.getValue
 
 
 @AndroidEntryPoint
@@ -71,9 +60,9 @@ class WelcomeFragment : BaseFragment<FragmentWelcomeBinding, OnboardingViewModel
 
     private fun handleNavigationEvent(event: OnboardingNavigationEvent) {
         when (event) {
-            OnboardingNavigationEvent.NavigateToHome -> {}
+            OnboardingNavigationEvent.NavigateToHome -> findNavController().navigate(R.id.action_welcome_to_home)
             OnboardingNavigationEvent.NavigateToImportOptions ->  findNavController().navigate(R.id.action_welcome_to_import_options)
-            is OnboardingNavigationEvent.NavigateToShowMnemonic -> {}
+            is OnboardingNavigationEvent.NavigateToShowMnemonic -> findNavController().navigate(R.id.action_welcome_to_home)
             else -> {}
         }
     }

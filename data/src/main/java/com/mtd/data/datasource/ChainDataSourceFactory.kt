@@ -1,6 +1,5 @@
 package com.mtd.data.datasource
 
-
 import com.mtd.core.model.NetworkName.BITCOINTESTNET
 import com.mtd.core.model.NetworkType
 import com.mtd.core.registry.AssetRegistry
@@ -8,8 +7,6 @@ import com.mtd.core.registry.BlockchainRegistry
 import okhttp3.OkHttpClient
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
-import org.web3j.protocol.Web3j
-import org.web3j.protocol.http.HttpService
 import retrofit2.Retrofit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,11 +18,9 @@ class ChainDataSourceFactory @Inject constructor(
     private val assetRegistry: AssetRegistry,
     private val okHttpClient: OkHttpClient
 ) {
-    // یک کش ساده برای جلوگیری از ساخت مکرر DataSource ها
     private val dataSourceCache = mutableMapOf<Long, IChainDataSource>()
 
     fun create(chainId: Long): IChainDataSource {
-        // اگر قبلاً ساخته شده، از کش برگردان
         if (dataSourceCache.containsKey(chainId)) {
             return dataSourceCache[chainId]!!
         }
@@ -35,18 +30,8 @@ class ChainDataSourceFactory @Inject constructor(
 
         val newDataSource = when (network.networkType) {
             NetworkType.EVM -> {
-                // ۱. انتخاب هوشمند RPC URL برای این شبکه
-                // TODO: منطق کامل سه‌لایه انتخاب RPC باید در یک کلاس جداگانه پیاده‌سازی شود
-                // و در اینجا فراخوانی شود. فعلاً از اولین RPC استفاده می‌کنیم.
-                val rpcUrl = network.defaultRpcUrls.firstOrNull()
-                    ?: throw IllegalStateException("No RPC URL configured for network: $chainId")
-
-                // ۲. ساخت یک نمونه Web3j جدید و مشخص برای این شبکه
-                val httpService = HttpService(rpcUrl, okHttpClient, false)
-                val web3j = Web3j.build(httpService)
-
-                // ۳. ساخت EvmDataSource با تمام وابستگی‌هایش
-                EvmDataSource(network , web3j,retrofitBuilder,assetRegistry)
+                // تغییر مهم: پاس دادن okHttpClient به جای ساختن Web3j در اینجا
+                EvmDataSource(network, retrofitBuilder, assetRegistry, okHttpClient)
             }
             NetworkType.BITCOIN -> {
                 val networkParams= if (network.name==BITCOINTESTNET){
@@ -56,11 +41,9 @@ class ChainDataSourceFactory @Inject constructor(
                 }
                 BitcoinDataSource(network, retrofitBuilder,networkParams)
             }
-            // ... (سایر انواع شبکه)
             else -> throw IllegalArgumentException("Unsupported network type: ${network.networkType}")
         }
 
-        // DataSource جدید را در کش ذخیره کن
         dataSourceCache[chainId] = newDataSource
         return newDataSource
     }

@@ -6,7 +6,10 @@
     "chainId": 11155111,
     "derivationPath": "m/44'/60'/0'/0/0",
     "rpcUrls": [
-      "https://sepolia.drpc.org"
+      "https://sepolia.drpc.org",
+      "https://rpc.sepolia.org",
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://1rpc.io/sepolia"
     ],
     "explorers": [
       "https://eth-sepolia.blockscout.com/"
@@ -14,9 +17,12 @@
     "webSocketUrl": "wss://sepolia.drpc.org",
     "decimals": 18,
     "currencySymbol": "ETH",
-    "phoenixContractAddress": "0x5B5cA9728B84BD3929E2594Db6921a345a171a74",
+    "phoenixContractAddress": "0xE6da582b8465EdD34B3e5f97932e122e7E739012",
+    "forwarderContractAddress": "0xaeae091bb824e3b9e9375fcdd44c9c55cd8be837",
     "blockExplorerUrl": "https://eth-sepolia.blockscout.com",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    "color": "#627EEA",
+    "faName": "سپولیا"
   },
   {
     "id": "bsc_testnet",
@@ -25,17 +31,22 @@
     "chainId": 97,
     "derivationPath": "m/44'/60'/0'/0/0",
     "rpcUrls": [
-      "https://bsc-testnet-rpc.publicnode.com"
+      "https://bsc-testnet-rpc.publicnode.com",
+      "https://data-seed-prebsc-1-s1.binance.org:8545",
+      "https://data-seed-prebsc-2-s1.binance.org:8545",
+      "https://bsc-testnet.drpc.org"
     ],
     "webSocketUrl": "wss://bsc-testnet.drpc.org",
     "explorers": [
-      "https://api-testnet.bscscan.com/"
+      "https://api.etherscan.io/"
     ],
     "decimals": 18,
     "currencySymbol": "tBNB",
-    "phoenixContractAddress": "0x90b6F0a89b92dCdA2F08490Fff88e33DE45DBcdD",
+    "phoenixContractAddress": "0xE6da582b8465EdD34B3e5f97932e122e7E739012",
     "blockExplorerUrl": "https://testnet.bscscan.com",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png",
+    "color": "#F3BA2F",
+    "faName": "تست‌نت بایننس"
   },
   {
     "id": "polygon_testnet",
@@ -44,17 +55,22 @@
     "chainId": 80002,
     "derivationPath": "m/44'/60'/0'/0/0",
     "rpcUrls": [
-      "https://polygon-amoy-bor-rpc.publicnode.com"
+      "https://polygon-amoy-bor-rpc.publicnode.com",
+      "https://rpc-amoy.polygon.technology",
+      "https://polygon-amoy.drpc.org",
+      "https://assets.zebra-nodes.com/rpc/polygon-amoy"
     ],
     "webSocketUrl": "wss://polygon-amoy.drpc.org",
     "explorers": [
-      "https://polygon.blockscout.com/api/v2"
+      "https://polygon.blockscout.com/api/v2/"
     ],
     "decimals": 18,
     "currencySymbol": "POL",
     "phoenixContractAddress": "",
     "blockExplorerUrl": "https://amoy.polygonscan.com/api",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/28321.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/28321.png",
+    "color": "#8247E5",
+    "faName": "تست‌نت پالیگان"
   },
   {
     "id": "bitcoin_mainnet",
@@ -71,7 +87,9 @@
     "currencySymbol": "BTC",
     "phoenixContractAddress": "",
     "blockExplorerUrl": "https://mempool.space",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png",
+    "color": "#F7931A",
+    "faName": "بیت‌کوین"
   },
   {
     "id": "bitcoin_testnet",
@@ -88,6 +106,8 @@
     "currencySymbol": "BTC",
     "phoenixContractAddress": "",
     "blockExplorerUrl": "https://mempool.space/testnet",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png",
+    "color": "#F7931A",
+    "faName": "تست‌نت بیت‌کوین"
   }
 ]

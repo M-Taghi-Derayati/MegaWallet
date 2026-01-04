@@ -1,8 +1,5 @@
 package com.mtd.megawallet.viewmodel
 
-import android.util.Log
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.mtd.core.assets.AssetConfig
 import com.mtd.core.model.NetworkName
 import com.mtd.core.model.NetworkType
@@ -10,29 +7,33 @@ import com.mtd.core.model.WalletKey
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.BalanceFormatter
+import com.mtd.core.utils.GlobalEvent
+import com.mtd.core.utils.GlobalEventBus
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.repository.IWalletRepository
+import com.mtd.domain.model.AssetPrice
 import com.mtd.domain.model.BitcoinTransaction
 import com.mtd.domain.model.EvmTransaction
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.Wallet
 import com.mtd.domain.repository.IMarketDataRepository
+import com.mtd.domain.wallet.ActiveWalletManager
+import com.mtd.megawallet.core.BaseViewModel
+import com.mtd.megawallet.event.ActivityItem
+import com.mtd.megawallet.event.ActivityType
+import com.mtd.megawallet.event.AssetItem
+import com.mtd.megawallet.event.AssetWithBalance
 import com.mtd.megawallet.event.HomeUiState
-import com.mtd.megawallet.event.HomeUiState.ActivityItem
-import com.mtd.megawallet.event.HomeUiState.AssetItem
-import com.mtd.megawallet.event.HomeUiState.AssetWithBalance
+import com.mtd.megawallet.event.HomeUiState.DisplayCurrency
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
+import timber.log.Timber
 import java.math.BigDecimal
+import java.math.RoundingMode
 import javax.inject.Inject
-
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -40,309 +41,240 @@ class HomeViewModel @Inject constructor(
     private val marketDataRepository: IMarketDataRepository,
     private val dataSourceFactory: ChainDataSourceFactory,
     private val assetRegistry: AssetRegistry,
-    private val blockchainRegistry: BlockchainRegistry
-) : ViewModel() {
+    private val blockchainRegistry: BlockchainRegistry,
+    private val globalEventBus: GlobalEventBus,
+    private val activeWalletManager: ActiveWalletManager,
+    errorManager: com.mtd.core.manager.ErrorManager
+) : BaseViewModel(errorManager) {
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
     init {
-        loadHomePageData()
+        observeActiveWallet()
+        listenToGlobalEvents()
     }
 
-    fun refreshData() {
-        loadHomePageData()
-    }
-
-    private suspend fun fetchAllTransactions(wallet: Wallet): List<TransactionRecord> {
-        // استفاده از coroutineScope برای ایجاد یک حیطه امن برای فراخوانی‌های موازی
-        return coroutineScope {
-            wallet.keys.map { key ->
-                // هر درخواست در یک Coroutine جداگانه (async) اجرا می‌شود
-                async(Dispatchers.IO) { // بهتر است روی ترد IO اجرا شود
-                    try {
-                        // ۱. اطمینان از وجود chainId (برای شبکه‌های غیر EVM می‌توان از یک مقدار پیش‌فرض استفاده کرد)
-                        val chainId = key.chainId ?: -1
-                        val dataSource = dataSourceFactory.create(chainId)
-
-                        // ۲. فراخوانی getTransactionHistory برای هر کلید/شبکه
-                        when (val result = dataSource.getTransactionHistory(key.address)) {
-                            is ResultResponse.Success -> {
-                                // --- بخش کامل شده ---
-                                // ۳. به هر تراکنش، نام شبکه (NetworkName) مربوط به کلید را اضافه می‌کنیم
-                                result.data.forEach { transaction ->
-                                    transaction.networkName = key.networkName
-                                }
-                                // حالا لیست تراکنش‌ها با اطلاعات کامل شبکه برگردانده می‌شود
-                                result.data
-                                // ---
-                            }
-                            is ResultResponse.Error -> {
-                                // اگر برای یک شبکه خطا رخ داد، لاگ می‌گیریم و یک لیست خالی برمی‌گردانیم
-                                Log.e("FetchTransactions", "Failed to fetch history for ${key.networkName}: ${result.exception.message}")
-                                emptyList<TransactionRecord>()
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.e("FetchTransactions", "Exception while fetching history for ${key.networkName}", e)
-                        emptyList<TransactionRecord>()
-                    }
+    private fun observeActiveWallet() {
+        launchSafe {
+            activeWalletManager.activeWallet.collect { wallet ->
+                if (wallet != null) {
+                    loadHomePageData(wallet)
                 }
-            }.awaitAll().flatten() // منتظر همه نتایج می‌مانیم و آنها را در یک لیست واحد ادغام می‌کنیم
-        }
-    }
-
-    /**
-     * متد اصلی برای بارگذاری تمام داده‌های صفحه اصلی.
-     */
-    private fun loadHomePageData() {
-        _uiState.value = HomeUiState.Loading
-        viewModelScope.launch {
-            try {
-                // ۱. بارگذاری کیف پول فعال
-                val walletResult = walletRepository.loadExistingWallet()
-                if (walletResult !is ResultResponse.Success || walletResult.data == null) {
-                    _uiState.value = HomeUiState.Error("کیف پول پیدا نشد.")
-                    return@launch
-                }
-                val activeWallet = walletResult.data!!
-
-                // ۲. نمایش فوری اسکلت UI
-                val allSupportedAssets = assetRegistry.getAllAssets()
-                val initialAssetItems = allSupportedAssets.map { assetConfig ->
-                    AssetItem(
-                        id = assetConfig.id,
-                        name = assetConfig.name,
-                        symbol = assetConfig.symbol,
-                        networkName = "on ${blockchainRegistry.getNetworkById(assetConfig.networkId)?.name?.name?.lowercase()}",
-                        networkId = assetConfig.networkId,
-                        iconUrl = assetConfig.iconUrl,
-                        balance = "...",
-                        balanceUsd = "...",
-                        balanceRaw = BigDecimal.ZERO,
-                        priceUsdRaw = BigDecimal.ZERO,
-                        decimals = assetConfig.decimals,
-                        contractAddress = assetConfig.contractAddress,
-                        isNativeToken = assetConfig.contractAddress == null
-                    )
-                }
-                _uiState.value = HomeUiState.Success(
-                    totalBalanceUsd = "...",
-                    isUpdating = true,
-                    assets = initialAssetItems,
-                    recentActivity = emptyList()
-                )
-
-                // ۳. بارگذاری داده‌های واقعی در پس‌زمینه به صورت موازی
-                val assetsWithBalanceDeferred =
-                    async { fetchAllBalances(activeWallet, allSupportedAssets) }
-                val transactionsDeferred = async { fetchAllTransactions(activeWallet) }
-
-                val assetsWithBalance = assetsWithBalanceDeferred.await()
-                val allTransactions = transactionsDeferred.await()
-
-                // ۴. گرفتن قیمت‌ها
-                val assetIdsForPricing = allSupportedAssets.mapNotNull { it.coinGeckoId }.distinct()
-                val pricesResult = if (assetIdsForPricing.isNotEmpty()) {
-                    marketDataRepository.getLatestPrices(assetIdsForPricing)
-                } else {
-                    ResultResponse.Success(emptyList())
-                }
-                val priceMap =
-                    (pricesResult as? ResultResponse.Success)?.data?.associateBy { it.assetId }
-                        ?: emptyMap()
-
-                // ۵. تبدیل نهایی داده‌ها و محاسبه موجودی کل
-                var totalBalanceUsd = BigDecimal.ZERO
-                val finalAssetItems = assetsWithBalance.map { assetWithBalance ->
-                    val config = assetWithBalance.config
-                    val priceInfo = priceMap[config.coinGeckoId]
-                    val priceUsd = priceInfo?.priceUsd ?: BigDecimal.ZERO
-                    val balanceDecimal =
-                        BigDecimal(assetWithBalance.balance).divide(BigDecimal.TEN.pow(config.decimals))
-                    val balanceUsd = balanceDecimal * priceUsd
-                    totalBalanceUsd += balanceUsd
-
-                    AssetItem(
-                        id = config.id,
-                        name = config.name,
-                        symbol = config.symbol,
-                        networkName = "on ${blockchainRegistry.getNetworkById(config.networkId)?.name?.name?.lowercase()}",
-                        networkId = config.networkId,
-                        iconUrl = config.iconUrl,
-                        balance = BalanceFormatter.formatBalance(
-                            assetWithBalance.balance,
-                            config.decimals
-                        ),
-                        balanceUsd = BalanceFormatter.formatUsdValue(balanceUsd),
-                        balanceRaw = balanceDecimal,
-                        priceUsdRaw = priceUsd,
-                        decimals = config.decimals,
-                        contractAddress = config.contractAddress,
-                        isNativeToken = config.contractAddress == null,
-                        priceChange24h = priceInfo?.priceChanges24h?.toDouble() ?: 0.0
-                    )
-                }
-
-                // تبدیل تراکنش‌ها به ActivityItem
-                val activityItems = allTransactions
-                    .sortedByDescending { it.timestamp } // جدیدترین‌ها اول
-                    .take(20) // فقط ۲۰ تای آخر
-                    .mapNotNull { transaction -> // استفاده از mapNotNull برای نادیده گرفتن تراکنش‌های ناشناخته
-                        mapTransactionToActivityItem(transaction, activeWallet.keys)
-                    }
-
-                // ۶. انتشار State نهایی
-                _uiState.value = HomeUiState.Success(
-                    totalBalanceUsd = BalanceFormatter.formatUsdValue(totalBalanceUsd),
-                    isUpdating = false,
-                    assets = finalAssetItems.sortedByDescending {
-                        it.balanceUsd.removePrefix("$").replace(",", "").toDouble()
-                    },
-                    recentActivity = activityItems
-                )
-            } catch (e: Exception) {
-                _uiState.value = HomeUiState.Error(e.message ?: "خطای ناشناخته")
             }
         }
     }
 
-
-    /*  private fun loadHomePageData() {
-        viewModelScope.launch {
-            // --- مرحله ۱: بارگذاری کیف پول و نمایش فوری اسکلت UI ---
-            _uiState.value = HomeUiState.Loading
-            val walletResult = walletRepository.loadExistingWallet()
-            if (walletResult !is ResultResponse.Success || walletResult.data == null) {
-                _uiState.value = HomeUiState.Error("کیف پول پیدا نشد.")
-                return@launch
-            }
-            val activeWallet = walletResult.data!!
-
-            // تمام دارایی‌های پشتیبانی شده را از رجیستری می‌خوانیم
+    private fun loadHomePageData(activeWallet: Wallet) {
+        launchSafe {
+            // ۱. نمایش فوری اسکلت UI
             val allSupportedAssets = assetRegistry.getAllAssets()
-
-            // یک لیست اولیه از AssetItem ها با مقادیر "در حال بارگذاری" می‌سازیم
             val initialAssetItems = allSupportedAssets.map { assetConfig ->
                 AssetItem(
                     id = assetConfig.id,
                     name = assetConfig.name,
-                    networkName = "on ${blockchainRegistry.getNetworkById(assetConfig.networkId)?.name?.name?.lowercase()}",
-                    networkId = "",
                     symbol = assetConfig.symbol,
+                    networkName = "on ${blockchainRegistry.getNetworkById(assetConfig.networkId)?.name?.name?.lowercase()}",
+                    networkId = assetConfig.networkId,
                     iconUrl = assetConfig.iconUrl,
                     balance = "...",
-                    balanceUsd = "...",
-                    priceChange24h = 0.0,
-                    balanceRaw = BigDecimal.ZERO
+                    balanceUsdt = "...",
+                    balanceRaw = BigDecimal.ZERO,
+                    priceUsdRaw = BigDecimal.ZERO,
+                    decimals = assetConfig.decimals,
+                    contractAddress = assetConfig.contractAddress,
+                    isNativeToken = assetConfig.contractAddress == null
                 )
             }
-
-            // **اولین انتشار State:** UI را با اسکلت اولیه نمایش می‌دهیم
             _uiState.value = HomeUiState.Success(
-                totalBalanceUsd = "...",
+                totalBalanceUsdt = "...",
                 isUpdating = true,
                 assets = initialAssetItems,
-                recentActivity = emptyList() // تاریخچه بعداً لود می‌شود
+                recentActivity = emptyList()
             )
 
-            // --- مرحله ۲: بارگذاری موجودی‌ها و قیمت‌ها در پس‌زمینه ---
-
-            // گرفتن قیمت‌ها
-            val assetIdsForPricing = allSupportedAssets.mapNotNull { it.coinGeckoId }.distinct()
-            val pricesResult = marketDataRepository.getLatestPrices(assetIdsForPricing)
-            val priceMap = (pricesResult as? ResultResponse.Success)?.data?.associateBy { it.assetId } ?: emptyMap()
-
-            // گرفتن موجودی‌ها
-            val assetsWithBalance = fetchAllBalances(activeWallet, allSupportedAssets)
-
-            // --- مرحله ۳: آپدیت نهایی UI با داده‌های واقعی ---
-            var totalBalanceUsd = BigDecimal.ZERO
-            val finalAssetItems = assetsWithBalance.map { assetWithBalance ->
-                val priceInfo = priceMap[assetWithBalance.config.coinGeckoId]
-                val priceUsd = priceInfo?.priceUsd ?: BigDecimal.ZERO
-                val balanceDecimal = BigDecimal(assetWithBalance.balance).divide(BigDecimal.TEN.pow(assetWithBalance.config.decimals))
-                val balanceUsd = balanceDecimal * priceUsd
-                totalBalanceUsd += balanceUsd
-
-                AssetItem(
-                    id = assetWithBalance.config.id,
-                    name = assetWithBalance.config.name,
-                    networkName = "on ${blockchainRegistry.getNetworkById(assetWithBalance.config.networkId)?.name?.name?.lowercase()}",
-                    iconUrl = assetWithBalance.config.iconUrl,
-                    networkId = "",
-                    symbol = assetWithBalance.config.symbol,
-                    balance = BalanceFormatter.formatBalance(assetWithBalance.balance, assetWithBalance.config.decimals),
-                    balanceUsd = BalanceFormatter.formatUsdValue(balanceUsd),
-                    priceChange24h = priceInfo?.priceChanges24h?.toDouble() ?: 0.0,
-                    balanceRaw = BigDecimal.ZERO
-                )
-            }
-
-            // **دومین انتشار State:** UI را با داده‌های کامل و نهایی آپدیت می‌کنیم
-            _uiState.value = HomeUiState.Success(
-                totalBalanceUsd = BalanceFormatter.formatUsdValue(totalBalanceUsd),
-                isUpdating = false,
-                assets = finalAssetItems.sortedByDescending { it.balanceUsd.removePrefix("$").replace(",", "").toDouble() },
-                recentActivity = emptyList() // TODO: Fetch recent activity
-            )
-        }
-    }*/
-
-    private suspend fun fetchAllBalances(
-        wallet: Wallet,
-        assets: List<AssetConfig>
-    ): List<AssetWithBalance> {
-        return coroutineScope {
-            // دارایی‌ها را بر اساس شبکه گروه‌بندی می‌کنیم تا درخواست‌ها بهینه شوند
-            val assetsByNetwork = assets.groupBy { it.networkId }
-
-            assetsByNetwork.map { (networkId, assetsInNetwork) ->
-                async {
-                    val networkInfo =
-                        blockchainRegistry.getNetworkById(networkId) ?: return@async emptyList()
-                    val key =
-                        wallet.keys.find { it.networkName.name.lowercase() == networkInfo.name.name.lowercase() }
-                            ?: return@async emptyList()
-                    val dataSource = dataSourceFactory.create(networkInfo.chainId ?: -1)
-
-                    if (networkInfo.networkType == NetworkType.EVM) {
-                        val result = dataSource.getBalanceEVM(key.address)
-                        if (result is ResultResponse.Success) {
-                            result.data.mapNotNull { fetchedAsset ->
-                                val config = assetsInNetwork.find {
-                                    it.symbol == fetchedAsset.symbol && (it.contractAddress == null || it.contractAddress.equals(
-                                        fetchedAsset.contractAddress,
-                                        true
-                                    ))
-                                }
-                                config?.let {
-                                    AssetWithBalance(it, fetchedAsset.balance)
-                                }
-                            }
-                        } else emptyList()
-                    } else { // Bitcoin and other non-EVM chains
-                        val result = dataSource.getBalance(key.address)
-                        if (result is ResultResponse.Success) {
-                            assetsInNetwork.firstOrNull()
-                                ?.let { listOf(AssetWithBalance(it, result.data)) } ?: emptyList()
-                        } else emptyList()
+            // ۳. دریافت موجودی‌ها به صورت موازی اما ایمن (بدون awaitAll)
+            val networks = blockchainRegistry.getAllNetworks()
+            networks.forEach { network ->
+                launchSafe {
+                    val assetsForNetwork = assetRegistry.getAssetsForNetwork(network.id)
+                    if (assetsForNetwork.isNotEmpty()) {
+                        val result =
+                            fetchBalancesForNetwork(activeWallet, network.id, assetsForNetwork)
+                        if (result.isNotEmpty()) {
+                            updateAssetsState(result)
+                        }
                     }
                 }
-            }.awaitAll().flatten()
+            }
+
+            // ۳.۵. دریافت قیمت‌ها (جداگانه و موازی)
+            launchSafe {
+                val allAssetIds = allSupportedAssets.mapNotNull { it.coinGeckoId }.distinct()
+                if (allAssetIds.isNotEmpty()) {
+                    val pricesResult = marketDataRepository.getLatestPrices(allAssetIds)
+                    if (pricesResult is ResultResponse.Success) {
+                        val priceMap = pricesResult.data.associateBy { it.assetId }
+                        updatePricesState(priceMap)
+                    }
+                }
+            }
+
+            // ۴. دریافت تراکنش‌ها (جداگانه)
+            launchSafe {
+                val allTransactions = fetchAllTransactions(activeWallet)
+                val activityItems = allTransactions
+                    .sortedByDescending { it.timestamp }
+                    .take(20)
+                    .mapNotNull { transaction ->
+                        mapTransactionToActivityItem(transaction, activeWallet.keys)
+                    }
+
+                _uiState.update { currentState ->
+                    if (currentState is HomeUiState.Success) {
+                        currentState.copy(recentActivity = activityItems, isUpdating = false)
+                    } else currentState
+                }
+            }
         }
     }
 
+    private suspend fun fetchBalancesForNetwork(
+        wallet: Wallet,
+        networkId: String,
+        assets: List<AssetConfig>
+    ): List<AssetWithBalance> {
+        val networkInfo = blockchainRegistry.getNetworkById(networkId) ?: return emptyList()
+        val key =
+            wallet.keys.find { it.networkName.name.lowercase() == networkInfo.name.name.lowercase() }
+                ?: return emptyList()
+        val dataSource = dataSourceFactory.create(networkInfo.chainId ?: -1)
+
+        return if (networkInfo.networkType == NetworkType.EVM) {
+            val result = dataSource.getBalanceEVM(key.address)
+            if (result is ResultResponse.Success) {
+                result.data.mapNotNull { fetchedAsset ->
+                    val config = assets.find {
+                        it.symbol == fetchedAsset.symbol && (it.contractAddress == null || it.contractAddress.equals(
+                            fetchedAsset.contractAddress,
+                            true
+                        ))
+                    }
+                    config?.let { AssetWithBalance(it, fetchedAsset.balance) }
+                }
+            } else {
+                 if (result is ResultResponse.Error) throw result.exception // Rethrow for global handler
+                 emptyList()
+            }
+        } else {
+            val result = dataSource.getBalance(key.address)
+            if (result is ResultResponse.Success) {
+                assets.firstOrNull()?.let { listOf(AssetWithBalance(it, result.data)) }
+                    ?: emptyList()
+            } else {
+                 if (result is ResultResponse.Error) throw result.exception // Rethrow for global handler
+                 emptyList()
+            }
+        }
+    }
+
+    private fun updateAssetsState(newAssets: List<AssetWithBalance>) {
+        launchSafe {
+            val (usdtRate, irrRate) = fetchExchangeRates()
+
+            _uiState.update { currentState ->
+                if (currentState is HomeUiState.Success) {
+                    val updatedList = currentState.assets.map { item ->
+                        val matchingAsset = newAssets.find { it.config.id == item.id }
+                        if (matchingAsset != null) {
+                            val balanceDecimal = BigDecimal(matchingAsset.balance).divide(
+                                BigDecimal.TEN.pow(matchingAsset.config.decimals)
+                            )
+                            // حفظ قیمت‌های موجود و محاسبه مجدد balanceUsd
+                            val balanceUsd = if (item.priceUsdRaw > BigDecimal.ZERO) {
+                                balanceDecimal * item.priceUsdRaw
+                            } else {
+                                BigDecimal.ZERO
+                            }
+
+                            val balanceUsdt = balanceUsd / usdtRate
+                            val balanceIrr = balanceUsd * irrRate
+
+                            item.copy(
+                                balance = BalanceFormatter.formatBalance(
+                                    matchingAsset.balance,
+                                    matchingAsset.config.decimals
+                                ),
+                                balanceUsdt = BalanceFormatter.formatUsdValue(balanceUsdt),
+                                balanceIrr = "{balanceIrr.setScale(0, RoundingMode.HALF_UP)}",
+                                formattedDisplayBalance = BalanceFormatter.formatUsdValue(balanceUsdt), // پیش‌فرض تتر
+                                balanceRaw = balanceDecimal
+                                // priceUsdRaw و priceChange24h را حفظ می‌کنیم
+                            )
+                        } else {
+                            item
+                        }
+                    }
+
+                    // محاسبه totalBalanceUsd
+                    val totalUsd = updatedList.sumOf {
+                        if (it.priceUsdRaw > BigDecimal.ZERO) it.balanceRaw * it.priceUsdRaw else BigDecimal.ZERO
+                    }
+                    val totalUsdt = totalUsd / usdtRate
+                    val totalIrr = totalUsd * irrRate
+
+                    currentState.copy(
+                        assets = updatedList,
+                        totalBalanceUsdt = BalanceFormatter.formatUsdValue(totalUsdt),
+                        totalBalanceIrr = "{totalIrr.setScale(0, RoundingMode.HALF_UP)}"
+                    )
+                } else {
+                    currentState
+                }
+            }
+        }
+    }
+
+    private suspend fun fetchAllTransactions(wallet: Wallet): List<TransactionRecord> {
+        // اینجا هم می‌توانیم از launchSafe داخلی استفاده کنیم یا همینطور بگذاریم چون در launchSafe والد است
+        // اما برای اینکه awaitAll کل پروسه را قفل نکند، بهتر است لیست را برگردانیم
+        // فعلاً برای سادگی همان منطق قبلی را با try-catch داخلی نگه می‌داریم
+        val allTxs = mutableListOf<TransactionRecord>()
+        wallet.keys.forEach { key ->
+            try {
+                val chainId = key.chainId ?: -1
+                val dataSource = dataSourceFactory.create(chainId)
+                val result = dataSource.getTransactionHistory(key.address)
+                if (result is ResultResponse.Success) {
+                    result.data.forEach { it.networkName = key.networkName }
+                    allTxs.addAll(result.data)
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error fetching transactions for ${key.networkName}")
+            }
+        }
+        return allTxs
+    }
+
+    private fun listenToGlobalEvents() {
+        launchSafe {
+            globalEventBus.events.collect { event ->
+                if (event is GlobalEvent.WalletNeedsRefresh) {
+                    Timber.i("WalletNeedsRefresh event received, forcing data refresh.")
+                    activeWalletManager.activeWallet.value?.let { wallet ->
+                        loadHomePageData(wallet)
+                    }
+                }
+            }
+        }
+    }
 
     private fun mapTransactionToActivityItem(
         transaction: TransactionRecord,
-        userKeys: List<WalletKey> // لیست تمام کلیدهای کاربر
+        userKeys: List<WalletKey>
     ): ActivityItem? {
-
         return when (transaction) {
             is EvmTransaction -> {
-                // ۱. پیدا کردن شبکه مربوط به این تراکنش
-                // ما آدرس کاربر رو از لیست کلیدها پیدا می‌کنیم که در این تراکنش حضور داره
                 val userAddressInTx = userKeys.find {
                     it.address.equals(transaction.fromAddress, true) || it.address.equals(transaction.toAddress, true)
                 }?.address
@@ -352,40 +284,29 @@ class HomeViewModel @Inject constructor(
                 }
                 val network = blockchainRegistry.getNetworkByName(keyForNetwork?.networkName ?: return null) ?: return null
 
-                // --- منطق جدید و اصلاح شده برای پیدا کردن دارایی ---
                 var identifiedAsset: AssetConfig?
-
-                // ابتدا چک می‌کنیم آیا این یک تراکنش توکن ERC20 است یا نه.
-                // تراکنش‌های ERC20 همیشه به یک آدرس قرارداد ارسال میشن.
-                // و مقدار value (ارسال ETH) معمولا صفر است.
                 val possibleToken = assetRegistry.getAllAssets().find {
-                    it.contractAddress != null && it.contractAddress.equals(transaction.toAddress, true)
+                    it.contractAddress != null && it.contractAddress.equals(
+                        transaction.contractAddress,
+                        true
+                    )
                 }
 
-                identifiedAsset = // این یک تراکنش توکن ERC20 است (مثل ارسال USDC)
-                    possibleToken ?: // این یک تراکنش توکن اصلی شبکه است (Native ETH, BNB, etc.)
-                            // یا یک دریافت توکن ERC20 است که باید لاگ‌ها رو بررسی کنیم (فعلا ساده‌سازی می‌کنیم)
-                            assetRegistry.getAssetsForNetwork(network.id).find { it.contractAddress == null }
+                identifiedAsset = possibleToken ?: assetRegistry.getAssetsForNetwork(network.id)
+                    .find { it.contractAddress == null }
 
-                if (identifiedAsset == null) return null // اگر دارایی پیدا نشد، این تراکنش را نادیده بگیر
-
-                // --- بقیه منطق بدون تغییر، فقط از identifiedAsset استفاده می‌کند ---
-                val amountDecimal = BigDecimal(transaction.amount)
-                    .divide(BigDecimal.TEN.pow(identifiedAsset.decimals))
-
+                if (identifiedAsset == null) return null
 
                 val title: String
                 val subtitle: String
-                val type: HomeUiState.ActivityType
+                val type: ActivityType
 
                 if (transaction.isOutgoing) {
-                    type = HomeUiState.ActivityType.SEND
+                    type = ActivityType.SEND
                     title = "ارسال ${identifiedAsset.symbol}"
-                    // برای ارسال توکن، گیرنده واقعی در Input Data هست، اما برای سادگی فعلا از toAddress استفاده می‌کنیم
-                    // در آینده باید Input Data رو پارس کنیم تا گیرنده واقعی رو پیدا کنیم.
                     subtitle = "به: ${transaction.toAddress.take(6)}...${transaction.toAddress.takeLast(4)}"
                 } else {
-                    type = HomeUiState.ActivityType.RECEIVE
+                    type = ActivityType.RECEIVE
                     title = "دریافت ${identifiedAsset.symbol}"
                     subtitle = "از: ${transaction.fromAddress.take(6)}...${transaction.fromAddress.takeLast(4)}"
                 }
@@ -400,26 +321,21 @@ class HomeViewModel @Inject constructor(
                     iconUrl = identifiedAsset.iconUrl
                 )
             }
-
             is BitcoinTransaction -> {
-                val network =
-                    blockchainRegistry.getNetworkByName(NetworkName.BITCOINTESTNET) // فرض تست نت
-                val asset = assetRegistry.getAssetsForNetwork(network?.id ?: "")
-                    .first() // بیت کوین فقط یک دارایی اصلی دارد
-
-                val amountDecimal = BigDecimal(transaction.amount).divide(BigDecimal.TEN.pow(asset.decimals))
+                val network = blockchainRegistry.getNetworkByName(NetworkName.BITCOINTESTNET)
+                val asset = assetRegistry.getAssetsForNetwork(network?.id ?: "").first()
 
                 val title: String
                 val subtitle: String
-                val type: HomeUiState.ActivityType
+                val type: ActivityType
 
                 if (transaction.isOutgoing) {
-                    type = HomeUiState.ActivityType.SEND
+                    type = ActivityType.SEND
                     title = "ارسال ${asset.symbol}"
                     subtitle =
                         "به: ${transaction.toAddress?.take(6)}...${transaction.toAddress?.takeLast(4)}"
                 } else {
-                    type = HomeUiState.ActivityType.RECEIVE
+                    type = ActivityType.RECEIVE
                     title = "دریافت ${asset.symbol}"
                     subtitle = "از: ${transaction.fromAddress?.take(6)}...${
                         transaction.fromAddress?.takeLast(4)
@@ -442,7 +358,109 @@ class HomeViewModel @Inject constructor(
                 )
             }
 
-            else -> null // برای انواع تراکنش ناشناخته
+            else -> null
+        }
+    }
+    // و یک متد جدید برای آپدیت قیمت‌ها:
+
+    // تغییر واحد پول نمایش داده شده
+    fun toggleDisplayCurrency() {
+        _uiState.update { currentState ->
+            if (currentState is HomeUiState.Success) {
+                val newCurrency = when (currentState.displayCurrency) {
+                    DisplayCurrency.USDT -> DisplayCurrency.IRR
+                    DisplayCurrency.IRR -> DisplayCurrency.USDT
+                    else -> DisplayCurrency.USDT // Default fallback
+                }
+
+                // آپدیت کردن لیست دارایی‌ها بر اساس ارز جدید
+                val updatedAssets = currentState.assets.map { asset ->
+                    val newDisplayBalance = when (newCurrency) {
+                        DisplayCurrency.USDT -> asset.balanceUsdt
+                        DisplayCurrency.IRR -> asset.balanceIrr
+                    }
+                    // فقط فیلد نمایش را آپدیت می‌کنیم
+                    asset.copy(formattedDisplayBalance = newDisplayBalance)
+                }
+
+                currentState.copy(
+                    displayCurrency = newCurrency,
+                    assets = updatedAssets
+                )
+            } else {
+                currentState
+            }
+        }
+    }
+
+    // در HomeViewModel
+    private suspend fun fetchExchangeRates(): Pair<BigDecimal, BigDecimal> {
+        // دریافت قیمت USDT/USD (معمولاً 1)
+        val usdtPrice = BigDecimal.ONE
+
+        // دریافت قیمت USD/IRR از چند صرافی
+        val irrPrice = fetchUsdToIrrRate()
+
+        return Pair(usdtPrice, irrPrice)
+    }
+
+    private suspend fun fetchUsdToIrrRate(): BigDecimal {
+        return try {
+           // val result = marketDataRepository.getUsdToIrrRate()
+            if (false) {
+               // result.data.rate
+                BigDecimal("127000000")
+            } else {
+                BigDecimal("60000") // Fallback
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error fetching USD to IRR rate")
+            BigDecimal("60000") // Fallback
+        }
+    }
+
+    private fun updatePricesState(priceMap: Map<String, AssetPrice>) {
+        launchSafe {
+            val (usdtRate, irrRate) = fetchExchangeRates()
+
+            _uiState.update { currentState ->
+                if (currentState is HomeUiState.Success) {
+                    val updatedList = currentState.assets.map { item ->
+                        val assetConfig = assetRegistry.getAssetById(item.id)
+                        val priceData = assetConfig?.coinGeckoId?.let { priceMap[it] }
+                        if (priceData != null) {
+                            val balanceUsd = item.balanceRaw * priceData.priceUsd
+                            val balanceUsdt = balanceUsd / usdtRate
+                            val balanceIrr = balanceUsd * irrRate
+
+                            item.copy(
+                                balanceUsdt = BalanceFormatter.formatUsdValue(balanceUsdt).replace("$", ""),
+                                balanceIrr = "${balanceIrr.setScale(0, RoundingMode.HALF_UP)} ",
+                                formattedDisplayBalance = BalanceFormatter.formatUsdValue(balanceUsdt).replace("$", ""), // پیش‌فرض تتر
+                                priceUsdRaw = priceData.priceUsd,
+                                priceChange24h = priceData.priceChanges24h.toDouble()
+                            )
+                        } else {
+                            item
+                        }
+                    }
+
+                    // محاسبه totalBalance به هر سه ارز
+                    val totalUsd = updatedList.sumOf {
+                        if (it.priceUsdRaw > BigDecimal.ZERO) it.balanceRaw * it.priceUsdRaw else BigDecimal.ZERO
+                    }
+                    val totalUsdt = totalUsd / usdtRate
+                    val totalIrr = totalUsd * irrRate
+
+                    currentState.copy(
+                        assets = updatedList,
+                        totalBalanceUsdt = BalanceFormatter.formatUsdValue(totalUsdt),
+                        totalBalanceIrr = "${totalIrr.setScale(0, RoundingMode.HALF_UP)}"
+                    )
+                } else {
+                    currentState
+                }
+            }
         }
     }
 }

@@ -11,24 +11,27 @@ interface IWalletRepository {
 
     /**
      * یک کیف پول جدید بر اساس کلمات بازیابی ایجاد و ذخیره می‌کند.
+     * @param id ID اختیاری برای کیف پول (در صورت restore از cloud). اگر null باشد، UUID جدید تولید می‌شود.
      * @return یک Result که در صورت موفقیت، حاوی آبجکت Wallet است.
      */
-    suspend fun createNewWallet(): ResultResponse<Wallet>
+    suspend fun createNewWallet(name: String, color: Int, id: String? = null): ResultResponse<Wallet>
 
     /**
      * یک کیف پول موجود را از طریق کلمات بازیابی وارد می‌کند.
      * @param mnemonic کلمات بازیابی وارد شده توسط کاربر.
+     * @param id ID اختیاری برای کیف پول (در صورت restore از cloud). اگر null باشد، UUID جدید تولید می‌شود.
      * @return یک Result که در صورت موفقیت، حاوی آبجکت Wallet است.
      */
-    suspend fun importWalletFromMnemonic(mnemonic: String): ResultResponse<Wallet>
+    suspend fun importWalletFromMnemonic(mnemonic: String, name: String, color: Int, id: String? = null): ResultResponse<Wallet>
 
     /**
      * یک کیف پول موجود را از طریق کلید خصوصی وارد می‌کند.
      * (این متد برای سادگی فعلاً فقط برای شبکه‌های EVM کار می‌کند)
      * @param privateKey کلید خصوصی وارد شده توسط کاربر.
+     * @param id ID اختیاری برای کیف پول (در صورت restore از cloud). اگر null باشد، UUID جدید تولید می‌شود.
      * @return یک Result که در صورت موفقیت، حاوی آبجکت Wallet است.
      */
-    suspend fun importWalletFromPrivateKey(privateKey: String): ResultResponse<Wallet>
+    suspend fun importWalletFromPrivateKey(privateKey: String, name: String, color: Int, id: String? = null): ResultResponse<Wallet>
 
     /**
      * کیف پول ذخیره شده فعلی را از حافظه امن بارگذاری می‌کند.
@@ -50,16 +53,30 @@ interface IWalletRepository {
 
     /**
      * تمام اطلاعات مربوط به کیف پول فعلی را از حافظه امن پاک می‌کند.
+     * @deprecated Use deleteWallet(walletId: String) instead. This method will be removed in a future version.
      */
+    @Deprecated("Use deleteWallet(walletId: String) instead", ReplaceWith("deleteWallet(getActiveWalletId() ?: return)"))
     suspend fun deleteWallet()
 
+    /**
+     * حذف یک کیف پول خاص با استفاده از ID.
+     */
+    suspend fun deleteWallet(walletId: String): ResultResponse<Unit>
+
+    /**
+     * به‌روزرسانی نام یک کیف پول خاص.
+     */
+    suspend fun updateWalletName(walletId: String, newName: String): ResultResponse<Unit>
+
+    /**
+     * به‌روزرسانی رنگ یک کیف پول خاص.
+     */
+    suspend fun updateWalletColor(walletId: String, newColor: Int): ResultResponse<Unit>
 
     /**
      * یک تراکنش را امضا کرده و به شبکه ارسال می‌کند.
-     * @param networkType شبکه‌ای که تراکنش باید در آن ارسال شود.
-     * @param toAddress آدرس مقصد.
-     * @param amount مقدار ارسالی (در واحد Wei).
-     * @return یک Result که در صورت موفقیت، حاوی هش تراکنش (Transaction Hash) است.
+     * @param params پارامترهای تراکنش.
+     * @return یک Result که در صورت موفقیت، حاوی هش تراکنش است.
      */
     suspend fun sendTransaction(
         params: TransactionParams
@@ -67,14 +84,33 @@ interface IWalletRepository {
 
     /**
      * لیست تمام دارایی‌های کاربر (توکن‌ها) را برای یک شبکه خاص به همراه موجودی آن‌ها برمی‌گرداند.
-     * @param networkType شبکه‌ای که می‌خواهیم دارایی‌های آن را بگیریم.
+     * @param networkName نام شبکه‌ای که می‌خواهیم دارایی‌های آن را بگیریم.
      * @return یک Result که در صورت موفقیت، حاوی لیستی از Asset است.
      */
     suspend fun getAssets(networkName: NetworkName): ResultResponse<List<Asset>>
 
+    /**
+     * لیست تمام کیف پول‌های ذخیره شده در دستگاه (فقط متادیتا) را برمی‌گرداند.
+     */
+    suspend fun getAllWallets(): ResultResponse<List<Wallet>>
+ 
+    /**
+     * کیف پول فعال سیستم را با استفاده از ID تغییر می‌دهد.
+     */
+    suspend fun switchActiveWallet(walletId: String): ResultResponse<Unit>
+ 
+    /**
+     * ID کیف پول فعال فعلی را برمی‌گرداند.
+     */
+    suspend fun getActiveWalletId(): String?
+ 
     suspend fun getTransactionHistory( networkName: NetworkName, userAddress: String): ResultResponse<List<TransactionRecord>>
-
+ 
+    /**
+     * آدرس کیف پول فعال را برای یک شبکه خاص برمی‌گرداند.
+     * @deprecated Use ActiveWalletManager.getAddressForNetwork(chainId) instead. This method will be removed in a future version.
+     */
+    @Deprecated("Use ActiveWalletManager.getAddressForNetwork(chainId) instead", ReplaceWith("activeWalletManager.getAddressForNetwork(blockchainRegistry.getNetworkById(networkId)?.chainId ?: return null)"))
     suspend fun getActiveAddressForNetwork(networkId: String): String?
-
+ 
 }
-

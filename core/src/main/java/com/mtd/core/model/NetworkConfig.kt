@@ -13,5 +13,7 @@ data class NetworkConfig(
     val iconUrl: String,
     val phoenixContractAddress: String?,
     val blockExplorerUrl: String?, // URL برای مشاهده در مرورگر
-    val explorers: List<String> // لیست Base URL های API اکسپلوررها
+    val explorers: List<String>, // لیست Base URL های API اکسپلوررها
+    val color: String? = null, // رنگ شبکه به صورت هگز
+    val faName: String? = null // نام فارسی شبکه
 )

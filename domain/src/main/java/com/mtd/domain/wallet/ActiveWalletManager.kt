@@ -16,6 +16,8 @@ class ActiveWalletManager @Inject constructor(
     private val _activeWallet = MutableStateFlow<Wallet?>(null)
     val activeWallet = _activeWallet.asStateFlow()
 
+    private val _activeWalletId = MutableStateFlow<String?>(null)
+    val activeWalletId = _activeWalletId.asStateFlow()
 
     /**
      * کیف پول را "باز" می‌کند.
@@ -29,6 +31,7 @@ class ActiveWalletManager @Inject constructor(
 
         // ۲. آبجکت Wallet را در StateFlow قرار بده
         _activeWallet.value = wallet
+        _activeWalletId.value = wallet.id
     }
 
     /**
@@ -42,6 +45,7 @@ class ActiveWalletManager @Inject constructor(
 
         // ۲. StateFlow را پاک کن
         _activeWallet.value = null
+        _activeWalletId.value = null
     }
 
 

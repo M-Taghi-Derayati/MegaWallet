@@ -136,7 +136,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/button_receive"
         app:layout_constraintTop_toTopOf="@+id/button_send"
-        app:srcCompat="@drawable/ic_swap" />
+        app:srcCompat="@drawable/ic_swap_old" />
 
     <TextView
         style="@style/textViewRegular2"
@@ -188,7 +188,7 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:gravity="center"
-            android:text="ابزار ها"
+            android:text="سابقه تراکنش"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="@id/g_left_strategic"
             app:layout_constraintStart_toStartOf="parent"
@@ -200,7 +200,7 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:gravity="center"
-            android:text="سابقه تراکنش"
+            android:text="ابزار ها"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="@id/g_left_strategic"

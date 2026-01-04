@@ -18,6 +18,7 @@
     <color name="semantic_error">#FF6B6B</color>
     <color name="semantic_success">#25C992</color>
     <color name="semantic_warning">#FFB800</color>
+    <color name="RedDarker">#653939</color>
 
     <!-- Component Specific Colors -->
     <color name="chip_border">#5A5580</color>
@@ -34,11 +35,14 @@
     <!-- Brand accent (logo / primary btn) -->
     <color name="kraken_brand_purple">#8C5BFF</color>
     <color name="kraken_brand_purple_dark">#6F42FF</color>
-
+    <color name="blue_grey_alpha_90">#F8F8F8</color>
+    <color name="grayTv">#7A7A7A</color>
+    <color name="text_color_default">#000000</color>
     <!-- Purple brand -->
     <color name="kraken_purple_dark">#7639F6</color>
     <color name="kraken_purple_light">#8A54FF</color>
-
+    <color name="Red">#EA3943</color>
+    <color name="white">#ffffff</color>
     <!-- Glass button -->
     <color name="kraken_glass_fill_top">#26FFFFFF</color>   <!-- 15% سفید -->
     <color name="kraken_glass_fill_bottom">#12FFFFFF</color>

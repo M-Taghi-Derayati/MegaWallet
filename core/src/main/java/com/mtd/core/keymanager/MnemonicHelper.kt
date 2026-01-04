@@ -1,6 +1,10 @@
 package com.mtd.core.keymanager
 
-import org.web3j.crypto.*
+import org.web3j.crypto.Bip32ECKeyPair
+import org.web3j.crypto.Credentials
+import org.web3j.crypto.MnemonicUtils
+import org.web3j.utils.Numeric
+import java.math.BigInteger
 import java.security.SecureRandom
 
 object MnemonicHelper {
@@ -18,6 +22,31 @@ object MnemonicHelper {
         return try {
             MnemonicUtils.validateMnemonic(mnemonic)
         } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun isPrivateKeyValid(privateKey: String): Boolean {
+        // 1. پیشوند '0x' را حذف کن
+        val cleanKey = Numeric.cleanHexPrefix(privateKey)
+
+        // 2. فیلتر اولیه و سریع (ترکیب کد شما و بهترین شیوه‌ها)
+        // اگر طول 64 نیست یا شامل کاراکتر غیر هگزادسیمال است، سریعا رد کن.
+        if (cleanKey.length != 64 || !cleanKey.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) {
+            return false
+        }
+
+        // 3. اعتبارسنجی نهایی و دقیق با کتابخانه
+        return try {
+            // این تابع، محدوده عددی و سایر قوانین را چک می‌کند.
+            Credentials.create(cleanKey)
+
+            // اطمینان از اینکه کلید، صفر نیست.
+            val keyAsBigInt = BigInteger(cleanKey, 16)
+            keyAsBigInt != BigInteger.ZERO
+
+        } catch (e: Exception) {
+            // هر خطایی در حین ایجاد Credentials به معنی نامعتبر بودن کلید است.
             false
         }
     }

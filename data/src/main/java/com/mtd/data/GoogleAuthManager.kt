@@ -20,7 +20,7 @@ class GoogleAuthManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) : IAuthManager {
 
-    private val webClientId = "1046615759222-fggaugss9v746lmrisrk9qnoddq4fobm.apps.googleusercontent.com"
+    private val webClientId = "1046615759222-vl9okabqo2a4j8ji9eg496v3s1h38jn4.apps.googleusercontent.com"
 
     private val googleSignInClient: GoogleSignInClient by lazy {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -51,4 +51,10 @@ class GoogleAuthManager @Inject constructor(
             ResultResponse.Error(e)
         }
     }
+
+    override fun signOut() {
+        googleSignInClient.signOut()
+    }
+
+
 }

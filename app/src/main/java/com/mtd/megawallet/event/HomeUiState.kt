@@ -7,27 +7,24 @@ import java.math.BigInteger
 sealed class HomeUiState {
     data object Loading : HomeUiState()
     data class Success(
-        val totalBalanceUsd: String,
+        val totalBalanceUsdt: String,
+        val totalBalanceIrr: String = "...",
+        val tetherPriceIrr: String = "...",
         val isUpdating: Boolean,
         val assets: List<AssetItem>,
-        val recentActivity: List<ActivityItem>
+        val recentActivity: List<ActivityItem>,
+        val displayCurrency: DisplayCurrency = DisplayCurrency.USDT
     ) : HomeUiState()
     data class Error(val message: String) : HomeUiState()
 
+    enum class DisplayCurrency {
+         IRR, USDT
+    }
+}
 
 /**
  * مدل داده برای نمایش یک دارایی (Asset) در لیست‌ها.
  * این مدل در صفحه اصلی و صفحه انتخاب دارایی برای ارسال استفاده می‌شود.
- *
- * @param id یک شناسه یکتا برای هر دارایی در هر شبکه (e.g., "ETH-SEPOLIA").
- * @param name نام قابل نمایش دارایی (e.g., "Ethereum").
- * @param symbol نماد دارایی (e.g., "ETH").
- * @param networkName نام شبکه قابل نمایش (e.g., "on Sepolia").
- * @param networkId شناسه شبکه از رجیستری (برای استفاده‌های داخلی).
- * @param iconUrl آدرس URL آیکون دارایی.
- * @param balance مقدار موجودی به صورت رشته فرمت‌شده (e.g., "10.0 ETH").
- * @param balanceUsd ارزش دلاری موجودی به صورت رشته فرمت‌شده (e.g., "$30,000.00").
- * @param priceChange24h درصد تغییرات قیمت در ۲۴ ساعت گذشته.
  */
 data class AssetItem(
     // --- شناسه‌ها ---
@@ -36,13 +33,17 @@ data class AssetItem(
 
     // --- اطلاعات نمایشی ---
     val name: String, // "Ethereum"
+    val faName: String? = null, // نام فارسی ارز
     val symbol: String, // "ETH"
     val networkName: String, // "on Sepolia"
+    val networkFaName: String? = null, // نام فارسی شبکه
     val iconUrl: String?,
 
     // --- اطلاعات موجودی (نمایشی) ---
     val balance: String, // "10.0 ETH"
-    val balanceUsd: String, // "$30,000.00"
+    val balanceUsdt: String, // "$30,000.00"
+    val balanceIrr: String = "...",
+    val formattedDisplayBalance: String = balanceUsdt, // فیلد جدید برای نمایش در UI
 
     // --- اطلاعات قیمت (نمایشی) ---
     val priceChange24h: Double=0.0, // e.g., 2.84 for +2.84%
@@ -52,20 +53,31 @@ data class AssetItem(
     val priceUsdRaw: BigDecimal= BigDecimal.ZERO, // قیمت هر واحد
     val decimals: Int=0, // تعداد ارقام اعشار
     val contractAddress: String?=null, // آدرس قرارداد (برای توکن‌ها)
-    val isNativeToken: Boolean=false // مشخص می‌کند که آیا توکن اصلی شبکه است یا خیر
+    val isNativeToken: Boolean=false, // مشخص می‌کند که آیا توکن اصلی شبکه است یا خیر
+
+    // --- فیلدهای مربوط به گروه‌بندی (Aggregation) ---
+    val isGroupHeader: Boolean = false, // آیا این آیتم نماینده یک گروه است؟
+    val groupName: String? = null, // نام گروه (مثلاً "Tether")
+    val groupAssets: List<AssetItem> = emptyList(), // لیست زیرمجموعه‌های گروه
+    val isExpanded: Boolean = false, // وضعیت باز/بسته بودن گروه (فقط برای نمایش در UI)
+    
+    // --- توزیع شبکه‌ها (برای نمایش Circle Chart) ---
+    val networkDistribution: List<NetworkShare> = emptyList() // نسبت موجودی در هر شبکه
+)
+
+/**
+ * اطلاعات سهم هر شبکه در یک گروه (برای نمایش Circle Chart)
+ */
+data class NetworkShare(
+    val networkId: String,
+    val networkName: String,
+    val colorHex: String, // رنگ شبکه به صورت Hex (مثل "#1E88E5")
+    val percentage: Float // درصد از کل (0-100)
 )
 
 
 /**
  * مدل داده برای نمایش یک آیتم در لیست فعالیت‌های اخیر.
- *
- * @param id هش تراکنش.
- * @param type نوع تراکنش (ارسال، دریافت، ...).
- * @param title عنوان اصلی (e.g., "ارسال بیت‌کوین").
- * @param subtitle توضیحات (e.g., "به: bc1q...xyz").
- * @param amount مقدار تراکنش با نماد ارز (e.g., "-0.01 tBTC").
- * @param amountUsd ارزش دلاری تراکنش (e.g., "-$600.00").
- * @param iconUrl آدرس URL آیکون مربوط به تراکنش.
  */
 data class ActivityItem(
     val id: String,
@@ -83,11 +95,6 @@ enum class ActivityType { SEND, RECEIVE, SWAP, MINT, UNKNOWN }
 
 /**
  * مدل داده برای نمایش گزینه‌های کارمزد در صفحه ارسال.
- *
- * @param level سطح کارمزد (e.g., "Normal", "Fast").
- * @param feeAmount مقدار کارمزد با نماد ارز (e.g., "0.000072 ETH").
- * @param feeAmountUsd ارزش دلاری کارمزد (e.g., "$0.15").
- * @param estimatedTime زمان تخمینی تایید تراکنش.
  */
 data class FeeOption(
     val level: String,
@@ -100,5 +107,3 @@ data class FeeOption(
     val gasLimit: BigInteger? = null,
     val feeRateInSatsPerByte: Long? = null
 )
-
-}

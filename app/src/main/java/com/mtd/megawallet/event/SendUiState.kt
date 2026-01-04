@@ -1,8 +1,6 @@
 // In: app/src/main/java/com/mtd/app/ui/send/SendUiState.kt
 package com.mtd.megawallet.event
 
-import com.mtd.megawallet.event.HomeUiState.AssetItem
-import com.mtd.megawallet.event.HomeUiState.FeeOption
 
 
 sealed class SendUiState {
@@ -19,15 +17,14 @@ sealed class SendUiState {
     // مرحله ۲: انتخاب دارایی
     data class SelectingAsset(
         val recipientAddress: String,
-        val compatibleAssets: List<AssetItem>
+        val compatibleAssets: List<AssetItem> = emptyList()
     ) : SendUiState()
 
     // مرحله ۳: وارد کردن مقدار و کارمزد
     data class EnteringDetails(
         val recipientAddress: String,
-        val selectedAsset: AssetItem,
+        val selectedAsset: AssetItem?=null,
         val amount: String = "",
-
         val amountUsd: String = "$0.00",
         val feeOptions: List<FeeOption> = emptyList(),
         val selectedFee: FeeOption? = null,

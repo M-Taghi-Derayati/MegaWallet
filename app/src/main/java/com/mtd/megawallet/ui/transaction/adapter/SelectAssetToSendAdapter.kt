@@ -7,7 +7,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.mtd.common_ui.loaded
 import com.mtd.megawallet.databinding.ItemAssetSelectableBinding
-import com.mtd.megawallet.event.HomeUiState.AssetItem
+import com.mtd.megawallet.event.AssetItem
 
 
 class SelectAssetToSendAdapter(
@@ -32,7 +32,7 @@ class SelectAssetToSendAdapter(
 
             binding.textAssetName.text = asset.name
             binding.textNetworkName.text = asset.networkName
-            binding.textBalance.text = asset.balanceUsd
+            binding.textBalance.text = asset.balanceUsdt
             binding.textBalanceUsd.text = asset.balance
             binding.imageAssetIcon.loaded(asset.iconUrl?:"")
 

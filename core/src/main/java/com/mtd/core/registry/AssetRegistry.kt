@@ -48,4 +48,20 @@ class AssetRegistry @Inject constructor() {
     fun getAssetById(id: String): AssetConfig? {
         return assetsById[id]
     }
+
+    /**
+     * یک دارایی خاص را با نماد و شناسه شبکه آن پیدا می‌کند.
+     * این تابع به صورت بهینه در لیست دارایی‌ها جستجو می‌کند.
+     *
+     * @param symbol نماد ارز (e.g., "USDT")
+     * @param networkId شناسه شبکه (e.g., "sepolia")
+     * @return آبجکت AssetConfig یا null اگر پیدا نشود.
+     */
+    fun getAssetBySymbol(symbol: String, networkId: String): AssetConfig? {
+        // ابتدا لیست دارایی‌های مربوط به آن شبکه را پیدا می‌کنیم
+        val assetsOnNetwork = assetsByNetwork[networkId] ?: return null
+
+        // سپس در آن لیست کوچک، به دنبال نماد مورد نظر می‌گردیم
+        return assetsOnNetwork.find { it.symbol.equals(symbol, ignoreCase = true) }
+    }
 }

@@ -1,8 +1,6 @@
 package com.mtd.megawallet.viewmodel
 
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.keymanager.MnemonicHelper
 import com.mtd.core.model.Bip39Words
@@ -14,19 +12,17 @@ import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.repository.IBackupRepository
 import com.mtd.data.repository.IWalletRepository
 import com.mtd.domain.model.ResultResponse
+import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.megawallet.event.AccountInfo
 import com.mtd.megawallet.event.OnboardingNavigationEvent
 import com.mtd.megawallet.event.OnboardingUiState
 import com.mtd.megawallet.event.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import java.math.BigInteger
 import javax.inject.Inject
 
@@ -36,8 +32,9 @@ class OnboardingViewModel @Inject constructor(
     private val backupRepository: IBackupRepository,
     private val keyManager: KeyManager,
     private val dataSourceFactory: ChainDataSourceFactory,
-    private val blockchainRegistry: BlockchainRegistry
-) : ViewModel() {
+    private val blockchainRegistry: BlockchainRegistry,
+    errorManager: com.mtd.core.manager.ErrorManager
+) : BaseViewModel(errorManager) {
 
     // --- State & Event Flows ---
 
@@ -54,8 +51,8 @@ class OnboardingViewModel @Inject constructor(
      */
     fun createNewWallet() {
         _uiState.value = OnboardingUiState.Loading("در حال ساخت کیف پول...")
-        viewModelScope.launch {
-            when (val result = walletRepository.createNewWallet()) {
+        launchSafe {
+            when (val result = walletRepository.createNewWallet("",0)) {
                 is ResultResponse.Success -> {
                     val mnemonic = result.data.mnemonic
                     if (mnemonic != null) {
@@ -109,16 +106,16 @@ class OnboardingViewModel @Inject constructor(
     fun importFromInput() {
         val currentState = _uiState.value
         if (currentState !is OnboardingUiState.EnteringSeed || currentState.validationResult !is ValidationResult.Valid) {
-            return // اگر وضعیت فعلی معتبر نیست، کاری انجام نده
+            return
         }
         _uiState.value = OnboardingUiState.Loading("در حال وارد کردن کیف پول...")
         val inputToImport = currentState.enteredWords.joinToString(" ")
 
-        viewModelScope.launch {
+        launchSafe {
             val result = if (currentState.isPrivateKey) {
-                walletRepository.importWalletFromPrivateKey(CryptoUtils.validateAndExtractPrivateKey(inputToImport).privateKeyHex!!)
+                walletRepository.importWalletFromPrivateKey(CryptoUtils.validateAndExtractPrivateKey(inputToImport).privateKeyHex!!,"",0)
             } else {
-                walletRepository.importWalletFromMnemonic(inputToImport)
+                walletRepository.importWalletFromMnemonic(inputToImport,"",0)
             }
 
             when (result) {
@@ -216,74 +213,62 @@ class OnboardingViewModel @Inject constructor(
 
     fun discoverAccountsFromMnemonic(mnemonic: String, privateKey: String) {
         _uiState.value = OnboardingUiState.WalletsToImport(isLoading = true)
-        viewModelScope.launch {
-            try {
-                // ۱. ساخت تمام کلیدهای ممکن از Mnemonic
-                val keys = if (mnemonic.isEmpty()) {
-                    keyManager.generateWalletKeysFromPrivateKey(
-                        CryptoUtils.validateAndExtractPrivateKey(
-                            privateKey
-                        ).privateKeyHex!!
-                    )
-                } else {
-                    keyManager.generateWalletKeysFromMnemonic(mnemonic)
-                }
+        launchSafe {
+            val keys = if (mnemonic.isEmpty()) {
+                keyManager.generateWalletKeysFromPrivateKey(
+                    CryptoUtils.validateAndExtractPrivateKey(privateKey).privateKeyHex!!
+                )
+            } else {
+                keyManager.generateWalletKeysFromMnemonic(mnemonic)
+            }
 
-                // ۲. گرفتن موجودی برای هر کلید به صورت موازی برای سرعت بیشتر
-                val accountsInfoAsync = keys.map { key ->
-                    async { // هر درخواست در یک Coroutine جداگانه اجرا می‌شود
-                        val dataSource =
-                            dataSourceFactory.create(key.chainId ?: -1) // -1 for Bitcoin
-                        val balanceResult = if (key.networkType == NetworkType.EVM) {
-                            val evm = dataSource.getBalanceEVM(key.address)
-                            val balance = if (evm is ResultResponse.Success) {
-                                evm.data.find { itFind -> itFind.contractAddress == null }?.balance
-                            } else {
-                                BigInteger.ZERO
-                            }
-                            balance
+            val accountsInfo = mutableListOf<AccountInfo>()
+
+            // هر account را مستقل fetch می‌کنیم
+            keys.forEach { key ->
+                launchSafe {
+                    val dataSource = dataSourceFactory.create(key.chainId ?: -1)
+                    val balanceResult = if (key.networkType == NetworkType.EVM) {
+                        val evm = dataSource.getBalanceEVM(key.address)
+                        if (evm is ResultResponse.Success) {
+                            evm.data.find { itFind -> itFind.contractAddress == null }?.balance
                         } else {
-                            val network = dataSource.getBalance(key.address)
-                            val balance = if (network is ResultResponse.Success) {
-                                network.data
-                            } else {
-                                BigInteger.ZERO
-                            }
-                            balance
+                            BigInteger.ZERO
                         }
+                    } else {
+                        val network = dataSource.getBalance(key.address)
+                        if (network is ResultResponse.Success) {
+                            network.data
+                        } else {
+                            BigInteger.ZERO
+                        }
+                    }
 
-                        val networkInfo = blockchainRegistry.getNetworkByName(key.networkName)
+                    val networkInfo = blockchainRegistry.getNetworkByName(key.networkName)
+                    val formattedBalance = BalanceFormatter.formatBalance(
+                        rawBalance = balanceResult ?: BigInteger.ZERO,
+                        decimals = networkInfo?.decimals ?: 18,
+                    )
 
+                    val accountInfo = AccountInfo(
+                        id = key.networkName.name,
+                        networkName = networkInfo?.name?.name ?: "",
+                        address = "${key.address.take(6)}...${key.address.takeLast(4)}",
+                        balance = formattedBalance,
+                        balanceUsd = "$0.00",
+                        iconUrl = networkInfo?.iconUrl,
+                        derivationPath = key.derivationPath ?: "N/A"
+                    )
 
-                      val formattedBalance= BalanceFormatter.formatBalance(
-                            rawBalance = balanceResult?: BigInteger.ZERO,
-                            decimals = networkInfo?.decimals?:18,
-                        )
-
-                        AccountInfo(
-                            id = key.networkName.name,
-                            networkName = networkInfo?.name?.name?:"",
-                            address = "${key.address.take(6)}...${key.address.takeLast(4)}",
-                            balance = formattedBalance,
-                            balanceUsd = "$0.00",
-                            iconUrl = networkInfo?.iconUrl,
-                            derivationPath = key.derivationPath ?: "N/A"
+                    synchronized(accountsInfo) {
+                        accountsInfo.add(accountInfo)
+                        _uiState.value = OnboardingUiState.WalletsToImport(
+                            isLoading = accountsInfo.size < keys.size,
+                            accounts = accountsInfo.toList(),
+                            selectedAccountIds = accountsInfo.map { it.id }.toSet()
                         )
                     }
                 }
-
-                val accountsInfo = accountsInfoAsync.awaitAll()
-
-                // آپدیت UI با لیست حساب‌های کشف شده
-                _uiState.value = OnboardingUiState.WalletsToImport(
-                    isLoading = false,
-                    accounts = accountsInfo,
-                    selectedAccountIds = accountsInfo.map { it.id }
-                        .toSet() // انتخاب همه به صورت پیش‌فرض
-                )
-            } catch (e: Exception) {
-                _uiState.value =
-                    OnboardingUiState.Error("خطایی در هنگام بررسی حساب‌ها رخ داد: ${e.message}")
             }
         }
     }
@@ -328,14 +313,11 @@ class OnboardingViewModel @Inject constructor(
 
             _uiState.value = OnboardingUiState.Loading("در حال ذخیره کیف پول...")
 
-            // ما فقط عبارت بازیابی را ذخیره می‌کنیم.
-            // در آینده، می‌توانیم انتخاب‌های کاربر را هم در SharedPreferences ذخیره کنیم
-            // تا در صفحه اصلی فقط شبکه‌های انتخاب شده نمایش داده شوند.
-            viewModelScope.launch {
+            launchSafe {
                 val result=  if (mnemonic.isEmpty()){
-                    walletRepository.importWalletFromPrivateKey(CryptoUtils.validateAndExtractPrivateKey(privateKey).privateKeyHex!!)
+                    walletRepository.importWalletFromPrivateKey(CryptoUtils.validateAndExtractPrivateKey(privateKey).privateKeyHex!!,"",0)
                 }else{
-                    walletRepository.importWalletFromMnemonic(mnemonic)
+                    walletRepository.importWalletFromMnemonic(mnemonic,"",0)
                 }
 
 

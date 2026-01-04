@@ -1,5 +1,21 @@
 <resources>
     <string name="app_name">MegaWallet</string>
+    
+    <!-- Wallet Import Strings -->
+    <string name="import_wallet_title">وارد کردن کیف پول</string>
+    <string name="import_wallet_subtitle_12_key">لطفا جهت افزودن کیف پول ۱۲/۲۴ کلمه بازیابی خود را وارد کنید</string>
+    <string name="import_wallet_subtitle_private_key">لطفا جهت افزودن کیف پول  کلید خصوصی خود را وارد کنید</string>
+    <string name="import_wallet_security_note">پس از وارد کردن عبارت بازیابی مخفی خود\nمیتوانید فرآیند وارد کردن را ادامه دهید</string>
+    <string name="import_wallet_manual_entry">وارد کردن دستی</string>
+    <string name="import_wallet_add_button">افزودن</string>
+    <string name="import_wallet_paste_button">جایگذاری کلید ها</string>
+    <string name="import_wallet_secret_phrase">Secret Phrase</string>
+    <string name="import_wallet_private_key">Private Key</string>
+    <string name="import_wallet_enter_phrase">عبارت بازیابی خود را وارد کنید</string>
+    <string name="import_wallet_enter_private_key">کلید خصوصی ۶۴ کاراکتری خود را وارد کنید</string>
+    <string name="import_wallet_paste_clipboard">Paste from Clipboard</string>
+    <string name="import_wallet_manual_input_link">ورود دستی</string>
+    <string name="import_wallet_verify_submit">ثبت</string>
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>

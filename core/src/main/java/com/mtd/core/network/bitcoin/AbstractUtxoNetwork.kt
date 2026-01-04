@@ -12,6 +12,7 @@ import org.bitcoinj.crypto.HDPath
 import org.bitcoinj.script.ScriptBuilder
 import org.bitcoinj.wallet.DeterministicKeyChain
 import org.bitcoinj.wallet.DeterministicSeed
+import java.math.BigInteger
 
 abstract class AbstractUtxoNetwork(
     protected val config: NetworkConfig,
@@ -28,6 +29,8 @@ abstract class AbstractUtxoNetwork(
     override val currencySymbol = config.currencySymbol
     override val blockExplorerUrl = config.blockExplorerUrl
     override val explorers = config.explorers
+    override val color = config.color
+    override val faName = config.faName
 
     override fun deriveKeyFromMnemonic(mnemonic: String): WalletKey {
         // ۱. ساخت Seed از Mnemonic
@@ -77,8 +80,16 @@ abstract class AbstractUtxoNetwork(
     }
 
     override fun deriveKeyFromPrivateKey(privateKey: String): WalletKey {
+        val privateKeyHex = if (privateKey.startsWith("0x")) privateKey.substring(2) else privateKey
+
+        if (privateKeyHex.length != 64 || !privateKeyHex.matches(Regex("[a-fA-F0-9]+"))) {
+            return throw IllegalStateException("Invalid private key format")
+        }
+        val privateKeyBigInt = BigInteger(privateKeyHex, 16)
+        if (privateKeyBigInt == BigInteger.ZERO) return throw IllegalStateException("Invalid private key format")
+
         // ۱. ساخت کلید ECKey از هگز کلید خصوصی
-        val key = ECKey.fromPrivate(privateKey.hexToBytes())
+        val key = ECKey.fromPrivate(privateKeyBigInt)
 
         // --- بخش اصلاح شده ---
         // ۲. تولید آدرس بر اساس نوع مسیر استخراج تعریف شده در کانفیگ شبکه

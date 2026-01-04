@@ -1,6 +1,8 @@
 package com.mtd.megawallet.event// در پکیج com.mtd.megawallet.event
 
-import com.mtd.domain.model.Quote
+import com.mtd.core.model.QuoteResponse
+import com.mtd.core.model.QuoteResponse.ReceivingOptionDto
+import com.mtd.megawallet.event.SwapUiState.AssetSelectItem
 import java.math.BigDecimal
 
 // کلاس کمکی برای نگهداری اطلاعات دارایی در UI
@@ -9,8 +11,16 @@ data class SwapAsset(
     val symbol: String,
     val iconUrl: String?,
     val networkName: String,
+    val networkId: String,
     val balance: BigDecimal // موجودی به صورت عددی برای محاسبات
 )
+
+// یک آیتم در لیست انتخاب دارایی می‌تواند یا یک هدر باشد یا خود دارایی
+sealed interface AssetSelectionListItem {
+    data class Header(val networkName: String) : AssetSelectionListItem
+    data class Asset(val item: AssetSelectItem) : AssetSelectionListItem
+}
+
 
 sealed class SwapUiState {
     // حالت اولیه، در حال دریافت اطلاعات اولیه مثل جفت‌ارزها
@@ -24,11 +34,18 @@ sealed class SwapUiState {
         // انتخاب‌های فعلی کاربر
         val selectedFromAsset: SwapAsset?,
         val selectedToAsset: SwapAsset?,
+        val fromNetworkId: String?,
         // فیلدهای مقدار و قیمت
         val amountIn: String = "",
         val amountOut: String = "",
-        val quote: Quote? = null,
+        val selectedOption:ReceivingOptionDto?=null,
+        val receivingOptionsForUI: List<ReceivingOptionUI> = emptyList(),
+        val quote: QuoteResponse? = null,
         val isQuoteLoading: Boolean = false,
+        val isBottomSheetVisible: Boolean = false,
+        val assetsForSelection: List<AssetSelectionListItem> = emptyList(),
+        val bottomSheetTitle: String = "",
+        val searchQuery: String = "",
         // کنترل UI
         val isToAssetSelectorEnabled: Boolean = false,
         val isAmountInputEnabled: Boolean = false,
@@ -43,8 +60,11 @@ sealed class SwapUiState {
         val feeDisplay: String,  // e.g., "Fee: 1.50 USDT"
         val fromNetworkIcon: String?,
         val toNetworkIcon: String?,
+        internal val fromNetworkId: String,
         // quote را برای استفاده در execute نگه می‌داریم
-        internal val quote: Quote 
+        internal val quote: QuoteResponse,
+        internal val selectedOption: ReceivingOptionDto?,
+        val selectedFromAsset: SwapAsset?
     ) : SwapUiState()
 
     // حالت‌های میانی در حین اجرای معامله
@@ -56,10 +76,25 @@ sealed class SwapUiState {
 
     // حالت جدید برای سواپ‌های UTXO (مثل بیت‌کوین)
     data class WaitingForDeposit(
-        val quote: Quote, // تمام اطلاعات قیمت را نگه می‌داریم
-        val amountToDeposit: String, // e.g., "0.015 BTC"
+        val quote: QuoteResponse , // تمام اطلاعات قیمت را نگه می‌داریم
+        val amountToDeposit: String,
+        val assetToDeposit: AssetItem,// e.g., "0.015 BTC"
         val depositAddress: String
     ) : SwapUiState()
+
+    data class AssetSelectItem(
+        val assetId: String,
+        val name: String,
+        val symbol: String,
+        val iconUrl: String?,
+        val networkName: String,
+        val balance: String
+    )
+
+    data class ReceivingOptionUI(
+        val option: ReceivingOptionDto,
+        val isSelected: Boolean
+    )
 }
 
 sealed class SwapNavigationEvent {

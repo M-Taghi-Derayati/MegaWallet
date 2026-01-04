@@ -18,7 +18,8 @@ data class EvmTransaction(
     val fromAddress: String,
     val toAddress: String,
     val amount: BigInteger,
-    val isOutgoing: Boolean
+    val isOutgoing: Boolean,
+    val contractAddress: String=""
 ) : TransactionRecord(hash, timestamp, fee, status)
 
 data class BitcoinTransaction(

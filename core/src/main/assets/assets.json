@@ -2,12 +2,13 @@
   {
     "id": "BTC-BITCOIN_TESTNET",
     "name": "Bitcoin",
-    "symbol": "tBTC",
+    "symbol": "BTC",
     "decimals": 8,
     "networkId": "bitcoin_testnet",
     "contractAddress": null,
     "coinGeckoId": "bitcoin",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png",
+    "faName": "بیت‌ کوین"
   },
   {
     "id": "ETH-SEPOLIA",
@@ -17,7 +18,8 @@
     "networkId": "sepolia",
     "contractAddress": null,
     "coinGeckoId": "ethereum",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    "faName": "اتریوم"
   },
   {
     "id": "USDC-SEPOLIA",
@@ -27,7 +29,8 @@
     "networkId": "sepolia",
     "contractAddress": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     "coinGeckoId": "usd-coin",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png",
+    "faName": "یو‌اس‌دی کوین"
   },
   {
     "id": "USDT-SEPOLIA",
@@ -37,7 +40,30 @@
     "networkId": "sepolia",
     "contractAddress": "0x186cca6904490818AB0DC409ca59D932A2366031",
     "coinGeckoId": "usd-coin",
-    "iconUrl": "https://assets.coingecko.com/coins/images/325/standard/Tether.png?1696501661"
+    "iconUrl": "https://assets.coingecko.com/coins/images/325/standard/Tether.png?1696501661",
+    "faName": "تتر"
+  },
+  {
+    "id": "USDT-BSC_TESTNET",
+    "name": "Tether",
+    "symbol": "USDT",
+    "decimals": 18,
+    "networkId": "bsc_testnet",
+    "contractAddress": "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd",
+    "coinGeckoId": "usd-coin",
+    "iconUrl": "https://assets.coingecko.com/coins/images/325/standard/Tether.png?1696501661",
+    "faName": "تتر"
+  },
+  {
+    "id": "USDT-POLYGON_TESTNET",
+    "name": "Tether",
+    "symbol": "USDT",
+    "decimals": 6,
+    "networkId": "polygon_testnet",
+    "contractAddress": "0x00C4a847164dF1b3BEc394A889337F3AbE161186",
+    "coinGeckoId": "usd-coin",
+    "iconUrl": "https://assets.coingecko.com/coins/images/325/standard/Tether.png?1696501661",
+    "faName": "تتر"
   },
   {
     "id": "POLYGON",
@@ -47,16 +73,18 @@
     "networkId": "polygon_testnet",
     "contractAddress": null,
     "coinGeckoId": "usd-coin",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/28321.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/28321.png",
+    "faName": "پالیگان"
   },
   {
     "id": "BNB-BSC_TESTNET",
     "name": "Testnet BNB",
-    "symbol": "tBNB",
+    "symbol": "BNB",
     "decimals": 18,
     "networkId": "bsc_testnet",
     "contractAddress": null,
     "coinGeckoId": "binancecoin",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png"
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png",
+    "faName": "بایننس کوین"
   }
 ]

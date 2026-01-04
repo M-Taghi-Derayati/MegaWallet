@@ -9,7 +9,7 @@ import javax.inject.Singleton
 @Singleton
 class GlobalEventBus @Inject constructor() {
 
-    private val _events = MutableSharedFlow<GlobalEvent>()
+    private val _events = MutableSharedFlow<GlobalEvent>(replay = 1)
     val events = _events.asSharedFlow()
 
     suspend fun postEvent(event: GlobalEvent) {

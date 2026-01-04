@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <data>
+
+        <variable
+            name="item"
+            type="com.mtd.megawallet.event.OrderBookRow" />
+
+
+        <import type="android.R" />
+
+        <import type="androidx.core.content.ContextCompat" />
+    </data>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:id="@+id/cons_root"
+        android:layout_height="@dimen/_20sdp">
+
+        <FrameLayout
+            android:id="@+id/bg_sell"
+            android:layout_width="wrap_content"
+            android:layout_height="0dp"
+            android:layout_gravity="end"
+            android:alpha="0.2"
+            android:background="@color/Red"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/txt_price"
+            style="@style/textViewBold2"
+            android:layout_width="wrap_content"
+            android:layout_height="0dp"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginHorizontal="@dimen/_5sdp"
+            android:gravity="end|center_vertical"
+             android:text="@{item.price}"
+            android:textColor="@color/Red"
+            android:textSize="@dimen/_8ssp"
+            tools:text= "125"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/tv_amount"
+            style="@style/textViewRegular3"
+            android:layout_width="wrap_content"
+            android:layout_height="0sp"
+            android:layout_marginHorizontal="@dimen/_5sdp"
+            android:gravity="start|center_vertical"
+            android:text="@{item.quantity}"
+            android:textColor="@color/white"
+            android:textSize="@dimen/_8ssp"
+            tools:text= "125"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/im_logo"
+            app:layout_constraintTop_toTopOf="parent" />
+
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/im_logo"
+            android:layout_width="@dimen/_15sdp"
+            android:layout_height="@dimen/_15sdp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            android:layout_marginEnd="@dimen/_5sdp"
+            app:srcCompat="@drawable/ic_omp"
+            />
+
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</layout>

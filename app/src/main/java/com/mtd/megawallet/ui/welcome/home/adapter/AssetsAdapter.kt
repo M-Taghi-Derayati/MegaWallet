@@ -10,7 +10,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.mtd.common_ui.loaded
 import com.mtd.megawallet.databinding.ItemAssetBinding
-import com.mtd.megawallet.event.HomeUiState.AssetItem
+import com.mtd.megawallet.event.AssetItem
 import com.mtd.common_ui.R as commonUiR
 
 class AssetsAdapter : ListAdapter<AssetItem, AssetsAdapter.ViewHolder>(DiffCallback()) {
@@ -30,7 +30,7 @@ class AssetsAdapter : ListAdapter<AssetItem, AssetsAdapter.ViewHolder>(DiffCallb
             val context = binding.root.context
             binding.textAssetName.text = asset.name
             binding.textNetworkName.text = asset.networkName
-            binding.textBalance.text = "${asset.balanceUsd} تتر "
+            binding.textBalance.text = asset.formattedDisplayBalance
             binding.textBalanceUsd.text = asset.balance
 
             // بارگذاری آیکون با Coil

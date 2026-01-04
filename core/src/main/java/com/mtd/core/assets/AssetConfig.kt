@@ -8,5 +8,6 @@ data class AssetConfig(
     val networkId: String,
     val contractAddress: String?,
     val coinGeckoId: String?,
-    val iconUrl: String?
+    val iconUrl: String?,
+    val faName: String? = null
 )

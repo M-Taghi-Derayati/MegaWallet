@@ -24,8 +24,12 @@ class GoogleDriveDataSource @Inject constructor(
     private var drive: Drive? = null
     private val jsonFactory = GsonFactory.getDefaultInstance()
     private val transport = NetHttpTransport()
-    private val androidClientId = "1046615759222-fggaugss9v746lmrisrk9qnoddq4fobm.apps.googleusercontent.com"
-    private val clientSecret = "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"
+    private val androidClientId =
+        "1046615759222-r16ths1csmqc0jtf3hi1421ghauoa8ff.apps.googleusercontent.com"
+    private val webClientId =
+        "1046615759222-vl9okabqo2a4j8ji9eg496v3s1h38jn4.apps.googleusercontent.com"
+
+    private val clientSecret = "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"
 
     private companion object {
         private const val BACKUP_FILE_NAME = "megawallet_backup.dat"
@@ -33,15 +37,17 @@ class GoogleDriveDataSource @Inject constructor(
     }
 
     override suspend fun initializeWithAuthCode(authCode: String): Unit = withContext(Dispatchers.IO) {
+
+
         val tokenResponse = GoogleAuthorizationCodeTokenRequest(
-            transport, jsonFactory, androidClientId, clientSecret, authCode, ""
+            transport, jsonFactory, webClientId, clientSecret, authCode, "urn:ietf:wg:oauth:2.0:oob"
         ).execute()
         val credential = GoogleCredential.Builder()
             .setJsonFactory(jsonFactory)
             .setTransport(transport)
             .setClientSecrets(androidClientId, clientSecret)
             .build()
-        credential.setFromTokenResponse(tokenResponse)
+            .setFromTokenResponse(tokenResponse)
         drive = Drive.Builder(transport, jsonFactory, credential)
             .setApplicationName("MegaWallet")
             .build()
@@ -82,5 +88,11 @@ class GoogleDriveDataSource @Inject constructor(
     }
 
     override suspend fun hasCloudBackup(): Boolean = findBackupFileId() != null
+
+    override suspend fun deleteBackup(): Unit = withContext(Dispatchers.IO) {
+        val driveService = drive ?: throw IllegalStateException("Drive service not initialized.")
+        val fileId = findBackupFileId() ?: return@withContext
+        driveService.files().delete(fileId).execute()
+    }
 }
 

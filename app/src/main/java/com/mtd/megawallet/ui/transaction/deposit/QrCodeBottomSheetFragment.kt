@@ -20,6 +20,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.mtd.common_ui.toStyledAddress
 import com.mtd.megawallet.databinding.BottomSheetQrCodeBinding
+import timber.log.Timber
 import net.glxn.qrgen.android.QRCode
 import com.google.android.material.R as material
 
@@ -80,7 +81,7 @@ class QrCodeBottomSheetFragment : BottomSheetDialogFragment() {
         } catch (e: Exception) {
             // در صورت بروز خطا در ساخت QR Code
             Toast.makeText(context, "خطا در ساخت QR Code", Toast.LENGTH_SHORT).show()
-            e.printStackTrace()
+            Timber.e(e, "Error generating QR code")
         }
     }
 

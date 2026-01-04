@@ -21,6 +21,8 @@ class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
     override val phoenixContractAddress=config.phoenixContractAddress
     override val blockExplorerUrl=config.blockExplorerUrl
     override val explorers=config.explorers
+    override val color = config.color
+    override val faName = config.faName
     private val derivationPath = config.derivationPath
 
     override fun deriveKeyFromMnemonic(mnemonic: String): WalletKey {

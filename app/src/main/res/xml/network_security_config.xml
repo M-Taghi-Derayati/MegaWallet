@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        این پیکربندی فقط در بیلد‌های debug اعمال می‌شود
+        و به ما اجازه می‌دهد به localhost و IP های محلی متصل شویم.
+    -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+    <!--
+        این پیکربندی به ما اجازه می‌دهد تا به صورت صریح
+        به آدرس‌های خاصی از طریق http متصل شویم.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">195.78.49.45</domain>
+        <domain includeSubdomains="true">192.168.1.10</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+</network-security-config>

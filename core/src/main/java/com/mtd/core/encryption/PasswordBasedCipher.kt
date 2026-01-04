@@ -55,7 +55,7 @@ object PasswordBasedCipher {
             val plaintext = cipher.doFinal(ciphertext)
             String(plaintext, Charsets.UTF_8)
         } catch (e: AEADBadTagException) {
-            throw IllegalArgumentException("رمز عبور نادرست یا داده خراب شده است.")
+            throw IllegalArgumentException("رمز عبور نادرست یا داده خراب شده است.",e)
         }
     }
 

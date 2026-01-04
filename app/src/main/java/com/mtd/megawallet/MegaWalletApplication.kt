@@ -15,7 +15,9 @@ import timber.log.Timber
 class MegaWalletApplication: MultiDexApplication() , ImageLoaderFactory{
     override fun onCreate() {
         super.onCreate()
-        Timber.Forest.plant(Timber.DebugTree())
+       // if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        //}
     }
 
     override fun newImageLoader(): ImageLoader {

@@ -22,6 +22,7 @@
             app:popUpToInclusive="true" />
     </fragment>
 
+
     <fragment
         android:id="@+id/homeFragment"
         android:name="com.mtd.megawallet.ui.welcome.home.HomeFragment"
@@ -33,17 +34,10 @@
         <action
             android:id="@+id/action_home_to_send_graph"
             app:destination="@id/send_graph" />
-        <action
-            android:id="@+id/action_homeFragment_to_swapFragment"
-            app:destination="@id/swapFragment" />
 
     </fragment>
 
-    <fragment
-        android:id="@+id/swapFragment"
-        android:name="com.mtd.megawallet.ui.swap.SwapFragment"
-        android:label="SwapFragment"
-        tools:layout="@layout/fragment_swap"/>
+
 
     <dialog
         android:id="@+id/receiveBottomSheetFragment"
@@ -67,6 +61,7 @@
             android:name="networkName"
             app:argType="string" />
     </dialog>
+
 
     <!-- === گراف ناوبری جریان ارسال (Send Flow) === -->
     <navigation
@@ -101,6 +96,12 @@
             <action
                 android:id="@+id/action_welcome_to_import_options"
                 app:destination="@id/importOptionsFragment" />
+
+            <action
+                android:id="@+id/action_welcome_to_home"
+                app:destination="@id/homeFragment"
+                app:popUpTo="@id/welcomeFragment"
+                app:popUpToInclusive="true"/>
         </fragment>
 
         <fragment
@@ -149,7 +150,5 @@
 
 
     </navigation>
-
-
 
 </navigation>

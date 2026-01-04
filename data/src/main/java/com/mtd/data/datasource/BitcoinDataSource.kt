@@ -30,6 +30,7 @@ import org.bitcoinj.script.ScriptBuilder
 import org.web3j.protocol.Web3j
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
+import timber.log.Timber
 import java.math.BigInteger
 
 
@@ -231,9 +232,19 @@ class BitcoinDataSource(
             tx.addOutput(Coin.valueOf(params.amountInSatoshi), toAddress)
 
             val changeAmount = totalInputValue - params.amountInSatoshi - finalFee
-            if (changeAmount >= Coin.SMALLEST_UNIT_EXPONENT) {
+            val DUST_THRESHOLD = 546L // آستانه استاندارد به صورت Long
+            if (changeAmount >= DUST_THRESHOLD) {
+                // اگر باقیمانده به اندازه کافی بزرگ است، یک خروجی باقیمانده می‌سازیم.
                 tx.addOutput(Coin.valueOf(changeAmount), fromAddress)
+                Timber.d("Change of $changeAmount sats will be sent back to $fromAddress")
+            } else {
+                // اگر باقیمانده Dust است، هیچ خروجی باقیمانده‌ای نمی‌سازیم.
+                // این مقدار به صورت خودکار به کارمزد ماینر اضافه خواهد شد.
+                Timber.d("Change amount ($changeAmount sats) is below dust threshold. Adding to miner fee.")
             }
+           /* if (changeAmount >= Coin.SMALLEST_UNIT_EXPONENT) {
+                tx.addOutput(Coin.valueOf(changeAmount), fromAddress)
+            }*/
 
             // ۴. امضای هر ورودی به روش صحیح برای SegWit (P2WPKH)
             val signedInputs = mutableListOf<TransactionInput>()
@@ -312,16 +323,6 @@ class BitcoinDataSource(
             ResultResponse.Error(e)
         }
     }
-
-   /* private suspend fun estimateTxFee(inputs: Int, outputs: Int): Long = withContext(Dispatchers.IO) {
-        val txSize = inputs * 148 + outputs * 34 + 10
-
-        val feerate = estimateFee()
-        val recommendedFeeRate = (feerate as ResultResponse.Success).data.toLong()
-        return@withContext (txSize.toLong() * recommendedFeeRate)
-    }
-*/
-
 
     override suspend fun getFeeOptions(fromAddress: String?, toAddress: String?, asset: Asset?): ResultResponse<List<FeeData>> {
         return try {

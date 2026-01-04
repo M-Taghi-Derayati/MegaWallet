@@ -17,6 +17,8 @@ interface BlockchainNetwork {
     val phoenixContractAddress: String?
     val blockExplorerUrl: String?
     val explorers: List<String>
+    val color: String?
+    val faName: String?
     /**
      * تولید کلید از روی mnemonic (عبارت بازیابی)
      */

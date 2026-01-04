@@ -86,7 +86,7 @@ class EnterAddressFragment: BottomSheetDialogFragment()  {
         }
 
          assetsAdapter = SelectAssetToSendAdapter { selectedAsset ->
-             viewModel.onAssetSelected(selectedAsset)
+             viewModel.onAssetSelected(selectedAsset)//1
          }
          binding.recyclerViewAssets.adapter = assetsAdapter
 
@@ -113,13 +113,13 @@ class EnterAddressFragment: BottomSheetDialogFragment()  {
         }
 
 
-         binding.buttonContinue.setOnClickListener {
+         binding.buttonContinueAddress.setOnClickListener {
             viewModel.onAddressEntered()
         }
 
          binding.buttonContinueSend.setOnClickListener {
              viewLifecycleOwner.lifecycleScope.launch {
-                 viewModel.onContinueToConfirmation()
+                 viewModel.onContinueToConfirmation()//2
              }
          }
 
@@ -133,7 +133,7 @@ class EnterAddressFragment: BottomSheetDialogFragment()  {
 
          binding.slideConfirmWithdraw.onSlideCompleteListener=object :SlideToActView.OnSlideCompleteListener{
              override fun onSlideComplete(view: SlideToActView) {
-                 viewModel.confirmAndSendTransaction()
+                 viewModel.confirmAndSendTransaction()//3
              }
 
          }
@@ -165,8 +165,8 @@ class EnterAddressFragment: BottomSheetDialogFragment()  {
                 binding.linShowAddress.gone()
                 binding.linShowAssets.gone()
                 binding.linShowDetail.show()
-                binding.toolbar.title = "ارسال ${state.selectedAsset.symbol}"
-                binding.textBalance.text = "موجودی: ${state.selectedAsset.balance}"
+                binding.toolbar.title = "ارسال ${state.selectedAsset?.symbol}"
+                binding.textBalance.text = "موجودی: ${state.selectedAsset?.balance}"
                 binding.textAmountUsd.text = state.amountUsd
 
                 // آپدیت کردن منوی کارمزد با متن‌های نمایشی
@@ -185,7 +185,7 @@ class EnterAddressFragment: BottomSheetDialogFragment()  {
                 }
 
                 // کنترل فعال بودن دکمه و نمایش خطا
-                binding.buttonContinue.isEnabled = state.validationError == null && (state.amount.toBigDecimalOrNull() ?: BigDecimal.ZERO > BigDecimal.ZERO)
+                binding.buttonContinueAddress.isEnabled = state.validationError == null && (state.amount.toBigDecimalOrNull() ?: BigDecimal.ZERO > BigDecimal.ZERO)
                // binding.linDetailSend.inputLayoutAmount.error = state.validationError // فرض می‌کنیم TextInputLayout یک id دارد
             }
             is SendUiState.Confirmation->{

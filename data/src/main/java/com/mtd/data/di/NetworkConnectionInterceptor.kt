@@ -18,7 +18,7 @@ class NetworkConnectionInterceptor @Inject constructor(
     @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
     override fun intercept(chain: Interceptor.Chain): Response {
         if (!isConnected()) {
-          //  throw NoConnectivityException()
+            throw NoConnectivityException()
         }
         return chain.proceed(chain.request())
     }
