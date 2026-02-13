@@ -6,12 +6,15 @@ import com.mtd.data.datasource.IChainDataSource.FeeData
 import com.mtd.data.repository.TransactionParams
 import com.mtd.data.service.BlockcypherApiService
 import com.mtd.data.service.MempoolUtxoDto
+import com.mtd.data.utils.AssetNormalizer.normalize
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.BitcoinTransaction
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -31,6 +34,7 @@ import org.web3j.protocol.Web3j
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import timber.log.Timber
+import java.math.BigDecimal
 import java.math.BigInteger
 
 
@@ -41,7 +45,7 @@ class BitcoinDataSource(
 ) : IChainDataSource {
 
 
-    override suspend fun getBalance(address: String): ResultResponse<BigInteger> {
+    override suspend fun getBalance(address: String): ResultResponse<BigDecimal> {
         try {
             val api = retrofitBuilder.baseUrl(network.explorers.first()).build()
                 .create(BlockcypherApiService::class.java)
@@ -51,8 +55,8 @@ class BitcoinDataSource(
                 throw Exception("API Error: ${response.code()}")
             }
             val balance =
-                response.body()!!.chain_stats.funded_txo_sum - response.body()!!.chain_stats.spent_txo_sum
-            return ResultResponse.Success(BigInteger.valueOf(balance))
+                (response.body()!!.chain_stats.funded_txo_sum - response.body()!!.chain_stats.spent_txo_sum).toBigDecimal()
+            return ResultResponse.Success(normalize (balance,network.decimals,network.name))
         } catch (e: Exception) {
             return ResultResponse.Error(e)
         }
@@ -343,11 +347,11 @@ class BitcoinDataSource(
 
                 // ۴. محاسبه کارمزد کل برای یک تراکنش استاندارد (۱ ورودی، ۲ خروجی)
                 // ما از منطق estimateTxFee خود شما استفاده می‌کنیم
-                fun calculateTotalFee(feeRateInSatsPerByte: Long): BigInteger {
+                fun calculateTotalFee(feeRateInSatsPerByte: Long): BigDecimal {
                     val inputs = 1 // فرض برای یک ورودی
                     val outputs = 2 // فرض برای دو خروجی (گیرنده و باقیمانده)
                     val txSize = inputs * 148 + outputs * 34 + 10
-                    return BigInteger.valueOf(txSize * feeRateInSatsPerByte)
+                    return BigDecimal.valueOf(txSize * feeRateInSatsPerByte)
                 }
 
                 // ۵. ساخت گزینه‌های کارمزد
@@ -386,8 +390,40 @@ class BitcoinDataSource(
     }
 
 
-    override suspend fun getBalanceEVM(address: String): ResultResponse<List<Asset>> {
-        TODO("Not yet implemented")
+    override suspend fun getBalanceAssets(address: String): ResultResponse<List<Asset>> {
+        return ResultResponse.Success(emptyList())
+    }
+
+    override suspend fun getBalancesForMultipleAddresses(addresses: List<String>): ResultResponse<Map<String, List<Asset>>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                // پیاده‌سازی موازی با Coroutines برای درخواست‌های همزمان
+                val deferreds = addresses.map { address ->
+                    async {
+                        val balanceResult = getBalance(address)
+                        val assets = if (balanceResult is ResultResponse.Success) {
+                            listOf(
+                                Asset(
+                                    name = "Bitcoin",
+                                    symbol = "BTC",
+                                    decimals = 8,
+                                    contractAddress = null,
+                                    balance = balanceResult.data
+                                )
+                            )
+                        } else {
+                            emptyList() // یا لاگ کردن خطا
+                        }
+                        address to assets
+                    }
+                }
+                
+                val results = deferreds.awaitAll().toMap()
+                ResultResponse.Success(results)
+            } catch (e: Exception) {
+                ResultResponse.Error(e)
+            }
+        }
     }
 
 
@@ -397,7 +433,13 @@ class BitcoinDataSource(
         chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
     private fun estimateTxFeeBasedOnRate(inputs: Int, outputs: Int, feeRate: Long): Long {
-        val txSize = inputs * 148 + outputs * 34 + 10
-        return txSize * feeRate
+        // SegWit (P2WPKH) Transaction Size Estimation (in vBytes)
+        // Input: ~68 vBytes
+        // Output: ~31 vBytes
+        // Overhead: ~10.5 vBytes
+        // Formula: inputs * 68 + outputs * 31 + 11
+        
+        val txVBytes = inputs * 68 + outputs * 31 + 11
+        return txVBytes * feeRate
     }
 }

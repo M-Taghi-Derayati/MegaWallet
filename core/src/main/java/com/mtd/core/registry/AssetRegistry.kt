@@ -7,7 +7,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class AssetRegistry @Inject constructor() {
+class AssetRegistry @Inject constructor(
+    private val blockchainRegistry: BlockchainRegistry
+) {
 
     private val assetsById = mutableMapOf<String, AssetConfig>()
     private val assetsByNetwork = mutableMapOf<String, MutableList<AssetConfig>>()
@@ -16,10 +18,11 @@ class AssetRegistry @Inject constructor() {
      * دارایی‌ها را از فایل assets.json بارگذاری و در حافظه ثبت می‌کند.
      */
     fun loadAssetsFromAssets(context: Context) {
+        val allowedNetworkIds = blockchainRegistry.getAllNetworks().map { it.id }.toSet()
         val assetList = loadAssets(context)
-        assetList.forEach { asset ->
-            registerAsset(asset)
-        }
+        assetList
+            .filter { it.networkId in allowedNetworkIds }
+            .forEach { asset -> registerAsset(asset) }
     }
 
     private fun registerAsset(asset: AssetConfig) {

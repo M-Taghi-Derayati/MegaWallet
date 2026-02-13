@@ -102,7 +102,7 @@ data class FeeOption(
     val feeAmountUsdDisplay: String, // "$0.15"
     val estimatedTime: String,
     // فیلدهای داده خام برای ارسال تراکنش
-    val feeInSmallestUnit: BigInteger,
+    val feeInSmallestUnit: BigDecimal,
     val gasPrice: BigInteger? = null,
     val gasLimit: BigInteger? = null,
     val feeRateInSatsPerByte: Long? = null

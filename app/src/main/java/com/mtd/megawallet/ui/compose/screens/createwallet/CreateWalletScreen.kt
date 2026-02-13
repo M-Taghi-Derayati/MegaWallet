@@ -14,12 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBackIosNew
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -32,7 +28,9 @@ import com.mtd.megawallet.event.CreateWalletStep
 import com.mtd.megawallet.event.GoogleSignInEvent
 import com.mtd.megawallet.event.ImportData
 import com.mtd.megawallet.ui.compose.components.ErrorSnackbarHandler
+import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudBackupPasswordScreen
+import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudPasswordMode
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
 
 /**
@@ -46,6 +44,13 @@ fun CreateWalletScreen(
     viewModel: CreateWalletViewModel = hiltViewModel(),
     importData: ImportData? = null
 ) {
+    // Reset state to name input when first entering for a fresh creation
+    LaunchedEffect(Unit) {
+        if (importData == null && !viewModel.isRestoreMode) {
+            viewModel.resetToInitialState()
+        }
+    }
+
     LaunchedEffect(importData) {
         // فقط اگر importData از خارج آمده باشد (نه از restore mode)
         if (importData != null && !viewModel.isRestoreMode) {
@@ -77,9 +82,13 @@ fun CreateWalletScreen(
         }
     }
 
-    Box(
+    Surface(
+        color = MaterialTheme.colorScheme.background,
         modifier = Modifier.fillMaxSize()
     ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
         // Error Snackbar Handler (در بالای همه چیز)
         ErrorSnackbarHandler(
             uiEvents = viewModel.uiEvents,
@@ -104,21 +113,14 @@ fun CreateWalletScreen(
             }
 
             if (canGoBack) {
-                IconButton(
-                    onClick = { if (!viewModel.prevStep()) onBack(step) },
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = if (step == CreateWalletStep.NAME_INPUT) {
-                            Icons.Default.Close
-                        } else {
-                            Icons.Default.ArrowBackIosNew
-                        },
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                UnifiedHeader(
+                    onBack = { if (!viewModel.prevStep()) onBack(step) },
+                    isClose = step == CreateWalletStep.NAME_INPUT,
+                    modifier = Modifier
+                        .zIndex(10f)
+                )
+
+
             } else {
                 // اگر در صفحه انیمیشن تمام شده هستیم، دکمه ضربدر یا بک نشان نمی‌دهیم تا زمانی که کاربر اکشن نهایی را انجام دهد
                 Box(modifier = Modifier.size(48.dp))
@@ -147,7 +149,11 @@ fun CreateWalletScreen(
                     CloudBackupPasswordScreen(
                         onBack = { viewModel.prevStep() },
                         targetColor = viewModel.selectedColor,
-                        isRecoveryMode = false,
+                        mode = if (viewModel.hasExistingCloudBackup) {
+                            CloudPasswordMode.APPEND_TO_EXISTING_BACKUP
+                        } else {
+                            CloudPasswordMode.CREATE_NEW_BACKUP
+                        },
                         horizontalPadding = 0.dp,
                         onPasswordSubmit = { password -> 
                             viewModel.onCloudPasswordSubmit(password)
@@ -155,6 +161,7 @@ fun CreateWalletScreen(
                     )
                 }
             }
+        }
         }
     }
 }

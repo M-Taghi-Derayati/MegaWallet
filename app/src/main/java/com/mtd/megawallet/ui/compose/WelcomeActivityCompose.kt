@@ -1,13 +1,11 @@
 package com.mtd.megawallet.ui.compose
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -25,8 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.mtd.common_ui.StartActivity
-import com.mtd.megawallet.ui.compose.MainActivityCompose
 import com.mtd.megawallet.event.CreateWalletStep
 import com.mtd.megawallet.event.ImportScreenState
 import com.mtd.megawallet.ui.compose.screens.OnboardingScreen
@@ -60,17 +56,17 @@ class WelcomeActivityCompose : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+
                         WelcomeNavGraph(
                             viewModelWelcome = viewModelWelcome,
                             viewModelWalletImport = viewModelWalletImport,
                             viewModelCreateWallet=viewModelCreateWallet,
                             onNavigateToHome = {
-                                StartActivity(MainActivityCompose::class.java)
+                                startActivity(Intent(this,MainActivityCompose::class.java))
                                 finish()
                             }
                         )
-                    }
+
                 }
             }
         }
@@ -217,7 +213,10 @@ fun WelcomeNavGraph(
                             (navController.context as ComponentActivity).finish()
                         }
                         CreateWalletStep.CLOUD_BACKUP_PASSWORD -> (navController.context as ComponentActivity).finish()
-                        else->navController.popBackStack()
+                        else-> {
+                            viewModelCreateWallet.resetToInitialState()
+                            navController.popBackStack()
+                        }
                     }
                 },
                 onNavigateToHome = onNavigateToHome,

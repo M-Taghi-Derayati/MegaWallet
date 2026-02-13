@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.graphics.toColorInt
 import com.blankj.utilcode.util.ClipboardUtils
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -19,6 +20,7 @@ import com.mtd.core.utils.BalanceFormatter
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.datasource.ICloudDataSource
 import com.mtd.data.repository.IBackupRepository
+import com.mtd.data.repository.IWalletRepository
 import com.mtd.domain.model.AssetPrice
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.repository.IAuthManager
@@ -33,6 +35,7 @@ import com.mtd.megawallet.event.ImportScreenState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
+import timber.log.Timber
 import java.math.BigDecimal
 import javax.inject.Inject
 
@@ -41,6 +44,7 @@ class WalletImportViewModel @Inject constructor(
     private val authManager: IAuthManager,
     private val cloudDataSource: ICloudDataSource,
     private val backupRepository: IBackupRepository,
+    private val walletRepository: IWalletRepository,
     private val gson: Gson,
     private val assetRegistry: AssetRegistry,
     private val blockchainRegistry: BlockchainRegistry,
@@ -112,6 +116,19 @@ class WalletImportViewModel @Inject constructor(
         }
         screenState = prevState
         return true
+    }
+
+    fun resetToInitialState() {
+        screenState = ImportScreenState.STACKED
+        pastedWords.clear()
+        pastedPrivateKey = ""
+        manualWords.clear()
+        repeat(12) { manualWords.add("") }
+        cloudWallets.clear()
+        isDownloadingBackup = false
+        isCalculatingBalances = false
+        validationSuccessEvent = null
+        restoreWalletEvent = null
     }
 
     private fun resetPastedState() {
@@ -330,7 +347,7 @@ class WalletImportViewModel @Inject constructor(
                 
                 // دریافت لیست تمام دارایی‌ها و قیمت‌های لحظه‌ای
                 val allAssets = assetRegistry.getAllAssets()
-                val allAssetIds = allAssets.mapNotNull { it.coinGeckoId }.distinct()
+                val allAssetIds = allAssets.map { it.symbol }.distinct()
                 
                 val pricesMap = if (allAssetIds.isNotEmpty()) {
                     val pricesResult = marketDataRepository.getLatestPrices(allAssetIds)
@@ -354,7 +371,7 @@ class WalletImportViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 // در صورت خطا، فقط لاگ می‌کنیم و ادامه می‌دهیم
-                android.util.Log.e("WalletImportVM", "Error calculating balances", e)
+                Timber.tag("WalletImportVM").e(e, "Error calculating balances")
             } finally {
                 isCalculatingBalances = false
             }
@@ -383,7 +400,7 @@ class WalletImportViewModel @Inject constructor(
             val dataSource = dataSourceFactory.create(chainId)
             
             if (key.networkType == NetworkType.EVM) {
-                val result = dataSource.getBalanceEVM(key.address)
+                val result = dataSource.getBalanceAssets(key.address)
                 if (result is ResultResponse.Success) {
                     result.data.forEach { assetBalance ->
                         val assetConfig = allAssets.find { asset ->
@@ -394,7 +411,7 @@ class WalletImportViewModel @Inject constructor(
                         
                         if (assetConfig != null) {
                             val balanceDecimal = BalanceFormatter.formatBalance(assetBalance.balance, assetConfig.decimals).toBigDecimal()
-                            val price = pricesMap[assetConfig.coinGeckoId]?.priceUsd ?: BigDecimal.ZERO
+                            val price = pricesMap[assetConfig.symbol]?.priceUsd ?: BigDecimal.ZERO
                             total += balanceDecimal * price
                         }
                     }
@@ -405,7 +422,7 @@ class WalletImportViewModel @Inject constructor(
                     val assetConfig = allAssets.find { it.networkId == blockchainRegistry.getNetworkByName(key.networkName)?.id }
                     if (assetConfig != null) {
                         val balanceDecimal = BalanceFormatter.formatBalance(result.data, assetConfig.decimals).toBigDecimal()
-                        val price = pricesMap[assetConfig.coinGeckoId]?.priceUsd ?: BigDecimal.ZERO
+                        val price = pricesMap[assetConfig.symbol]?.priceUsd ?: BigDecimal.ZERO
                         total += balanceDecimal * price
                     }
                 }
@@ -424,8 +441,51 @@ class WalletImportViewModel @Inject constructor(
             if (selected.isEmpty()) return@launchSafe
 
             try {
-                // ولت اول برای restore
+                // برای حفظ UX فعلی، اولین کیف پول با انیمیشن restore می‌شود
+                // و بقیه به صورت مستقیم در پس‌زمینه وارد می‌شوند.
                 val first = selected.first()
+
+                val remaining = selected.drop(1)
+                if (remaining.isNotEmpty()) {
+                    var failedCount = 0
+                    remaining.forEach { walletItem ->
+                        val walletColor = runCatching { walletItem.colorHex.toColorInt() }
+                            .getOrElse { 0xFF22C55E.toInt() }
+
+                        val importResult = if (walletItem.isMnemonic) {
+                            walletRepository.importWalletFromMnemonic(
+                                mnemonic = walletItem.key,
+                                name = walletItem.name,
+                                color = walletColor,
+                                id = walletItem.id,
+                                isManualBackedUp = false,
+                                isCloudBackedUp = true
+                            )
+                        } else {
+                            walletRepository.importWalletFromPrivateKey(
+                                privateKey = walletItem.key,
+                                name = walletItem.name,
+                                color = walletColor,
+                                id = walletItem.id,
+                                isManualBackedUp = false,
+                                isCloudBackedUp = true
+                            )
+                        }
+
+                        if (importResult is ResultResponse.Error) {
+                            failedCount++
+                            Timber.tag("WalletImportVM").e(
+                                importResult.exception,
+                                "Failed importing cloud wallet id=${walletItem.id}"
+                            )
+                        }
+                    }
+
+                    if (failedCount > 0) {
+                        showErrorSnackbar("بخشی از کیف پول‌ها بازیابی نشدند. لطفاً دوباره بررسی کنید.")
+                    }
+                }
+
                 restoreWalletEvent = first
             } catch (e: Exception) {
                 showErrorSnackbar("خطا در ایمپورت ولت‌ها: ${e.message}")
@@ -440,4 +500,3 @@ class WalletImportViewModel @Inject constructor(
     private val _googleSignInEvent = Channel<GoogleSignInEvent>()
     val googleSignInEvent = _googleSignInEvent.receiveAsFlow()
 }
-

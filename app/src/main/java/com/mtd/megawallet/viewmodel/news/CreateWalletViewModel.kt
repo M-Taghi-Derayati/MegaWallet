@@ -12,7 +12,6 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.mtd.core.assets.AssetConfig
-import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.keymanager.MnemonicHelper
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.model.NetworkType
@@ -30,12 +29,14 @@ import com.mtd.domain.model.Wallet
 import com.mtd.domain.repository.IAuthManager
 import com.mtd.domain.repository.IMarketDataRepository
 import com.mtd.megawallet.core.BaseViewModel
+import com.mtd.megawallet.event.CloudWalletItem
 import com.mtd.megawallet.event.CloudWalletMetadata
 import com.mtd.megawallet.event.CreateWalletStep
 import com.mtd.megawallet.event.GoogleSignInEvent
 import com.mtd.megawallet.event.ImportData
-import com.mtd.megawallet.ui.compose.animations.BackupAnimationState
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
+import com.mtd.megawallet.ui.compose.screens.createwallet.BackupAnimationState
+import com.mtd.megawallet.ui.compose.screens.createwallet.BackupMethodType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -49,7 +50,6 @@ import javax.inject.Inject
 @HiltViewModel
 class CreateWalletViewModel @Inject constructor(
     private val walletRepository: IWalletRepository,
-    private val keyManager: KeyManager,
     private val dataSourceFactory: ChainDataSourceFactory,
     private val blockchainRegistry: BlockchainRegistry,
     private val assetRegistry: AssetRegistry,
@@ -73,6 +73,9 @@ class CreateWalletViewModel @Inject constructor(
     var backupAnimationState by mutableStateOf(BackupAnimationState.IDLE)
         private set
 
+    var backupMethod by mutableStateOf(BackupMethodType.NONE)
+        private set
+
     // Terms
     var term1Accepted by mutableStateOf(false)
     var term2Accepted by mutableStateOf(false)
@@ -88,11 +91,9 @@ class CreateWalletViewModel @Inject constructor(
     var seedWords = mutableStateListOf<String>()
         private set
 
-    var walletAddressEVM by mutableStateOf("")
+    var walletAddress = mutableStateListOf<WalletKey>()
         private set
 
-    var walletAddressBTC by mutableStateOf("")
-        private set
 
     var totalBalanceUSDT by mutableStateOf("0.00")
         private set
@@ -108,7 +109,12 @@ class CreateWalletViewModel @Inject constructor(
     var isRestoreMode by mutableStateOf(false)
         private set
 
+    var hasExistingCloudBackup by mutableStateOf(false)
+        private set
+
     private var restoreId: String? = null
+    private var preloadedRestoreBalanceUsdt: String? = null
+    private var generatedWalletId: String? = null
 
     private val _googleSignInEvent = Channel<GoogleSignInEvent>()
     val googleSignInEvent = _googleSignInEvent.receiveAsFlow()
@@ -134,23 +140,24 @@ class CreateWalletViewModel @Inject constructor(
     }
 
     fun setPendingImportData(data: ImportData?) {
-        this.importData = data
-        // وقتی importData پاس داده می‌شود، باید از اول شروع کنیم
-        // اما اگر در restore mode هستیم، نباید reset کنیم
-        if (data != null && !isRestoreMode) {
+        // اگر در restore mode هستیم، فقط importData را ست می‌کنیم و کاری نمی‌کنیم
+       this.importData=data
+        if (data!=null && isRestoreMode){
             resetToInitialState()
         }
+
     }
 
     /**
      * Reset تمام state ها به حالت اولیه برای شروع فرآیند ساخت کیف پول
      */
-    private fun resetToInitialState() {
+    fun resetToInitialState() {
         currentStep = CreateWalletStep.NAME_INPUT
         walletName = ""
         selectedColor = Color(0xFF22C55E) // Default green
         isFlipped = false
         backupAnimationState = BackupAnimationState.IDLE
+        backupMethod = BackupMethodType.NONE
         term1Accepted = false
         term2Accepted = false
         term3Accepted = false
@@ -158,22 +165,33 @@ class CreateWalletViewModel @Inject constructor(
         isAnimationFinished = false
         creationSuccess = false
         isRestoreMode = false
+        hasExistingCloudBackup = false
         restoreId = null
+        preloadedRestoreBalanceUsdt = null
+        generatedWalletId = null
+        importData=null
+        seedWords.clear()
+        walletAddress.clear()
+        totalBalanceUSDT = "0.00"
     }
 
     /**
      * شروع فرآیند بازیابی کیف پول از cloud backup
      * @param walletItem اطلاعات کیف پول انتخاب شده از cloud
      */
-    fun startRestoreFromCloud(walletItem: com.mtd.megawallet.event.CloudWalletItem) {
+    fun startRestoreFromCloud(walletItem: CloudWalletItem) {
         viewModelScope.launch {
             try {
                 isRestoreMode = true
                 restoreId = walletItem.id
+                preloadedRestoreBalanceUsdt = walletItem.balanceUsdt
+                    .takeIf { it.isNotBlank() && it != "..." }
+                totalBalanceUSDT = preloadedRestoreBalanceUsdt ?: "0.00"
 
                 // Reset animation state برای نمایش انیمیشن از ابتدا
                 isAnimationFinished = false
                 backupAnimationState = BackupAnimationState.IDLE
+                backupMethod = BackupMethodType.NONE
 
                 // تنظیم اطلاعات کیف پول
                 walletName = walletItem.name
@@ -228,6 +246,7 @@ class CreateWalletViewModel @Inject constructor(
     private fun generateWallet() {
         viewModelScope.launch {
             val currentImportData = importData
+            val isCloudRestoreFlow = isRestoreMode && restoreId != null
             val result = if (currentImportData != null) {
                 // حالت ایمپورت
                 when (currentImportData) {
@@ -236,7 +255,9 @@ class CreateWalletViewModel @Inject constructor(
                             mnemonic = currentImportData.words.joinToString(" "),
                             name = walletName,
                             color = selectedColor.toArgb(),
-                            id = restoreId
+                            id = restoreId,
+                            isManualBackedUp = if (isCloudRestoreFlow) false else true,
+                            isCloudBackedUp = isCloudRestoreFlow
                         )
                     }
 
@@ -245,7 +266,9 @@ class CreateWalletViewModel @Inject constructor(
                             privateKey = currentImportData.key,
                             name = walletName,
                             color = selectedColor.toArgb(),
-                            id = restoreId
+                            id = restoreId,
+                            isManualBackedUp = if (isCloudRestoreFlow) false else true,
+                            isCloudBackedUp = isCloudRestoreFlow
                         )
                     }
                 }
@@ -260,34 +283,43 @@ class CreateWalletViewModel @Inject constructor(
             when (result) {
                 is ResultResponse.Success -> {
                     val wallet = result.data
+                    generatedWalletId = wallet.id
                     // اگر ساخت جدید بود، کلمات را نمایش می‌دهیم
                     if (currentImportData == null) {
-                        wallet.mnemonic?.let { mnemonic ->
+                        val mnemonicResult = walletRepository.getMnemonic(wallet.id)
+                        val mnemonic = (mnemonicResult as? ResultResponse.Success)?.data
+                        
+                        mnemonic?.let { m ->
                             seedWords.clear()
-                            seedWords.addAll(mnemonic.split(" "))
+                            seedWords.addAll(m.split(" "))
                         }
                     } else {
-                        // در حالت ایمپورت، کلمات را نمایش نمی‌دهیم (چون کاربر خودش وارد کرده)
-                        // اما برای اینکه UI فعلی (SeedPhrasePart) کار کند، شاید لازم باشد کاری کنیم.
-                        // فعلاً لیست خالی می‌گذاریم یا کلمات را پر می‌کنیم (بسته به تصمیم UX)
-                        // کاربر گفت: "use this info to recover"
                         if (currentImportData is ImportData.Mnemonic) {
                             seedWords.clear()
                             seedWords.addAll(currentImportData.words)
                         }
                     }
-                    // استخراج آدرس (فرض بر این است که حداقل یک کلید وجود دارد)
-                    wallet.keys.find { itFind -> itFind.networkType == NetworkType.EVM }
-                        ?.let { key ->
-                            walletAddressEVM = key.address
-                        }
-                    wallet.keys.find { itFind -> itFind.networkType == NetworkType.BITCOIN }
-                        ?.let { key ->
-                            walletAddressBTC = key.address
-                        }
+                    walletAddress.addAll(wallet.keys)
+                    walletAddress.map {
+                        val net = blockchainRegistry.getNetworkByName(it.networkName)
+                        it.symbol = (net?.currencySymbol ?: "ETH").lowercase()
+                    }
 
-                    // محاسبه موجودی
-                    calculateTotalBalance(wallet)
+                    // در restore از کلود اگر موجودی قبلاً در لیست محاسبه شده بود، مجدد درخواست نمی‌زنیم
+                    val cachedRestoreBalance = preloadedRestoreBalanceUsdt
+                    if (isCloudRestoreFlow && !cachedRestoreBalance.isNullOrBlank()) {
+                        totalBalanceUSDT = cachedRestoreBalance
+                    } else {
+                        calculateTotalBalance(wallet)
+                    }
+
+                    if (isCloudRestoreFlow) {
+                        walletRepository.updateBackupStatus(
+                            walletId = wallet.id,
+                            manual = false,
+                            cloud = true
+                        )
+                    }
 
                     creationSuccess = true
                 }
@@ -301,6 +333,15 @@ class CreateWalletViewModel @Inject constructor(
 
     // --- Google Drive Sign In Event ---
 
+    private suspend fun navigateToCloudPasswordStep() {
+        hasExistingCloudBackup = try {
+            backupRepository.hasCloudBackup()
+        } catch (_: Exception) {
+            false
+        }
+        currentStep = CreateWalletStep.CLOUD_BACKUP_PASSWORD
+    }
+
     fun onCloudBackupClick() {
         viewModelScope.launch {
             try {
@@ -310,12 +351,12 @@ class CreateWalletViewModel @Inject constructor(
                     val intent = authManager.getSignInIntent()
                     _googleSignInEvent.send(GoogleSignInEvent.LaunchIntent(intent))
                 } else {
-                    // اتصال برقرار است - مستقیماً به صفحه رمز عبور می‌رویم
-                    currentStep = CreateWalletStep.CLOUD_BACKUP_PASSWORD
+                    // اتصال برقرار است - پس از بررسی وجود بکاپ قبلی به صفحه رمز عبور می‌رویم
+                    navigateToCloudPasswordStep()
                 }
             } catch (e: Exception) {
                 launchSafe {
-                    showErrorSnackbar("خطا در بررسی اتصال به Google Drive: ${e.message}")
+                    showErrorSnackbar("خطا در بررسی اتصال به گوگل درایو: ${e.message}")
                 }
             }
         }
@@ -329,18 +370,18 @@ class CreateWalletViewModel @Inject constructor(
                     try {
                         // راه‌اندازی اتصال به Google Drive با auth code
                         cloudDataSource.initializeWithAuthCode(authCode)
-                        // بعد از اتصال موفق، به صفحه رمز عبور می‌رویم
-                        currentStep = CreateWalletStep.CLOUD_BACKUP_PASSWORD
+                        // بعد از اتصال موفق، با بررسی وضعیت بکاپ به صفحه رمز عبور می‌رویم
+                        navigateToCloudPasswordStep()
                     } catch (e: Exception) {
                         launchSafe {
-                            showErrorSnackbar("خطا در اتصال به Google Drive: ${e.message}")
+                            showErrorSnackbar("خطا در اتصال به گوگل درایو: ${e.message}")
                         }
                     }
                 }
 
                 is ResultResponse.Error -> {
                     launchSafe {
-                        showErrorSnackbar("ورود به Google ناموفق بود. لطفاً دوباره تلاش کنید.")
+                        showErrorSnackbar("ورود به گوگل ناموفق بود. لطفاً دوباره تلاش کنید.")
                     }
                 }
             }
@@ -348,7 +389,15 @@ class CreateWalletViewModel @Inject constructor(
     }
 
     fun onManualBackupClick() {
-        // برای این مرحله فعلاً تصمیم خاصی نگرفتیم، شاید مستقیم به تایید برود
+        viewModelScope.launch {
+            backupMethod = BackupMethodType.MANUAL
+            backupAnimationState = BackupAnimationState.PROCESSING
+            delay(900)
+            generatedWalletId?.let { walletId ->
+                walletRepository.updateBackupStatus(walletId = walletId, manual = true)
+            }
+            backupAnimationState = BackupAnimationState.SUCCESS
+        }
     }
 
     fun onCloudPasswordSubmit(password: String) {
@@ -358,10 +407,11 @@ class CreateWalletViewModel @Inject constructor(
                 currentStep = CreateWalletStep.SEED_PHRASE_GENERATION
 
                 // ۲. شروع انیمیشن لودینگ (برگشت کارت و نمایش در حال آپلود)
+                backupMethod = BackupMethodType.CLOUD
                 backupAnimationState = BackupAnimationState.PROCESSING
 
                 // ۳. آماده‌سازی اطلاعات کیف پول برای backup
-                val walletData = when {
+                val walletData: CloudWalletMetadata = when {
                     // حالت ساخت جدید - استفاده از seedWords
                     seedWords.isNotEmpty() && importData == null -> {
                         val mnemonic = seedWords.joinToString(" ")
@@ -371,7 +421,7 @@ class CreateWalletViewModel @Inject constructor(
                             return@launch
                         }
                         CloudWalletMetadata(
-                            id = UUID.randomUUID().toString(),
+                            id = generatedWalletId ?: UUID.randomUUID().toString(),
                             name = walletName.ifEmpty { "Wallet ${System.currentTimeMillis()}" },
                             key = mnemonic,
                             colorHex = String.format(
@@ -383,17 +433,17 @@ class CreateWalletViewModel @Inject constructor(
                     }
                     // حالت import - استفاده از importData
                     importData != null -> {
-                        when (importData) {
+                        when (val pendingImport = importData) {
                             is ImportData.Mnemonic -> {
                                 val mnemonic =
-                                    (importData as ImportData.Mnemonic).words.joinToString(" ")
+                                    pendingImport.words.joinToString(" ")
                                 if (!MnemonicHelper.isValidMnemonic(mnemonic)) {
                                     launchSafe { showErrorSnackbar("عبارت بازیابی نامعتبر است") }
                                     backupAnimationState = BackupAnimationState.IDLE
                                     return@launch
                                 }
                                 CloudWalletMetadata(
-                                    id = UUID.randomUUID().toString(),
+                                    id = generatedWalletId ?: UUID.randomUUID().toString(),
                                     name = walletName.ifEmpty { "Wallet ${System.currentTimeMillis()}" },
                                     key = mnemonic,
                                     colorHex = String.format(
@@ -405,15 +455,15 @@ class CreateWalletViewModel @Inject constructor(
                             }
 
                             is ImportData.PrivateKey -> {
-                                if (!MnemonicHelper.isPrivateKeyValid((importData as ImportData.PrivateKey).key)) {
+                                if (!MnemonicHelper.isPrivateKeyValid(pendingImport.key)) {
                                     launchSafe { showErrorSnackbar("کلید خصوصی نامعتبر است") }
                                     backupAnimationState = BackupAnimationState.IDLE
                                     return@launch
                                 }
                                 CloudWalletMetadata(
-                                    id = UUID.randomUUID().toString(),
+                                    id = generatedWalletId ?: UUID.randomUUID().toString(),
                                     name = walletName.ifEmpty { "Wallet ${System.currentTimeMillis()}" },
-                                    key = (importData as ImportData.PrivateKey).key,
+                                    key = pendingImport.key,
                                     colorHex = String.format(
                                         "#%06X",
                                         (0xFFFFFF and selectedColor.toArgb())
@@ -422,7 +472,11 @@ class CreateWalletViewModel @Inject constructor(
                                 )
                             }
 
-                            else -> {}
+                            null -> {
+                                launchSafe { showErrorSnackbar("اطلاعات کیف پول یافت نشد") }
+                                backupAnimationState = BackupAnimationState.IDLE
+                                return@launch
+                            }
                         }
                     }
 
@@ -433,27 +487,53 @@ class CreateWalletViewModel @Inject constructor(
                     }
                 }
 
-                // ۴. بررسی backup قبلی و اضافه کردن کیف پول جدید
-                val existingBackup = try {
-                    backupRepository.restoreData(password).let {
-                        if (it is ResultResponse.Success) {
-                            val type = object : TypeToken<List<CloudWalletMetadata>>() {}.type
-                            gson.fromJson<List<CloudWalletMetadata>>(it.data, type) ?: emptyList()
-                        } else {
-                            emptyList()
+                // ۴. بررسی وجود backup قبلی و اعتبارسنجی رمز در صورت وجود آن
+                val hasExistingBackup = try {
+                    backupRepository.hasCloudBackup()
+                } catch (e: Exception) {
+                    launchSafe {
+                        showErrorSnackbar(
+                            shortMessage = "خطا در بررسی وضعیت بکاپ ابری",
+                            detailedMessage = e.message ?: "خطای نامشخص",
+                            errorTitle = "خطا"
+                        )
+                    }
+                    backupAnimationState = BackupAnimationState.IDLE
+                    return@launch
+                }
+
+                val existingBackup: List<CloudWalletMetadata> = if (hasExistingBackup) {
+                    when (val restoreResult = backupRepository.restoreData(password)) {
+                        is ResultResponse.Success -> {
+                            try {
+                                val type = object : TypeToken<List<CloudWalletMetadata>>() {}.type
+                                gson.fromJson<List<CloudWalletMetadata>>(restoreResult.data, type)
+                                    ?: emptyList()
+                            } catch (_: Exception) {
+                                emptyList()
+                            }
+                        }
+
+                        is ResultResponse.Error -> {
+                            launchSafe {
+                                showErrorSnackbar(
+                                    shortMessage = "رمز عبور اشتباه است",
+                                    detailedMessage = "برای اضافه کردن کیف جدید به بکاپ قبلی، باید رمز بکاپ قبلی را وارد کنید.",
+                                    errorTitle = "خطای رمز عبور"
+                                )
+                            }
+                            backupAnimationState = BackupAnimationState.IDLE
+                            return@launch
                         }
                     }
-                } catch (e: Exception) {
-                    // اگر backup قبلی وجود نداشت یا رمز عبور اشتباه بود، لیست خالی برمی‌گردانیم
+                } else {
                     emptyList()
                 }
 
-                // ۵. اضافه کردن کیف پول جدید به لیست موجود (یا ایجاد لیست جدید)
-                val allWallets = if (existingBackup.isNotEmpty()) {
-                    existingBackup + walletData
-                } else {
-                    listOf(walletData)
-                }
+                // ۵. اضافه کردن کیف پول جدید به لیست موجود (یا ایجاد لیست جدید) با حذف تکراری‌ها
+                val allWallets = existingBackup
+                    .filterNot { it.id == walletData.id }
+                    .plus(walletData)
 
                 // ۶. تبدیل به JSON
                 val jsonData = gson.toJson(allWallets)
@@ -461,6 +541,9 @@ class CreateWalletViewModel @Inject constructor(
                 // ۷. آپلود به کلود با رمز عبور
                 when (val result = backupRepository.backupData(jsonData, password)) {
                     is ResultResponse.Success -> {
+                        generatedWalletId?.let { walletId ->
+                            walletRepository.updateBackupStatus(walletId = walletId, cloud = true)
+                        }
                         // ۸. نمایش وضعیت موفقیت
                         backupAnimationState = BackupAnimationState.SUCCESS
                     }
@@ -513,7 +596,7 @@ class CreateWalletViewModel @Inject constructor(
         launchSafe {
             // دریافت لیست تمام دارایی‌ها و قیمت‌های لحظه‌ای
             val allAssets = assetRegistry.getAllAssets()
-            val allAssetIds = allAssets.mapNotNull { it.coinGeckoId }.distinct()
+            val allAssetIds = allAssets.map { it.symbol }.distinct()
 
             val pricesMap = if (allAssetIds.isNotEmpty()) {
                 val pricesResult = marketDataRepository.getLatestPrices(allAssetIds)
@@ -544,8 +627,8 @@ class CreateWalletViewModel @Inject constructor(
             val chainId = key.chainId ?: return@forEach
             val dataSource = dataSourceFactory.create(chainId)
 
-            if (key.networkType == NetworkType.EVM) {
-                val result = dataSource.getBalanceEVM(key.address)
+            if (key.networkType == NetworkType.EVM || key.networkType == NetworkType.TVM) {
+                val result = dataSource.getBalanceAssets(key.address)
                 if (result is ResultResponse.Success) {
                     result.data.forEach { assetBalance ->
                         val assetConfig = allAssets.find { asset ->
@@ -558,13 +641,9 @@ class CreateWalletViewModel @Inject constructor(
                         }
 
                         if (assetConfig != null) {
-                            val balanceDecimal = BalanceFormatter.formatBalance(
-                                assetBalance.balance,
-                                assetConfig.decimals
-                            ).toBigDecimal()
                             val price =
-                                pricesMap[assetConfig.coinGeckoId]?.priceUsd ?: BigDecimal.ZERO
-                            total += balanceDecimal * price
+                                pricesMap[assetConfig.symbol]?.priceUsd ?: BigDecimal.ZERO
+                            total += assetBalance.balance * price
                         }
                     }
                 }
@@ -574,11 +653,8 @@ class CreateWalletViewModel @Inject constructor(
                     val assetConfig =
                         allAssets.find { it.networkId == blockchainRegistry.getNetworkByName(key.networkName)?.id }
                     if (assetConfig != null) {
-                        val balanceDecimal =
-                            BalanceFormatter.formatBalance(result.data, assetConfig.decimals)
-                                .toBigDecimal()
-                        val price = pricesMap[assetConfig.coinGeckoId]?.priceUsd ?: BigDecimal.ZERO
-                        total += balanceDecimal * price
+                        val price = pricesMap[assetConfig.symbol]?.priceUsd ?: BigDecimal.ZERO
+                        total += result.data * price
                     }
                 }
             }

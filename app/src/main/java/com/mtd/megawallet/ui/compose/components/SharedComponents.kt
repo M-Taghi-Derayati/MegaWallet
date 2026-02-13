@@ -41,7 +41,7 @@ fun PrimaryButton(
     isLoading: Boolean = false,
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.primary,
-    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+    contentColor: Color = Color.White,
     height: androidx.compose.ui.unit.Dp = AnimationConstants.BUTTON_HEIGHT
 ) {
     Button(
@@ -54,8 +54,8 @@ fun PrimaryButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
             contentColor = contentColor,
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            disabledContainerColor = MaterialTheme.colorScheme.surface,
+            disabledContentColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)
         )
     ) {
         if (isLoading) {
@@ -69,7 +69,7 @@ fun PrimaryButton(
                 text = text,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_bold, FontWeight.Bold))
+                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold))
             )
         }
     }

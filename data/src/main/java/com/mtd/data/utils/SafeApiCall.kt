@@ -13,6 +13,8 @@ suspend fun <T> safeApiCall(
     return try {
         val result = apiCall()
         ResultResponse.Success(result)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (e: Exception) {
         Timber.e(e, "API call failed")
         val appError = ErrorMapper.map(e)

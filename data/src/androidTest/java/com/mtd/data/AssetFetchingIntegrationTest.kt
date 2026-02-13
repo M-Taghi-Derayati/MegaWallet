@@ -2,6 +2,7 @@ package com.mtd.data
 
 
 import android.content.Context
+import android.graphics.Color
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.mtd.core.encryption.SecureStorage
@@ -26,6 +27,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.math.BigDecimal
 import java.math.BigInteger
 
 @RunWith(AndroidJUnit4::class)
@@ -48,14 +50,14 @@ class AssetFetchingIntegrationTest {
         val keyManager = KeyManager(blockchainRegistry)
 
         // این کار باعث می‌شود کلیدهای کیف پول در حافظه کش شوند
-        val walletKeys = keyManager.generateWalletKeysFromMnemonic(TEST_MNEMONIC)
-        keyManager.loadKeysIntoCache(walletKeys)
+       // val walletKeys = keyManager.generateWalletKeysFromMnemonic(TEST_MNEMONIC)
+       // keyManager.loadKeysIntoCache(walletKeys)
 
         val okHttpClient = provideOkHttpClient(httpLoggingInterceptorProvider(),NetworkConnectionInterceptor(context))
         val gson = provideGson()
         val retrofitBuilder = provideRetrofitBuilder(okHttpClient, gson)
         val activeWalletManager= ActiveWalletManager(keyManager)
-        val assetRegistry=AssetRegistry()
+        val assetRegistry=AssetRegistry(blockchainRegistry)
         val dataSourceFactory = ChainDataSourceFactory(blockchainRegistry, retrofitBuilder,assetRegistry,okHttpClient)
 
         walletRepository = WalletRepositoryImpl(
@@ -68,7 +70,7 @@ class AssetFetchingIntegrationTest {
 
         // قبل از تست، کیف پول را با Mnemonic تستی خودمان وارد می‌کنیم تا در SecureStorage ذخیره شود
         runTest {
-            walletRepository.importWalletFromMnemonic(TEST_MNEMONIC)
+            walletRepository.importWalletFromMnemonic(TEST_MNEMONIC,"test",Color.RED)
         }
     }
 
@@ -100,7 +102,7 @@ class AssetFetchingIntegrationTest {
 
         // بررسی موجودی توکن اصلی
         // شما باید قبل از اجرای تست، به آدرس تستی مقداری ETH واریز کرده باشید.
-        assertTrue("Native asset balance should be greater than zero", nativeAsset.balance > BigInteger.ZERO)
+        assertTrue("Native asset balance should be greater than zero", nativeAsset.balance > BigDecimal.ZERO)
 
         // ۲. بررسی یک توکن ERC20 شناخته شده (مثلاً USDC در Sepolia)
         val usdcContractAddress = "0x94a9D9AC8a22534E3FaCa422de466b95853443aD" // آدرس USDC در Sepolia

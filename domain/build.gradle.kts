@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.mtd.domain"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
 
@@ -32,18 +32,7 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-    packaging {
-        resources {
-            pickFirsts.add("META-INF/INDEX.LIST")
-            pickFirsts.add("META-INF/LICENSE.md")
-            pickFirsts.add("META-INF/LICENSE-notice.md")
-            pickFirsts.add("META-INF/DEPENDENCIES")
-            pickFirsts.add("META-INF/FastDoubleParser-LICENSE")
-            pickFirsts.add("META-INF/FastDoubleParser-NOTICE")
-            pickFirsts.add("META-INF/io.netty.versions.properties")
-        }
 
-    }
 }
 
 dependencies {

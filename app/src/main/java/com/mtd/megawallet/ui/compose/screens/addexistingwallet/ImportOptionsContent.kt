@@ -36,13 +36,14 @@ fun ImportOptionsContent(
         Text(
             text = "انتخاب روش وارد کردن",
             style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.tertiary,
             fontFamily = FontFamily(Font(R.font.vazirmatn_bold, FontWeight.Bold))
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "نحوه وارد کردن کیف پول خود را انتخاب کنید.",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onTertiary,
             textAlign = TextAlign.Center,
             fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light))
         )

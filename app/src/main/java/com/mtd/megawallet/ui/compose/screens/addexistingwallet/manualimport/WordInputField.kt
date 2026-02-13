@@ -58,7 +58,10 @@ fun AnimatedInputCard(
     currentIndex: Int,
     text: String,
     onTextChange: (String) -> Unit,
-    onClick: (Int) -> Unit
+    onClick: (Int) -> Unit,
+    validationState: ValidationState = ValidationState.None,
+    isReadOnly: Boolean = false,
+    hideIndex: Boolean = false
 ) {
     val distance = index - currentIndex
     val density = LocalDensity.current
@@ -107,7 +110,10 @@ fun AnimatedInputCard(
             text = text,
             isEnabled = (distance == 0),
             onTextChange = latestOnTextChange,
-            onClick = { onClick(index) }
+            onClick = { onClick(index) },
+            validationState = if (distance == 0) validationState else ValidationState.None,
+            isReadOnly = isReadOnly,
+            hideIndex = hideIndex
         )
     }
 }
@@ -121,9 +127,30 @@ private fun InputCard(
     text: String,
     onTextChange: (String) -> Unit,
     isEnabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    validationState: ValidationState,
+    isReadOnly: Boolean,
+    hideIndex: Boolean
 ) {
     val isDark = isSystemInDarkTheme()
+
+    // Determine card colors based on validation state
+    val backgroundColor = when (validationState) {
+        ValidationState.Success -> Color(0x9A02B910) // Dark Green
+        ValidationState.Error -> Color(0x46FF0000)   // Dark Red
+        ValidationState.None -> if (isDark) Color(0xFF252525) else Color(0xFFF7F8FA)
+    }
+
+    val contentColor = when (validationState) {
+        ValidationState.Success, ValidationState.Error -> Color.White
+        ValidationState.None -> if (isDark) Color.White else Color(0xFF424242)
+    }
+
+    val borderColor = when (validationState) {
+        ValidationState.Success -> Color(0xFF4CAF50)
+        ValidationState.Error -> Color(0xFFEF5350)
+        ValidationState.None -> Color(0xFFC4C4C4)
+    }
 
     Card(
         modifier = Modifier
@@ -141,12 +168,12 @@ private fun InputCard(
                 .fillMaxSize()
                 .padding(8.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(if (isDark) Color(0xFF252525) else Color(0xFFF7F8FA))
+                .background(backgroundColor)
                 .drawWithContent {
                     drawContent()
-                    val strokeWidth = if (!isDark) 2.dp.toPx() else 0.dp.toPx()
+                    val strokeWidth = if (!isDark || validationState != ValidationState.None) 2.dp.toPx() else 0.dp.toPx()
                     drawRoundRect(
-                        color = Color(0xFFC4C4C4),
+                        color = borderColor,
                         style = Stroke(
                             width = strokeWidth,
                             pathEffect = PathEffect.dashPathEffect(
@@ -160,25 +187,29 @@ private fun InputCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // شماره کلمه
-            Text(
-                text = (index + 1).toString(),
-                style = MaterialTheme.typography.titleMedium,
-                color = if (isDark) Color.Gray else Color(0xFF9E9E9E),
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium)),
-                modifier = Modifier.padding(end = 10.dp, start = 15.dp)
-            )
+            if (!hideIndex) {
+                Text(
+                    text = (index + 1).toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (isDark) Color.Gray else Color(0xFF9E9E9E),
+                    fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium)),
+                    modifier = Modifier.padding(end = 10.dp, start = 15.dp)
+                )
+            } else {
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(16.dp))
+            }
 
             // ورودی متن
             OutlinedTextField(
                 modifier = Modifier.weight(1f),
                 value = text,
                 onValueChange = onTextChange,
-                enabled = isEnabled,
-                readOnly = !isEnabled,
+                enabled = isEnabled && !isReadOnly,
+                readOnly = !isEnabled || isReadOnly,
                 singleLine = true,
                 textStyle = TextStyle(
                     fontSize = 18.sp,
-                    color = if (isDark) Color.White else Color(0xFF424242),
+                    color = contentColor,
                     fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium))
                 ),
                 placeholder = {
@@ -218,3 +249,10 @@ data class AnimatedState(val scale: Float, val offsetY: Float, val alpha: Float)
     }
 }
 
+
+
+enum class ValidationState {
+    None,
+    Success,
+    Error
+}

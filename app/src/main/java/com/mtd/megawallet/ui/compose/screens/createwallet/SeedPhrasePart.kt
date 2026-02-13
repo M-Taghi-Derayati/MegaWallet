@@ -10,10 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.mtd.megawallet.ui.compose.animations.GeneratingAnimation
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
 
 /**
@@ -35,13 +33,13 @@ fun SeedPhrasePart(
                 targetColor = viewModel.selectedColor,
                 walletName = viewModel.walletName,
                 seedWords = viewModel.seedWords,
-                walletAddressEVM = viewModel.walletAddressEVM,
-                walletAddressBTC = viewModel.walletAddressBTC,
+               walletAddress = viewModel.walletAddress,
                 isImportMode = isImportMode,
                 viewModel = viewModel,
                 isFlipped = viewModel.isFlipped,
                 onFlippedChange = { viewModel.toggleFlipped(it) },
                 backupState = viewModel.backupAnimationState,
+                backupMethod = viewModel.backupMethod,
                 totalBalance = viewModel.totalBalanceUSDT,
                 onCloudBackupClick = { viewModel.onCloudBackupClick() },
                 onManualBackupClick = { viewModel.onManualBackupClick() },

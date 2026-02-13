@@ -5,8 +5,6 @@ import com.mtd.data.repository.IWalletRepository
 import com.mtd.megawallet.event.ImportData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
 /**
@@ -19,7 +17,6 @@ class WelcomeViewModel @Inject constructor(
 ) : ViewModel() {
     
     private val _isModalActive = MutableStateFlow(false)
-    val isModalActive: StateFlow<Boolean> = _isModalActive.asStateFlow()
 
     // نگهداری داده‌های ایمپورت شده به صورت موقت برای انتقال به صفحه ساخت (CreateWallet)
     var pendingImportData: ImportData? = null

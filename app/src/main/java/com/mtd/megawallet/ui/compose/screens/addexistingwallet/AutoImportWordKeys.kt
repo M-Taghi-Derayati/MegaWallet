@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.mtd.megawallet.ui.compose.components.BottomSecuritySection
 import com.mtd.megawallet.ui.compose.components.InputManualSection
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
-import com.mtd.megawallet.ui.compose.components.TopHeader
+import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 
 /**
  * Screen for auto-importing seed phrase from clipboard.
@@ -40,10 +40,8 @@ fun AutoImportWordKeys(
             .padding(vertical = 25.dp, horizontal = 20.dp)
             .fillMaxSize()
     ) {
-        TopHeader(
-            title = title,
-            subtitle = subtitle
-        )
+
+        UnifiedHeader({},title,subtitle,null)
 
         InputManualSection(
             modifier = Modifier

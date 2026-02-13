@@ -6,8 +6,8 @@ import androidx.compose.ui.unit.dp
  * Constants برای Shimmer Screen
  */
  object ShimmerConstants {
-    val ANIMATION_DURATION = 1200
-    val ANIMATION_TARGET_VALUE = 1000f
+    val ANIMATION_DURATION = 1900
+    val ANIMATION_TARGET_VALUE = 800f
     val SHIMMER_ALPHA_DARK = 0.3f
     val SHIMMER_ALPHA_LIGHT = 0.9f
     val DEFAULT_ITEM_COUNT = 6

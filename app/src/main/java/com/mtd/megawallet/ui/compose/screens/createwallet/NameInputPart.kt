@@ -36,7 +36,7 @@ fun NameInputPart(
 ) {
 
 
-   // viewModel.deleteCloudBackup()
+    //viewModel.deleteCloudBackup()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -57,9 +57,10 @@ fun NameInputPart(
                 Text(
                     text = "کیف پول جدید من",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Normal)),
+                    color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.5f),
+                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal)),
                     modifier = Modifier.fillMaxWidth(),
+                    fontSize = 22.sp,
                     textAlign = TextAlign.Right
                 )
             }
@@ -69,10 +70,10 @@ fun NameInputPart(
                 onValueChange = { viewModel.walletName = it },
                 modifier = Modifier.fillMaxWidth(),
                 textStyle = MaterialTheme.typography.headlineMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.tertiary,
                     textAlign = TextAlign.Right,
                     fontSize = 22.sp,
-                    fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Normal))
+                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal))
                 ),
                 cursorBrush = SolidColor(viewModel.selectedColor),
                 singleLine = true
@@ -84,8 +85,8 @@ fun NameInputPart(
         Text(
             text = "نام مستعار شما خصوصی است و فقط برای شما قابل مشاهده است. شما می‌توانید آن را بعداً در هر زمانی تغییر دهید.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light)),
+            color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.7f),
+            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light)),
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Right
         )

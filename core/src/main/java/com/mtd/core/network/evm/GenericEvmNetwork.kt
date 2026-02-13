@@ -16,13 +16,12 @@ class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
     override val decimals=config.decimals
     override val iconUrl=config.iconUrl
     override val webSocketUrl=config.webSocketUrl
-    override val defaultRpcUrls=config.rpcUrls
+    override val RpcUrls=config.rpcUrls
     override val currencySymbol= config.currencySymbol
-    override val phoenixContractAddress=config.phoenixContractAddress
-    override val blockExplorerUrl=config.blockExplorerUrl
     override val explorers=config.explorers
     override val color = config.color
     override val faName = config.faName
+    override val isTestnet: Boolean = config.isTestnet
     private val derivationPath = config.derivationPath
 
     override fun deriveKeyFromMnemonic(mnemonic: String): WalletKey {
@@ -34,7 +33,6 @@ class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
             chainId = chainId,
             derivationPath = derivationPath,
             address = credentials.address,
-            privateKeyHex = EvmKeyDerivation.getPrivateKeyHex(credentials),
             publicKeyHex = EvmKeyDerivation.getPublicKeyHex(credentials)
         )
     }
@@ -47,8 +45,16 @@ class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
             chainId = chainId,
             derivationPath = derivationPath,
             address = credentials.address,
-            privateKeyHex = privateKey,
             publicKeyHex = credentials.ecKeyPair.publicKey.toString(16)
         )
+    }
+
+    override fun getPrivateKeyFromMnemonic(mnemonic: String): String {
+        val keyPair = EvmKeyDerivation.deriveKeyPairFromMnemonic(mnemonic, derivationPath)
+        return keyPair.privateKey.toString(16)
+    }
+
+    override fun getPrivateKeyFromPrivateKey(privateKey: String): String {
+        return privateKey
     }
 }

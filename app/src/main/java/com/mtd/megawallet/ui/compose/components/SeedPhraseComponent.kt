@@ -54,7 +54,7 @@ fun InputManualSection(modifier: Modifier = Modifier, text:String="", icon: Imag
                 .fillMaxWidth()
                 .clickable(onClick = onClick, indication = null, interactionSource = null)
                 .background(Color.Transparent)
-                .padding(horizontal = 30.dp) // کمی فاصله از لبه‌ها
+                .padding(horizontal = 10.dp) // کمی فاصله از لبه‌ها
                 .height(35.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
@@ -65,16 +65,16 @@ fun InputManualSection(modifier: Modifier = Modifier, text:String="", icon: Imag
                 .size(18.dp),
                 imageVector =icon ,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onTertiary
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text,
                 style = MaterialTheme.typography.bodySmall,
-                color =  MaterialTheme.colorScheme.onSurfaceVariant,
+                color =  MaterialTheme.colorScheme.onTertiary,
                 fontSize = 15.sp,
                 textAlign = TextAlign.Center,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light)),
+                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light)),
                 modifier=Modifier.clickable(onClick = onClick, indication = null, interactionSource = null)
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -92,7 +92,7 @@ fun GradientLine(
     strokeWidth: Dp = 1.dp,
     isRevert: Boolean
 ) {
-    Canvas(modifier = modifier.width(50.dp).height(0.2.dp)) {
+    Canvas(modifier = modifier.width(70.dp).height(0.2.dp)) {
         // 1. تعریف قلم‌موی گرادینت خطی
         // این قلم‌مو از چپ (startX = 0.0) به راست (endX = size.width) رنگ را تغییر می‌دهد
         val brush = if (isRevert) {
@@ -164,14 +164,9 @@ fun Modifier.threeSidedDashedGradientBorder(
     // 5. مسیر خط بالا (شامل گوشه‌های گرد، با رنگ ثابت)
     val pathTop = Path().apply {
         moveTo(0f, cornerRadiusPx) // شروع از انتهای خط چپ
-        quadraticBezierTo(x1 = 0f, y1 = 0f, x2 = cornerRadiusPx, y2 = 0f) // گوشه بالا-چپ
+        quadraticTo(x1 = 0f, y1 = 0f, x2 = cornerRadiusPx, y2 = 0f) // گوشه بالا-چپ
         lineTo(size.width - cornerRadiusPx, 0f) // خط صاف بالا
-        quadraticBezierTo(
-            x1 = size.width,
-            y1 = 0f,
-            x2 = size.width,
-            y2 = cornerRadiusPx
-        ) // گوشه بالا-راست
+        quadraticTo(x1 = size.width, y1 = 0f, x2 = size.width, y2 = cornerRadiusPx) // گوشه بالا-راست
     }
     drawPath(path = pathTop, color = color, style = stroke)
 }

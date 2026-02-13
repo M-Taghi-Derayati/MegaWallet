@@ -1,5 +1,6 @@
 package com.mtd.data
 
+import android.graphics.Color
 import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.keymanager.MnemonicHelper
@@ -8,12 +9,19 @@ import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.datasource.RemoteDataSource
 import com.mtd.data.repository.WalletRepositoryImpl
-import com.mtd.domain.model.Wallet
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.Wallet
 import com.mtd.domain.wallet.ActiveWalletManager
-import io.mockk.*
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.runs
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -64,12 +72,12 @@ class WalletRepositoryImplTest {
 
 
         // Act (اجرای متدی که می‌خواهیم تست کنیم)
-        val result = walletRepository.createNewWallet()
+        val result = walletRepository.createNewWallet("test",Color.RED)
 
         // Assert (بررسی نتایج)
         assertTrue(result is ResultResponse.Success)
         val wallet = (result as ResultResponse.Success<Wallet>).data
-        assertEquals(fakeMnemonic, wallet.mnemonic)
+        assertEquals(fakeMnemonic, wallet.hasMnemonic)
         assertEquals(fakeKeys, wallet.keys)
 
         // تایید می‌کنیم که متدهای مورد نظر دقیقاً یک بار فراخوانی شده‌اند
@@ -84,7 +92,7 @@ class WalletRepositoryImplTest {
         every { MnemonicHelper.isValidMnemonic(invalidMnemonic) } returns false
 
         // Act
-        val result = walletRepository.importWalletFromMnemonic(invalidMnemonic)
+        val result = walletRepository.importWalletFromMnemonic(invalidMnemonic,"test",Color.RED)
 
         // Assert
         assertTrue(result is ResultResponse.Error)
@@ -108,6 +116,6 @@ class WalletRepositoryImplTest {
         assertTrue(result is ResultResponse.Success)
         val wallet = (result as ResultResponse.Success<Wallet?>).data
         assertNotNull(wallet)
-        assertEquals(storedMnemonic, wallet?.mnemonic)
+        assertEquals(storedMnemonic, wallet?.hasMnemonic)
     }
 }

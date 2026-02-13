@@ -13,6 +13,7 @@ import org.bitcoinj.script.ScriptBuilder
 import org.bitcoinj.wallet.DeterministicKeyChain
 import org.bitcoinj.wallet.DeterministicSeed
 import java.math.BigInteger
+import java.time.Instant
 
 abstract class AbstractUtxoNetwork(
     protected val config: NetworkConfig,
@@ -21,20 +22,19 @@ abstract class AbstractUtxoNetwork(
 
     override val id = config.id
     override val chainId: Long? = config.chainId // شبکه‌های UTXO معمولاً chainId ندارند
-    override val defaultRpcUrls = config.rpcUrls
+    override val RpcUrls = config.rpcUrls
     override val decimals=config.decimals
     override val iconUrl=config.iconUrl
     override val webSocketUrl=config.webSocketUrl
-    override val phoenixContractAddress=config.phoenixContractAddress
     override val currencySymbol = config.currencySymbol
-    override val blockExplorerUrl = config.blockExplorerUrl
     override val explorers = config.explorers
     override val color = config.color
     override val faName = config.faName
+    override val isTestnet: Boolean = config.isTestnet
 
     override fun deriveKeyFromMnemonic(mnemonic: String): WalletKey {
         // ۱. ساخت Seed از Mnemonic
-        val seed = DeterministicSeed(mnemonic, null, "", System.currentTimeMillis() / 1000)
+        val seed =  DeterministicSeed.ofMnemonic(mnemonic, "", Instant.now())
 
         // ۲. ساخت زنجیره کلید
         val keyChain = DeterministicKeyChain.builder().seed(seed).build()
@@ -65,7 +65,6 @@ abstract class AbstractUtxoNetwork(
             }
         }
 
-        val privateKeyHex = deterministicKey.privKeyBytes.toHexString()
         val publicKeyHex = deterministicKey.pubKey.toHexString()
 
         return WalletKey(
@@ -74,7 +73,6 @@ abstract class AbstractUtxoNetwork(
             chainId = chainId,
             derivationPath = config.derivationPath,
             address = address,
-            privateKeyHex = privateKeyHex,
             publicKeyHex = publicKeyHex
         )
     }
@@ -117,9 +115,21 @@ abstract class AbstractUtxoNetwork(
             chainId = chainId,
             derivationPath = null, // مسیر استخراج برای کلید خصوصی وارد شده، مشخص نیست
             address = address,
-            privateKeyHex = privateKey,
             publicKeyHex = publicKeyHex
         )
+    }
+
+    override fun getPrivateKeyFromMnemonic(mnemonic: String): String {
+        val seed = DeterministicSeed.ofMnemonic(mnemonic, "", Instant.now())
+        val keyChain = DeterministicKeyChain.builder().seed(seed).build()
+        val compatiblePath = config.derivationPath.replace("'", "H")
+        val keyPath = HDPath.parsePath(compatiblePath)
+        val deterministicKey = keyChain.getKeyByPath(keyPath, true)
+        return deterministicKey.privKeyBytes.toHexString()
+    }
+
+    override fun getPrivateKeyFromPrivateKey(privateKey: String): String {
+        return if (privateKey.startsWith("0x")) privateKey.substring(2) else privateKey
     }
 
 

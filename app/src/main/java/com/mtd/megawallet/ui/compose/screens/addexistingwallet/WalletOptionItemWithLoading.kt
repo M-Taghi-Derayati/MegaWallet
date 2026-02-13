@@ -47,39 +47,12 @@ fun WalletOptionItemWithLoading(
             .fillMaxWidth()
             .height(90.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(MaterialTheme.colorScheme.surface)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End
+        horizontalArrangement = Arrangement.Start
     ) {
-        // متن‌ها (سمت راست)
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.End
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Bold)),
-                textAlign = TextAlign.End
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Light
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                lineHeight = 16.sp,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light)),
-                textAlign = TextAlign.End
-            )
-        }
-
-        Spacer(modifier = Modifier.width(16.dp))
 
         // Loading Indicator (سمت چپ)
         Box(
@@ -95,6 +68,33 @@ fun WalletOptionItemWithLoading(
                 strokeWidth = 2.dp
             )
         }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        // متن‌ها (سمت راست)
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Bold)),
+                textAlign = TextAlign.Start
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiary,
+                maxLines = 2,
+                lineHeight = 16.sp,
+                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium)),
+                textAlign = TextAlign.Start
+            )
+        }
+
+
     }
 }
 

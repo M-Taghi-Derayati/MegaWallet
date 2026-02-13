@@ -11,9 +11,8 @@ data class NetworkConfig(
     val webSocketUrl: String?,
     val decimals: Int,
     val iconUrl: String,
-    val phoenixContractAddress: String?,
-    val blockExplorerUrl: String?, // URL برای مشاهده در مرورگر
     val explorers: List<String>, // لیست Base URL های API اکسپلوررها
     val color: String? = null, // رنگ شبکه به صورت هگز
-    val faName: String? = null // نام فارسی شبکه
+    val faName: String? = null, // نام فارسی شبکه
+    val isTestnet: Boolean = false // مشخص کننده شبکه تست
 )

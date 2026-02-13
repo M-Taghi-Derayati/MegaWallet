@@ -13,7 +13,7 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
         <!-- Background color. -->
-        <item name="android:windowBackground">@drawable/gradient_background</item>
+       <!-- <item name="android:windowBackground">@drawable/gradient_background</item>-->
         <!-- Text Colors -->
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>

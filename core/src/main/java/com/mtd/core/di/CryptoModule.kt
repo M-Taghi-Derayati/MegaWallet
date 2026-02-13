@@ -39,8 +39,8 @@ object CryptoModule {
 
     @Provides
     @Singleton
-    fun provideAssetRegistry(@ApplicationContext context: Context): AssetRegistry {
-        return AssetRegistry().apply {
+    fun provideAssetRegistry(@ApplicationContext context: Context,registry: BlockchainRegistry): AssetRegistry {
+        return AssetRegistry(registry).apply {
             loadAssetsFromAssets(context)
         }
     }

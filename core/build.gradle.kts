@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.mtd.core"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
 
@@ -34,18 +34,7 @@ android {
         jvmTarget = "17"
     }
 
-    packaging {
-        resources {
-            pickFirsts.add("META-INF/INDEX.LIST")
-            pickFirsts.add("META-INF/LICENSE.md")
-            pickFirsts.add("META-INF/LICENSE-notice.md")
-            pickFirsts.add("META-INF/DEPENDENCIES")
-            pickFirsts.add("META-INF/FastDoubleParser-LICENSE")
-            pickFirsts.add("META-INF/FastDoubleParser-NOTICE")
-            pickFirsts.add("META-INF/io.netty.versions.properties")
-        }
 
-    }
 }
 
 dependencies {
@@ -59,20 +48,22 @@ dependencies {
     implementation(libs.retrofit)
 
     api(libs.timber)
-
+    api("org.bouncycastle:bcprov-jdk15to18:1.70")
     api(libs.bundles.web3){
-        exclude (group= "org.bouncycastle", module= "bcprov-jdk15to18")
-        exclude (group= "org.bouncycastle", module= "bcprov-jdk18on")
+        exclude(group = "org.bouncycastle")
     }
+    api(libs.bitcoinj){
+        exclude(group = "org.bouncycastle")
+    }
+
+    api(libs.bitcoin.kmp)
+    api(libs.bitcoin.jni)
+    api(libs.bundles.gson)
 
     api(libs.bundles.google.auth)
 
 
     implementation(libs.security.crypto)
-    api(libs.bitcoinj)
-    api(libs.bitcoin.kmp)
-    api(libs.bitcoin.jni)
-    api(libs.bundles.gson)
     api(libs.socket)
     {
         exclude(group = "org.json", module = "json")
@@ -85,9 +76,17 @@ dependencies {
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.bundles.web3) {
-        exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
-        exclude(group = "org.bouncycastle", module = "bcprov-jdk18on")
+        exclude(group = "org.bouncycastle")
     }
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+}
+
+
+
+configurations.all {
+    resolutionStrategy {
+        //failOnVersionConflict()
+       // activateDependencyLocking()
+    }
 }

@@ -6,11 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,7 +27,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
 import com.mtd.core.model.Bip39Words
-import com.mtd.megawallet.ui.compose.components.TopHeader
+import com.mtd.megawallet.ui.compose.components.PrimaryButton
+import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -65,15 +63,19 @@ fun ManualImportWordKeys(
             .padding(24.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Top) {
-            TopHeader(  title = stringResource(com.mtd.megawallet.R.string.import_wallet_title),
-                subtitle = stringResource(com.mtd.megawallet.R.string.import_wallet_subtitle_12_key))
+
+
+            UnifiedHeader({},stringResource(com.mtd.megawallet.R.string.import_wallet_title),stringResource(com.mtd.megawallet.R.string.import_wallet_subtitle_12_key),null)
+
             Spacer(modifier = Modifier.height(32.dp))
-            InputSeedPhraseSection(
-                currentIndex = currentIndex,
-                userInputs = userInputs.toList(),
-                wordCount = wordCount,
-                onTextChange = { index, text -> userInputs[index] = text }
-            )
+
+                InputSeedPhraseSection(
+                    currentIndex = currentIndex,
+                    userInputs = userInputs.toList(),
+                    wordCount = wordCount,
+                    onTextChange = { index, text -> userInputs[index] = text }
+                )
+            }
         }
 
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
@@ -83,8 +85,8 @@ fun ManualImportWordKeys(
             Text(
                 "کلید های بازیابی شما",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light)),
+                color = MaterialTheme.colorScheme.onTertiary,
+                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light)),
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
             Spacer(modifier = Modifier.height(15.dp))
@@ -101,36 +103,33 @@ fun ManualImportWordKeys(
             )
             Spacer(modifier = Modifier.height(32.dp))
 
-            Button(
-                onClick = {
-                    if (isCurrentInputCorrect) {
-                        if (currentIndex < wordCount - 1) {
-                            // اگر کلمات بعدی قبلاً پر شده‌اند (حالت ویرایش)، به کلمه بعدی برو
-                            // در غیر این صورت به بالاترین ایندکسی که رسیدیم برو
-                            if (currentIndex < maxReachedIndex && maxReachedIndex < wordCount) {
-                                currentIndex = maxReachedIndex
-                            } else {
-                                currentIndex++
-                                if (currentIndex > maxReachedIndex) {
-                                    maxReachedIndex = currentIndex
-                                }
-                            }
+            PrimaryButton(
+                text = "ثبت",
+                onClick = {    if (isCurrentInputCorrect) {
+                    if (currentIndex < wordCount - 1) {
+                        // اگر کلمات بعدی قبلاً پر شده‌اند (حالت ویرایش)، به کلمه بعدی برو
+                        // در غیر این صورت به بالاترین ایندکسی که رسیدیم برو
+                        if (currentIndex < maxReachedIndex && maxReachedIndex < wordCount) {
+                            currentIndex = maxReachedIndex
                         } else {
-                            // اگر روی آخرین کلمه هستیم، نهایی کن
-                            maxReachedIndex = wordCount 
-                            onWordsChange(userInputs.toList())
-                            onVerificationSuccess(userInputs.toList())
+                            currentIndex++
+                            if (currentIndex > maxReachedIndex) {
+                                maxReachedIndex = currentIndex
+                            }
                         }
+                    } else {
+                        // اگر روی آخرین کلمه هستیم، نهایی کن
+                        maxReachedIndex = wordCount
+                        onWordsChange(userInputs.toList())
+                        onVerificationSuccess(userInputs.toList())
                     }
-                },
+                } },
                 enabled = isCurrentInputCorrect,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = CircleShape
-            ) {
-                Text("ثبت",  fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light)))
-            }
+                modifier = Modifier.padding(horizontal = 10.dp),
+                height = 52.dp
+            )
         }
-    }
+    
 }
 
 

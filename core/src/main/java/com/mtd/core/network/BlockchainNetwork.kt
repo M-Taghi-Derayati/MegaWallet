@@ -12,13 +12,12 @@ interface BlockchainNetwork {
     val decimals: Int
     val iconUrl:String
     val webSocketUrl: String?
-    val defaultRpcUrls: List<String>
+    val RpcUrls: List<String>
     val currencySymbol: String
-    val phoenixContractAddress: String?
-    val blockExplorerUrl: String?
     val explorers: List<String>
     val color: String?
     val faName: String?
+    val isTestnet: Boolean
     /**
      * تولید کلید از روی mnemonic (عبارت بازیابی)
      */
@@ -30,4 +29,10 @@ interface BlockchainNetwork {
     fun deriveKeyFromPrivateKey(privateKey: String): WalletKey
 
 
+    /**
+     * فقط کلید خصوصی را برای امضا استخراج می‌کند (بدون ساخت WalletKey کامل)
+     */
+    fun getPrivateKeyFromMnemonic(mnemonic: String): String
+
+    fun getPrivateKeyFromPrivateKey(privateKey: String): String
 }

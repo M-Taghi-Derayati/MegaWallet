@@ -2,7 +2,7 @@ package com.mtd.data.di
 
 import android.content.Context
 import com.google.gson.Gson
-import com.mtd.data.service.CoinGeckoApiService
+import com.mtd.data.service.CoinDeskApiService
 import com.mtd.data.service.SwapApiService
 import com.mtd.data.service.USDTApiService
 import dagger.Module
@@ -52,8 +52,8 @@ object NetworkModule {
                 Timber.log(Timber.treeCount, message)
                 Timber.tag("Network").e(message)
             })).apply {
-                level /*= if (BuildConfig.DEBUG)*/
-                    HttpLoggingInterceptor.Level.BODY
+                level=HttpLoggingInterceptor.Level.BODY /*= if (BuildConfig.DEBUG)*/
+
                 /*else
                     HttpLoggingInterceptor.Level.NONE
 */            }
@@ -90,16 +90,16 @@ object NetworkModule {
 
         @Provides
         @Singleton
-        fun provideCoinGeckoApiService(
+        fun provideCoinDeskApiService(
             retrofitBuilder: Retrofit.Builder,
             gson: Gson
-        ): CoinGeckoApiService {
+        ): CoinDeskApiService {
             return retrofitBuilder
-                .baseUrl("https://api.coingecko.com/") // Base URL مخصوص CoinGecko
+                .baseUrl("https://data-api.coindesk.com/") // Base URL مخصوص CoinGecko
                 .addConverterFactory(ScalarsConverterFactory.create())
                 .addConverterFactory(GsonConverterFactory.create(gson))
                 .build()
-                .create(CoinGeckoApiService::class.java)
+                .create(CoinDeskApiService::class.java)
         }
 
     @Provides
@@ -111,17 +111,6 @@ object NetworkModule {
             .pingInterval(20, TimeUnit.SECONDS) // ارسال پینگ خودکار
             .build()
     }
-
-   /* @Provides
-    @Singleton
-    @SwapApiRetrofit
-    fun provideSwapApiService(okHttpClient: OkHttpClient, gson: Gson): Retrofit  {
-        return Retrofit.Builder()
-            .baseUrl("http://localhost:3000/")
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create(gson))
-            .build()
-    }*/
 
 
     @Provides
@@ -149,14 +138,6 @@ object NetworkModule {
             .build()
     }
 
-//    /**
-//     * سرویس SwapApiService را با استفاده از نمونه Retrofit مخصوص خودش می‌سازد.
-//     */
-//    @Provides
-//    @Singleton
-//    fun provideSwapApiService(@SwapApiRetrofit retrofit: Retrofit): SwapApiService {
-//        return retrofit.create(SwapApiService::class.java)
-//    }
 
     @Provides
     @Singleton
@@ -165,7 +146,7 @@ object NetworkModule {
         gson: Gson
     ): USDTApiService {
         return retrofitBuilder
-            .baseUrl("https://api.nobitex.ir/")
+            .baseUrl("https://api.wallex.ir/")
             .addConverterFactory(ScalarsConverterFactory.create())
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()

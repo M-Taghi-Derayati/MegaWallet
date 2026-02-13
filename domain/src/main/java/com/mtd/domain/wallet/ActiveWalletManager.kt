@@ -25,13 +25,20 @@ class ActiveWalletManager @Inject constructor(
      * و آبجکت Wallet را برای دسترسی عمومی تنظیم می‌کند.
      * این متد باید بعد از احراز هویت کاربر (مثلاً وارد کردن رمز عبور) فراخوانی شود.
      */
-    fun unlockWallet(wallet: Wallet) {
+    fun unlockWallet(wallet: Wallet, secret: String) {
         // ۱. کلیدها را در کش KeyManager بارگذاری کن
-        keyManager.loadKeysIntoCache(wallet.keys)
+        keyManager.loadKeysIntoCache(secret, wallet.hasMnemonic)
 
         // ۲. آبجکت Wallet را در StateFlow قرار بده
         _activeWallet.value = wallet
         _activeWalletId.value = wallet.id
+    }
+
+    /**
+     * اطلاعات متادیتای کیف پول (مثل نام یا رنگ) را بدون تغییر کلیدها بروز می‌کند.
+     */
+    fun updateWalletMetadata(wallet: Wallet) {
+        _activeWallet.value = wallet
     }
 
     /**

@@ -14,7 +14,13 @@ interface IWalletRepository {
      * @param id ID اختیاری برای کیف پول (در صورت restore از cloud). اگر null باشد، UUID جدید تولید می‌شود.
      * @return یک Result که در صورت موفقیت، حاوی آبجکت Wallet است.
      */
-    suspend fun createNewWallet(name: String, color: Int, id: String? = null): ResultResponse<Wallet>
+    suspend fun createNewWallet(
+        name: String, 
+        color: Int, 
+        id: String? = null,
+        isManualBackedUp: Boolean = false,
+        isCloudBackedUp: Boolean = false
+    ): ResultResponse<Wallet>
 
     /**
      * یک کیف پول موجود را از طریق کلمات بازیابی وارد می‌کند.
@@ -22,7 +28,14 @@ interface IWalletRepository {
      * @param id ID اختیاری برای کیف پول (در صورت restore از cloud). اگر null باشد، UUID جدید تولید می‌شود.
      * @return یک Result که در صورت موفقیت، حاوی آبجکت Wallet است.
      */
-    suspend fun importWalletFromMnemonic(mnemonic: String, name: String, color: Int, id: String? = null): ResultResponse<Wallet>
+    suspend fun importWalletFromMnemonic(
+        mnemonic: String, 
+        name: String, 
+        color: Int, 
+        id: String? = null,
+        isManualBackedUp: Boolean = true,
+        isCloudBackedUp: Boolean = false
+    ): ResultResponse<Wallet>
 
     /**
      * یک کیف پول موجود را از طریق کلید خصوصی وارد می‌کند.
@@ -31,7 +44,14 @@ interface IWalletRepository {
      * @param id ID اختیاری برای کیف پول (در صورت restore از cloud). اگر null باشد، UUID جدید تولید می‌شود.
      * @return یک Result که در صورت موفقیت، حاوی آبجکت Wallet است.
      */
-    suspend fun importWalletFromPrivateKey(privateKey: String, name: String, color: Int, id: String? = null): ResultResponse<Wallet>
+    suspend fun importWalletFromPrivateKey(
+        privateKey: String, 
+        name: String, 
+        color: Int, 
+        id: String? = null,
+        isManualBackedUp: Boolean = true,
+        isCloudBackedUp: Boolean = false
+    ): ResultResponse<Wallet>
 
     /**
      * کیف پول ذخیره شده فعلی را از حافظه امن بارگذاری می‌کند.
@@ -45,17 +65,14 @@ interface IWalletRepository {
     suspend fun hasWallet(): Boolean
 
     /**
-     * کلمات بازیابی ذخیره شده را برای نمایش به کاربر (Export) برمی‌گرداند.
+     * کلمات بازیابی ذخیره شده را برای یک کیف پول خاص برمی‌گرداند.
      * این متد باید فقط پس از احراز هویت قوی کاربر فراخوانی شود.
-     * @return یک Result که در صورت موفقیت، حاوی کلمات بازیابی است.
      */
-    suspend fun getSavedMnemonic(): ResultResponse<String?>
+    suspend fun getMnemonic(walletId: String): ResultResponse<String?>
 
     /**
      * تمام اطلاعات مربوط به کیف پول فعلی را از حافظه امن پاک می‌کند.
-     * @deprecated Use deleteWallet(walletId: String) instead. This method will be removed in a future version.
      */
-    @Deprecated("Use deleteWallet(walletId: String) instead", ReplaceWith("deleteWallet(getActiveWalletId() ?: return)"))
     suspend fun deleteWallet()
 
     /**
@@ -106,11 +123,19 @@ interface IWalletRepository {
  
     suspend fun getTransactionHistory( networkName: NetworkName, userAddress: String): ResultResponse<List<TransactionRecord>>
  
-    /**
-     * آدرس کیف پول فعال را برای یک شبکه خاص برمی‌گرداند.
-     * @deprecated Use ActiveWalletManager.getAddressForNetwork(chainId) instead. This method will be removed in a future version.
-     */
-    @Deprecated("Use ActiveWalletManager.getAddressForNetwork(chainId) instead", ReplaceWith("activeWalletManager.getAddressForNetwork(blockchainRegistry.getNetworkById(networkId)?.chainId ?: return null)"))
     suspend fun getActiveAddressForNetwork(networkId: String): String?
+
+    /**
+     * دریافت موجودی دارایی‌ها برای چندین کیف پول در یک شبکه خاص (Batch Fetching)
+     * در این متد، آدرس‌ها به صورت داخلی و امن تولید می‌شوند.
+     * @param networkName شبکه مورد نظر
+     * @param walletIds لیست آیدی‌های کیف پول
+     * @return مپ از <WalletId, List<Asset>>
+     */
+    suspend fun getBalancesForMultipleWallets(networkName: NetworkName, walletIds: List<String>): ResultResponse<Map<String, List<Asset>>>
  
+    /**
+     * بروزرسانی وضعیت پشتیبان‌گیری یک کیف پول خاص.
+     */
+    suspend fun updateBackupStatus(walletId: String, manual: Boolean? = null, cloud: Boolean? = null): ResultResponse<Unit>
 }

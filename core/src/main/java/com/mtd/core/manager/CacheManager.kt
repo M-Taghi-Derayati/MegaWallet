@@ -148,8 +148,9 @@ class CacheManager @Inject constructor(
         File(cacheDir, key).exists()
     }
 
-    companion object {
+   companion object {
         private const val DEFAULT_TTL = 5 * 60 * 1000L // 5 minutes
+         const val ASSETS_TTL = 5 *24* 3600 * 1000000L // 5 Days
     }
 
     /**

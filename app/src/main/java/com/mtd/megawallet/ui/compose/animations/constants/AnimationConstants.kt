@@ -88,7 +88,7 @@ object AnimationConstants {
     val GRID_STEP_DP = 40.dp
     
     /** Card corner radius in dp */
-    val CARD_CORNER_RADIUS = 24.dp
+    val CARD_CORNER_RADIUS = 21.dp
     
     /** Card width in dp */
     val CARD_WIDTH = 300.dp

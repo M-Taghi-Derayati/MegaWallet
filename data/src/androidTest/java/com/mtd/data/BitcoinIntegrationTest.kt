@@ -1,6 +1,7 @@
 package com.mtd.data
 
 import android.content.Context
+import android.graphics.Color
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.gson.Gson
@@ -26,7 +27,7 @@ import org.junit.FixMethodOrder
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.MethodSorters
-import java.math.BigInteger
+import java.math.BigDecimal
 
 @RunWith(AndroidJUnit4::class)
 @FixMethodOrder(MethodSorters.NAME_ASCENDING) // اجرای تست‌ها به ترتیب نام
@@ -55,7 +56,7 @@ class BitcoinIntegrationTest {
         val retrofitBuilder = provideRetrofitBuilder(okHttpClient,gson)
 
         // ۳. ساخت وابستگی‌های اصلی :data
-        val assetRegistry=AssetRegistry()
+        val assetRegistry=AssetRegistry(blockchainRegistry)
         val dataSourceFactory = ChainDataSourceFactory(blockchainRegistry, retrofitBuilder,assetRegistry,okHttpClient)
 
         val activeWalletManager = ActiveWalletManager(keyManager)
@@ -70,13 +71,13 @@ class BitcoinIntegrationTest {
 //f2449cde31e0e3960132206f9fac3fe50c250d403a11f610dedfb72e0594a253
         // وارد کردن کیف پول و استخراج آدرس بیت‌کوین
         runTest {
-            val result = walletRepository.importWalletFromPrivateKey("f2449cde31e0e3960132206f9fac3fe50c250d403a11f610dedfb72e0594a253")
+            val result = walletRepository.importWalletFromPrivateKey("f2449cde31e0e3960132206f9fac3fe50c250d403a11f610dedfb72e0594a253","test",Color.RED)
             val wallet = (result as ResultResponse.Success).data
             val bitcoinKey = wallet.keys.find { it.networkName == NetworkName.BITCOINTESTNET }
             assertNotNull("Bitcoin Testnet key should be generated ${wallet}", bitcoinKey)
             userBitcoinAddress = bitcoinKey!!.address
             println("🔑 Bitcoin Test Address: $userBitcoinAddress")
-            keyManager.loadKeysIntoCache((result).data.keys)
+            //keyManager.loadKeysIntoCache((result).data.keys)
         }
     }
 
@@ -92,7 +93,7 @@ class BitcoinIntegrationTest {
         val balance = (result as ResultResponse.Success).data
 
         // مطمئن شوید به آدرس خود مقداری tBTC از یک Faucet واریز کرده‌اید
-        assertTrue("Bitcoin balance should be greater than zero. Fund your address: $userBitcoinAddress", balance > BigInteger.ZERO)
+        assertTrue("Bitcoin balance should be greater than zero. Fund your address: $userBitcoinAddress", balance > BigDecimal.ZERO)
         println("✅ Bitcoin Balance: $balance Satoshis")
     }
 

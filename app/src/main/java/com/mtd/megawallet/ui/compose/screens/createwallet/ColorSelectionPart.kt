@@ -35,12 +35,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
+import com.mtd.megawallet.ui.compose.components.TopHeader
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
 
 /**
  * Available wallet colors for selection.
  */
-private val WALLET_COLORS = listOf(
+ val WALLET_COLORS = listOf(
     Color(0xFF22C55E), Color(0xFF3B82F6), Color(0xFFEF4444), Color(0xFFF59E0B),
     Color(0xFF8B5CF6), Color(0xFFEC4899), Color(0xFF06B6D4), Color(0xFF84CC16),
     Color(0xFF6366F1), Color(0xFFF97316), Color(0xFF14B8A6), Color(0xFFD946EF),
@@ -71,26 +72,11 @@ fun ColorSelectionPart(
             .padding(top = 40.dp)
     ) {
         // Header
-        Text(
-            text = "نمای کیف پول خود را انتخاب کنید",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.vazirmatn_bold, FontWeight.Normal)),
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Right,
-            fontSize = 25.sp
-        )
 
-        Spacer(modifier = Modifier.height(8.dp))
 
-        Text(
-            text = "رنگی را انتخاب کنید که برای شناسایی این کیف پول استفاده می شود.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.vazirmatn_medium, FontWeight.Light)),
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Right,
-            fontSize = 14.sp
+        TopHeader(
+            title =  "نمای کیف پول خود را انتخاب کنید",
+            subtitle = "رنگی را انتخاب کنید که برای شناسایی این کیف پول استفاده می شود"
         )
 
         Spacer(modifier = Modifier.weight(1f))
@@ -118,12 +104,12 @@ fun ColorSelectionPart(
 
         // Footer text
         Text(
-            text = "این رنگ در کارت ها، نمودارها و برخی دکمه ها نمایش داده می شود.",
+            text = "این رنگ در کارت ها، نمودارها و برخی دکمه ها نمایش داده می شود",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.vazirmatn_medium, FontWeight.Light)),
+            color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.7f),
+            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.iransansmobile_fa_regular, FontWeight.Light)),
             modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Right,
+            textAlign = TextAlign.Center,
             fontSize = 12.sp
         )
 

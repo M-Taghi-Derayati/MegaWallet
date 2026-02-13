@@ -57,15 +57,42 @@ class KeyManager @Inject constructor (
     }
 
     /**
-     * کلیدهای تولید شده را در کش بارگذاری می‌کند تا برای امضا در دسترس باشند.
-     * این متد باید بعد از باز شدن قفل کیف پول فراخوانی شود.
+     * کلیدهای خصوصی را از روی سکرت تولید کرده و در کش داخلی (Private Cache) بارگذاری می‌کند.
+     * این متد هرگز نباید در لایه‌های UI صدا زده شود.
      */
-    fun loadKeysIntoCache(keys: List<WalletKey>) {
+    fun loadKeysIntoCache(secret: String, isMnemonic: Boolean) {
         credentialsCache.clear()
-        keys.forEach { key ->
-            if (key.chainId != null) {
-                credentialsCache[key.chainId] = Credentials.create(key.privateKeyHex)
+        val networks = registry.getAllNetworks()
+        
+        networks.forEach { network ->
+            val chainId = network.chainId
+            if (chainId != null) {
+                // ما اینجا از تابع‌های رجیستری برای استخراج مستقیم پرایوت کی استفاده می‌کنیم
+                // توجه: آبجکت WalletKey که اینجا برمی‌گردد دیگر شامل پرایوت کی نیست،
+                // اما منطق داخلی هر شبکه (BlockchainNetwork) می‌تواند پرایوت کی را در لحظه تولید کند.
+                // برای این کار، ممکن است نیاز باشد متدهای BlockchainNetwork را هم کمی تغییر دهیم یا
+                // مستقیماً از helperها استفاده کنیم.
+                
+                // فعلاً فرض می‌کنیم متد کمکی برای استخراج PrivateKey داریم یا BlockchainNetwork آن را برمی‌گرداند.
+                // برای سادگی فعلاً از یک متد داخلی استفاده می‌کنیم:
+                val privateKey = if (isMnemonic) {
+                    derivePrivateKeyHexFromMnemonic(secret, network)
+                } else {
+                    secret // در حالت پرایوت کی، خود سیکرت همان کلید است
+                }
+                
+                if (privateKey != null) {
+                    credentialsCache[chainId] = Credentials.create(privateKey)
+                }
             }
+        }
+    }
+
+    private fun derivePrivateKeyHexFromMnemonic(mnemonic: String, network: com.mtd.core.network.BlockchainNetwork): String? {
+        return try {
+             network.getPrivateKeyFromMnemonic(mnemonic)
+        } catch (e: Exception) {
+            null
         }
     }
 

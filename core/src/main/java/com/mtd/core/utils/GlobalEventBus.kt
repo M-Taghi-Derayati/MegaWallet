@@ -1,4 +1,4 @@
-package com.mtd.core.utils// در یک پکیج جدید مثل com.mtd.megawallet.core یا com.mtd.megawallet.event
+package com.mtd.core.utils
 
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow

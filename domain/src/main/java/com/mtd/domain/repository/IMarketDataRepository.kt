@@ -16,4 +16,11 @@ interface IMarketDataRepository {
      * دریافت نرخ تبدیل تتر به تومان.
      */
     suspend fun getUsdToIrrRate(): ResultResponse<CurrencyRate>
+    
+    /**
+     * دریافت تاریخچه قیمت برای چارت.
+     * @param coinId شناسه کوین گکو (مثلاً "bitcoin")
+     * @param days تعداد روزهای تاریخچه (مثلاً "1", "7", "30")
+     */
+    suspend fun getHistoricalPrices(coinId: String, days: String): ResultResponse<List<Pair<Long, Double>>>
 }

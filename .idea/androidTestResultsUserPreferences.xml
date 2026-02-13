@@ -55,6 +55,34 @@
             </AndroidTestResultsTableState>
           </value>
         </entry>
+        <entry key="-200738076">
+          <value>
+            <AndroidTestResultsTableState>
+              <option name="preferredColumnWidths">
+                <map>
+                  <entry key="Duration" value="90" />
+                  <entry key="Pixel_7_Pro" value="120" />
+                  <entry key="Tests" value="360" />
+                  <entry key="Xiaomi Mi 9T" value="120" />
+                </map>
+              </option>
+            </AndroidTestResultsTableState>
+          </value>
+        </entry>
+        <entry key="-111388577">
+          <value>
+            <AndroidTestResultsTableState>
+              <option name="preferredColumnWidths">
+                <map>
+                  <entry key="Duration" value="90" />
+                  <entry key="Pixel_7_Pro" value="120" />
+                  <entry key="Tests" value="360" />
+                  <entry key="Xiaomi Mi 9T" value="120" />
+                </map>
+              </option>
+            </AndroidTestResultsTableState>
+          </value>
+        </entry>
         <entry key="285147831">
           <value>
             <AndroidTestResultsTableState>

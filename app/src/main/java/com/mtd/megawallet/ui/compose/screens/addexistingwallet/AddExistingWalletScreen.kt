@@ -8,7 +8,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
@@ -18,7 +20,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,22 +32,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mtd.megawallet.event.CloudWalletItem
 import com.mtd.megawallet.event.GoogleSignInEvent
 import com.mtd.megawallet.event.ImportData
 import com.mtd.megawallet.event.ImportScreenState
+import com.mtd.megawallet.ui.compose.components.AnimatedFlipCard
 import com.mtd.megawallet.ui.compose.components.ErrorSnackbarHandler
+import com.mtd.megawallet.ui.compose.components.FlipCardTargets
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
-import com.mtd.megawallet.ui.compose.components.WalletStackCard
 import com.mtd.megawallet.ui.compose.components.WalletStackCardBackPrivateKey
 import com.mtd.megawallet.ui.compose.components.WalletStackCardBackWordKeys
 import com.mtd.megawallet.ui.compose.components.WalletStackCardFront
@@ -59,7 +63,7 @@ fun AddExistingWalletScreen(
     viewModel: WalletImportViewModel = hiltViewModel(),
     onBack: () -> Unit,
     onImportSuccess: (ImportData) -> Unit,
-    onRestoreFromCloud: (com.mtd.megawallet.event.CloudWalletItem) -> Unit = {}
+    onRestoreFromCloud: (CloudWalletItem) -> Unit = {}
 ) {
     val screenState = viewModel.screenState
     val restoreWalletEvent = viewModel.restoreWalletEvent
@@ -83,8 +87,9 @@ fun AddExistingWalletScreen(
         screenState == ImportScreenState.CLOUD_WALLET_LIST
     }
 
-    val isGreenCardRevealed by derivedStateOf { 
-        isSeedPhraseVisible 
+    val isGreenCardRevealed by derivedStateOf {
+
+        isSeedPhraseVisible
     }
 
     LaunchedEffect(viewModel.validationSuccessEvent) {
@@ -192,11 +197,12 @@ fun AddExistingWalletScreen(
         if (state == ImportScreenState.SEED_PHRASE_MANUAL) 0f else 1f
     }
 
-    val gradientBrush = if (isSystemInDarkTheme()) {
-        Brush.verticalGradient(colors = listOf(Color.Black, Color.Black))
-    } else {
-        Brush.verticalGradient(colors = listOf(Color.White, Color(0xFFE7E7E7)))
-    }
+    val greenCardRotation by animateFloatAsState(
+        targetValue = if (isGreenCardRevealed) 180f else 0f,
+        animationSpec = tween(600, easing = FastOutSlowInEasing),
+        label = "greenRotation"
+    )
+
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
@@ -224,38 +230,69 @@ fun AddExistingWalletScreen(
                     .zIndex(10f)
             )
 
-            // ۲. پشته کارت‌ها (Wallet Cards)
+            // ۳. پشته کارت‌ها (Wallet Cards) با انیمیشن ورود مرحله‌ای (Staggered)
             val density = LocalDensity.current
+            
+            // تعریف استیت‌ها برای شروع انیمیشن هر کارت به صورت مجزا
+            var blueStarted by remember { mutableStateOf(false) }
+            var orangeStarted by remember { mutableStateOf(false) }
+            var greenStarted by remember { mutableStateOf(false) }
+
+            val blueIntroOffset by animateDpAsState(
+                targetValue = if (blueStarted) 0.dp else 120.dp,
+                animationSpec = spring(dampingRatio = 0.75f, stiffness = 200f),
+                label = "BlueIntro"
+            )
+            val orangeIntroOffset by animateDpAsState(
+                targetValue = if (orangeStarted) 0.dp else 120.dp,
+                animationSpec = spring(dampingRatio = 0.75f, stiffness = 200f),
+                label = "OrangeIntro"
+            )
+            val greenIntroOffset by animateDpAsState(
+                targetValue = if (greenStarted) 0.dp else 120.dp,
+                animationSpec = spring(dampingRatio = 0.75f, stiffness = 200f),
+                label = "GreenIntro"
+            )
+
+            // Staggered intro delays
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(150) // initial delay to sync with page animation
+                blueStarted = true
+                kotlinx.coroutines.delay(100)
+                orangeStarted = true
+                kotlinx.coroutines.delay(100)
+                greenStarted = true
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.31f),
                 contentAlignment = Alignment.Center
             ) {
-                // کارت ۳ (سبز نهایی - کارت متحرک اصلی)
-                // استفاده از graphicsLayer برای transform animations (بهینه‌سازی performance)
-                WalletStackCard(
+                // Card 3 (green)
+                AnimatedFlipCard(
+                    targets = FlipCardTargets(
+                        width = greenCardWidth,
+                        height = greenCardHeight,
+                        offsetY = with(density) { (greenCardYOffset + greenIntroOffset).toPx() },
+                        rotationY = greenCardRotation,
+                        cornerRadius = 16.dp,
+                        contentAlpha = greenCardAlpha
+                    ),
+                    backgroundColor = Color(0xFF22C55E),
                     modifier = Modifier
-                        .graphicsLayer {
-                            translationY = with(density) { greenCardYOffset.toPx() }
-                            alpha = greenCardAlpha
-                        }
-                        .zIndex(if (screenState == ImportScreenState.STACKED) 1f else 10f),
-                    width = greenCardWidth,
-                    height = greenCardHeight,
-                    isRevealed = isGreenCardRevealed,
-                    color = Color(0xFF22C55E),
-                    frontContent = { WalletStackCardFront() },
-                    backContent = {
+                        .zIndex(if (screenState == ImportScreenState.STACKED) 0f else 10f),
+                    animate = false,
+                    front = { WalletStackCardFront() },
+                    back = {
                         if (screenState == ImportScreenState.PRIVATE_KEY_INPUT) {
                             WalletStackCardBackPrivateKey(
                                 privateKey = viewModel.pastedPrivateKey,
                                 onPasteClick = { viewModel.onPastePrivateKeyToCard() }
                             )
                         } else {
-                            // بهینه‌سازی: بررسی اینکه آیا انیمیشن کارت به target height رسیده یا نه
                             val isAnimationStable by derivedStateOf {
-                                // وقتی height به 270.dp نزدیک شد (با tolerance 5.dp)، انیمیشن ثابت شده
                                 greenCardHeight >= 265.dp && screenState == ImportScreenState.SEED_PHRASE_AUTO
                             }
                             WalletStackCardBackWordKeys(
@@ -266,34 +303,43 @@ fun AddExistingWalletScreen(
                         }
                     }
                 )
-                // کارت ۲ (نارنجی)
-                WalletStackCard(
+                // Card 2 (orange)
+                AnimatedFlipCard(
+                    targets = FlipCardTargets(
+                        width = 200.dp,
+                        height = 120.dp,
+                        offsetY = with(density) { (orangeCardsOffset + orangeIntroOffset).toPx() },
+                        scaleX = 1.05f,
+                        scaleY = 1.05f,
+                        cornerRadius = 16.dp,
+                        contentAlpha = otherCardsAlpha
+                    ),
+                    backgroundColor = Color(0xFFFFA726),
                     modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = 1.05f
-                            scaleY = 1.05f
-                            translationY = with(density) { orangeCardsOffset.toPx() }
-                            alpha = otherCardsAlpha
-                        },
-                    color = Color(0xFFFFA726),
-                    frontContent = { WalletStackCardFront() },
-                    backContent = { }
+                        .zIndex(if (screenState == ImportScreenState.STACKED) 1f else 0f),
+                    animate = false,
+                    front = { WalletStackCardFront() },
+                    back = { }
                 )
-                // کارت ۱ (آبی)
-                WalletStackCard(
+                // Card 1 (blue)
+                AnimatedFlipCard(
+                    targets = FlipCardTargets(
+                        width = 200.dp,
+                        height = 120.dp,
+                        offsetY = with(density) { (blueCardsOffset + blueIntroOffset).toPx() },
+                        scaleX = 1.2f,
+                        scaleY = 1.2f,
+                        cornerRadius = 16.dp,
+                        contentAlpha = otherCardsAlpha
+                    ),
+                    backgroundColor = Color(0xFF42A5F5),
                     modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = 1.2f
-                            scaleY = 1.2f
-                            translationY = with(density) { blueCardsOffset.toPx() }
-                            alpha = otherCardsAlpha
-                        },
-                    color = Color(0xFF42A5F5),
-                    frontContent = { WalletStackCardFront() },
-                    backContent = { }
+                        .zIndex(if (screenState == ImportScreenState.STACKED) 2f else 0f),
+                    animate = false,
+                    front = { WalletStackCardFront() },
+                    back = { }
                 )
             }
-
             // ۳. بخش محتوا (گزینه‌ها یا فیلدهای ایمپورت)
             AnimatedVisibility(
                 modifier = Modifier
@@ -308,7 +354,7 @@ fun AddExistingWalletScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(40.dp, 40.dp, 0.dp, 0.dp))
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(MaterialTheme.colorScheme.background)
                         .padding(24.dp)
                 ) {
                     AnimatedContent(
@@ -412,6 +458,7 @@ fun AddExistingWalletScreen(
                                     onBack = {
                                         viewModel.handleBack()
                                     },
+                                    mode = CloudPasswordMode.RESTORE_WALLETS_LIST,
                                     isLoading = viewModel.isDownloadingBackup,
                                     onPasswordSubmit = { password ->
                                          viewModel.onRestorePasswordConfirm(password)
@@ -439,4 +486,3 @@ fun AddExistingWalletScreen(
         }
     }
 }
-

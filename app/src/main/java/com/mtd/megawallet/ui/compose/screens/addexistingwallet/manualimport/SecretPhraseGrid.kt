@@ -10,10 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.mtd.megawallet.ui.compose.components.SecretPhraseItem
 
@@ -39,44 +42,45 @@ fun SecretPhraseGrid(
     val itemColor = remember(isDark) {
         if (isDark) Color.Gray.copy(alpha = 0.5f) else Color.LightGray
     }
-    
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = horizontalPadding),
-        contentAlignment = Alignment.Center
-    ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
-            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
-            // بهینه‌سازی: استفاده از contentPadding
-            contentPadding = PaddingValues(0.dp),
-            userScrollEnabled = false,
-            modifier = Modifier.fillMaxWidth()
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = horizontalPadding),
+            contentAlignment = Alignment.Center
         ) {
-            items(
-                count = wordCount,
-                // بهینه‌سازی: استفاده از stable key
-                key = { index -> index }
-            ) { index ->
-                // بهینه‌سازی: محاسبه word یکبار در composition
-                val word = remember(userInputs, maxReachedIndex, index) {
-                    if (index < maxReachedIndex) {
-                        userInputs.getOrNull(index) ?: placeholderText
-                    } else {
-                        placeholderText
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
+                verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+                // بهینه‌سازی: استفاده از contentPadding
+                contentPadding = PaddingValues(0.dp),
+                userScrollEnabled = false,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(
+                    count = wordCount,
+                    // بهینه‌سازی: استفاده از stable key
+                    key = { index -> index }
+                ) { index ->
+                    // بهینه‌سازی: محاسبه word یکبار در composition
+                    val word = remember(userInputs, maxReachedIndex, index) {
+                        if (index < maxReachedIndex) {
+                            userInputs.getOrNull(index) ?: placeholderText
+                        } else {
+                            placeholderText
+                        }
                     }
-                }
-                Box(
-                    modifier = Modifier.clickable { onItemClick(index) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    SecretPhraseItem(
-                        index = index, 
-                        word = word, 
-                        color = itemColor
-                    )
+                    Box(
+                        modifier = Modifier.clickable { onItemClick(index) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        SecretPhraseItem(
+                            index = index,
+                            word = word,
+                            color = itemColor
+                        )
+                    }
                 }
             }
         }

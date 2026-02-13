@@ -112,9 +112,6 @@
             <action
                 android:id="@+id/action_import_options_to_import_seed"
                 app:destination="@id/importSeedFragment" />
-            <action
-                android:id="@+id/action_import_options_to_import_backup"
-                app:destination="@id/importBackupFragment" />
         </fragment>
 
         <fragment
@@ -128,11 +125,7 @@
             app:destination="@id/selectWalletsFragment"
             app:popUpTo="@id/importOptionsFragment"
             app:popUpToInclusive="false" />
-        <fragment
-            android:id="@+id/importBackupFragment"
-            android:name="com.mtd.megawallet.ui.importoption.ImportBackupFragment"
-            android:label="ImportBackupFragment"
-            tools:layout="@layout/fragment_import_backup" />
+
 
         <fragment
             android:id="@+id/selectWalletsFragment"

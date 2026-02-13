@@ -11,6 +11,7 @@ import com.mtd.data.dto.BlockscoutTransactionDto
 import com.mtd.data.repository.TransactionParams
 import com.mtd.data.service.BSCscanApiService
 import com.mtd.data.service.BlockscoutApiService
+import com.mtd.data.utils.AssetNormalizer.normalize
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.EvmTransaction
 import com.mtd.domain.model.ResultResponse
@@ -22,6 +23,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.datatypes.Address
@@ -52,45 +54,51 @@ class EvmDataSource(
     private val currentRpcIndex = AtomicInteger(0)
     private var currentWeb3j: Web3j? = null
 
+
+    object Web3jFactory {
+        private val cache = mutableMapOf<String, Web3j>()
+
+        fun getOrCreate(rpcUrl: String, okHttpClient: OkHttpClient): Web3j {
+            return cache.getOrPut(rpcUrl) {
+                Web3j.build(HttpService(rpcUrl, okHttpClient, false))
+            }
+        }
+    }
+
+
     @Synchronized
     private fun getOrUpdateWeb3j(): Web3j {
         if (currentWeb3j == null) {
-            val rpcUrl = getNextRpcUrl()
+            val index = currentRpcIndex.get() % network.RpcUrls.size
+            val rpcUrl = network.RpcUrls[index]
             Timber.i("Initializing Web3j with RPC: $rpcUrl")
             currentWeb3j = Web3j.build(HttpService(rpcUrl, okHttpClient, false))
         }
         return currentWeb3j!!
     }
 
-    @Synchronized
-    private fun rotateRpc() {
-        val nextIndex = (currentRpcIndex.incrementAndGet()) % network.defaultRpcUrls.size
-        currentRpcIndex.set(nextIndex)
-        val rpcUrl = network.defaultRpcUrls[nextIndex]
-        Timber.w("RPC connection failed. Rotating to next RPC: $rpcUrl")
-        currentWeb3j = Web3j.build(HttpService(rpcUrl, okHttpClient, false))
-    }
-
-    private fun getNextRpcUrl(): String {
-        val index = currentRpcIndex.get() % network.defaultRpcUrls.size
-        return network.defaultRpcUrls[index]
-    }
-
     private suspend fun <T> executeWithFailover(block: suspend (Web3j) -> T): T {
         var lastException: Exception? = null
-        val maxAttempts = network.defaultRpcUrls.size.coerceAtLeast(1)
-        
-        for (i in 0 until maxAttempts) {
+
+        // همیشه لیست را از ابتدا (اولویت بالا) به انتها تست می‌کنیم
+        val rpcList = network.RpcUrls
+
+        for (url in rpcList) {
             try {
-                val web3j = getOrUpdateWeb3j()
-                return block(web3j)
+                return withTimeout(6000) { // تایم‌اوت ۶ ثانیه‌ای برای هر RPC
+                    val web3j = Web3jFactory.getOrCreate(url, okHttpClient)
+                    // اجرای عملیات اصلی
+                    block(web3j)
+                }
             } catch (e: Exception) {
-                Timber.e(e, "Error executing Web3j request on attempt ${i + 1}/$maxAttempts")
+                Timber.e("RPC Failed: $url | Error: ${e.message}")
                 lastException = e
-                rotateRpc()
+                // در صورت خطا، حلقه ادامه پیدا کرده و به سراغ URL بعدی می‌رود
+                continue
             }
         }
-        throw lastException ?: Exception("All RPCs failed")
+
+        throw lastException ?: Exception("All RPC nodes are unreachable for ${network.name}")
     }
 
     override suspend fun getTransactionHistory(address: String): ResultResponse<List<TransactionRecord>> {
@@ -183,7 +191,7 @@ class EvmDataSource(
         }
     }
 
-    override suspend fun getBalanceEVM(address: String): ResultResponse<List<Asset>> {
+    override suspend fun getBalanceAssets(address: String): ResultResponse<List<Asset>> {
         return withContext(Dispatchers.IO) {
             try {
                 val supportedAssets = assetRegistry.getAssetsForNetwork(network.id)
@@ -200,10 +208,11 @@ class EvmDataSource(
                                     Transaction.createEthCallTransaction(address, assetConfig.contractAddress, FunctionEncoder.encode(function)),
                                     DefaultBlockParameterName.LATEST
                                 ).sendAsync().await()
-                                if (response.hasError() || response.value == "0x") BigInteger.ZERO 
-                                else try { BigInteger(response.value.substring(2), 16) } catch (e: Exception) { BigInteger.ZERO }
+
+                                 response.result.toString()
+
                             }
-                            Asset(assetConfig.name, assetConfig.symbol, assetConfig.decimals, assetConfig.contractAddress, balance)
+                            Asset(assetConfig.name, assetConfig.symbol, assetConfig.decimals, assetConfig.contractAddress, normalize(balance,assetConfig.decimals,network.name))
                         }
                     }
                 }
@@ -214,7 +223,118 @@ class EvmDataSource(
         }
     }
 
-    override suspend fun getBalance(address: String): ResultResponse<BigInteger> { TODO("Not yet implemented") }
+    /**
+     * پیاده‌سازی نهایی و تصحیح شده با رعایت دقیق محدودیت‌های RPC رایگان (drpc.org)
+     * محدودیت: حداکثر 3 درخواست در کل هر بچ.
+     * استراتژی:
+     * 1. تمام درخواست‌ها (کیف‌پول‌ها ضربدر دارایی‌ها) لیست می‌شوند.
+     * 2. به دسته‌های 3 تایی تقسیم می‌شوند (طبق پیام خطا).
+     * 3. دسته‌ها به صورت موازی ارسال می‌شوند تا سرعت حفظ شود.
+     * نتیجه: اگر 18 درخواست باشد، 6 درخواست HTTP ارسال می‌شود که تنها راه قانونی است.
+     */
+    override suspend fun getBalancesForMultipleAddresses(addresses: List<String>): ResultResponse<Map<String, List<Asset>>> {
+        return withContext(Dispatchers.IO) {
+            executeWithFailover { web3j ->
+                try {
+                    val supportedAssets = assetRegistry.getAssetsForNetwork(network.id)
+                    if (supportedAssets.isEmpty()) return@executeWithFailover ResultResponse.Success(
+                        emptyMap()
+                    )
+
+                    // 1. آماده‌سازی تمام درخواست‌ها به صورت تخت
+                    val allRequests =
+                        mutableListOf<Triple<String, com.mtd.core.assets.AssetConfig, org.web3j.protocol.core.Request<*, *>>>()
+
+                    addresses.forEach { address ->
+                        supportedAssets.forEach { assetConfig ->
+                            if (assetConfig.contractAddress == null) {
+                                // Native Coin
+                                val request =
+                                    web3j.ethGetBalance(address, DefaultBlockParameterName.LATEST)
+                                allRequests.add(Triple(address, assetConfig, request))
+                            } else {
+                                // ERC-20 Token
+                                val function =
+                                    Function("balanceOf", listOf(Address(address)), emptyList())
+                                val encodedFunction = FunctionEncoder.encode(function)
+                                val transaction = Transaction.createEthCallTransaction(
+                                    address,
+                                    assetConfig.contractAddress,
+                                    encodedFunction
+                                )
+                                val request =
+                                    web3j.ethCall(transaction, DefaultBlockParameterName.LATEST)
+                                allRequests.add(Triple(address, assetConfig, request))
+                            }
+                        }
+                    }
+
+                    if (allRequests.isEmpty()) return@executeWithFailover ResultResponse.Success(
+                        emptyMap()
+                    )
+
+                    // 2. اعمال محدودیت اکید: Max 3 Requests per Batch
+                    val REQUESTS_LIMIT_PER_BATCH = 3
+                    val requestChunks = allRequests.chunked(REQUESTS_LIMIT_PER_BATCH)
+
+                    // 3. ارسال موازی دسته‌ها
+                    val chunkDeferreds = requestChunks.map { chunk ->
+                        async {
+                            try {
+                                val batch = web3j.newBatch()
+                                chunk.forEach { (_, _, request) ->
+                                    batch.add(request)
+                                }
+
+                                val batchResponse = batch.sendAsync().await()
+                                val responses = batchResponse.responses
+
+                                val chunkResults = mutableListOf<Pair<String, Asset>>()
+
+                                responses.forEachIndexed { index, response ->
+                                    if (index < chunk.size) {
+                                        val (address, assetConfig, _) = chunk[index]
+                                        val balance = normalize(response.result.toString(),assetConfig.decimals,network.name)
+                                        val asset = Asset(
+                                            assetConfig.name,
+                                            assetConfig.symbol,
+                                            assetConfig.decimals,
+                                            assetConfig.contractAddress,
+                                            balance
+                                        )
+                                        chunkResults.add(address to asset)
+                                    }
+                                }
+                                chunkResults
+                            } catch (e: Exception) {
+                                Timber.e(e, "Error processing chunk")
+                                emptyList<Pair<String, Asset>>()
+                            }
+                        }
+                    }
+
+                    // 4. تجمیع نتایج
+                    val allChunkResults = chunkDeferreds.awaitAll().flatten()
+
+                    val finalResults = mutableMapOf<String, MutableList<Asset>>()
+                    allChunkResults.forEach { (address, asset) ->
+                        finalResults.getOrPut(address) { mutableListOf() }.add(asset)
+                    }
+
+                    ResultResponse.Success(finalResults)
+
+                } catch (e: Exception) {
+                    Timber.e(e, "Error in batched balance fetching")
+                    ResultResponse.Error(e)
+                }
+            }
+        }
+    }
+
+
+    override suspend fun getBalance(address: String): ResultResponse<BigDecimal> {
+        return ResultResponse.Success(BigDecimal.ZERO)
+    }
 
     private suspend fun getGasPrice(): BigInteger {
         return executeWithFailover { web3j -> web3j.ethGasPrice().sendAsync().await().gasPrice }
@@ -249,9 +369,9 @@ class EvmDataSource(
             val urgent = maxFeePerGas.add(priorityFee.multiply(BigInteger.valueOf(2)))
 
             ResultResponse.Success(listOf(
-                FeeData(level = "عادی 🐢", gasPrice =  normal, gasLimit =  gasLimit, feeInSmallestUnit =  normal * gasLimit, feeInEth =  (normal * gasLimit).toEth(), feeInUsd =  null, estimatedTime =  "~ 30s"),
-                FeeData(level = "سریع 🚀", gasPrice =  fast, gasLimit =  gasLimit, feeInSmallestUnit =  fast * gasLimit, feeInEth =  (fast * gasLimit).toEth(), feeInUsd =  null, estimatedTime =  "~ 15s"),
-                FeeData(level = "درلحظه 🔥", gasPrice =  urgent, gasLimit =  gasLimit, feeInSmallestUnit =  urgent * gasLimit, feeInEth =  (urgent * gasLimit).toEth(), feeInUsd =  null, estimatedTime =  "< 10s"),
+                FeeData(level = "عادی 🐢", gasPrice =  normal, gasLimit =  gasLimit, feeInSmallestUnit =  (normal * gasLimit).toBigDecimal(), feeInCoin = normalize ((normal * gasLimit),asset?.decimals?:18,network.name), feeInUsd =  null, estimatedTime =  "~ 30s"),
+                FeeData(level = "سریع 🚀", gasPrice =  fast, gasLimit =  gasLimit, feeInSmallestUnit =  (fast * gasLimit).toBigDecimal(), feeInCoin =  normalize ((fast * gasLimit),asset?.decimals?:18,network.name), feeInUsd =  null, estimatedTime =  "~ 15s"),
+                FeeData(level = "درلحظه 🔥", gasPrice =  urgent, gasLimit =  gasLimit, feeInSmallestUnit = ( urgent * gasLimit).toBigDecimal(), feeInCoin =   normalize ((urgent * gasLimit),asset?.decimals?:18,network.name), feeInUsd =  null, estimatedTime =  "< 10s"),
             ))
         } catch (e: Exception) {
             ResultResponse.Error(e)
@@ -260,7 +380,6 @@ class EvmDataSource(
 
     override fun getWeb3jInstance(): Web3j = getOrUpdateWeb3j()
 
-    fun BigInteger.toEth(): BigDecimal = this.toBigDecimal().divide(BigDecimal.TEN.pow(18))
 
     private fun BlockscoutTransactionDto.toDomainModel(userAddress: String): EvmTransaction {
         val fee = (this.gasUsed?.toBigIntegerOrNull() ?: BigInteger.ZERO) * (this.gasPrice?.toBigIntegerOrNull() ?: BigInteger.ZERO)

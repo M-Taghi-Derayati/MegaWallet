@@ -7,6 +7,7 @@ import com.mtd.core.model.NetworkType
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.network.bitcoin.BitcoinNetwork
 import com.mtd.core.network.evm.GenericEvmNetwork
+import com.mtd.core.network.tron.TronNetwork
 import com.mtd.core.utils.loadNetworkConfigs
 import fr.acinq.bitcoin.Base58
 import org.bitcoinj.base.exceptions.AddressFormatException
@@ -14,6 +15,48 @@ import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import org.web3j.crypto.WalletUtils
 import javax.inject.Inject
+
+
+/**
+ * Strategy-style factory for creating [BlockchainNetwork] instances from [NetworkConfig].
+ * این اینترفیس کمک می‌کند از whenهای بزرگ وابسته به [NetworkType] دور شویم
+ * و منطق ساخت هر شبکه را در یک کلاس جداگانه نگه داریم.
+ */
+interface NetworkFactory {
+    fun supports(networkType: NetworkType, config: NetworkConfig): Boolean
+    fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork
+}
+
+class EvmNetworkFactory : NetworkFactory {
+    override fun supports(networkType: NetworkType, config: NetworkConfig): Boolean {
+        return networkType == NetworkType.EVM
+    }
+
+    override fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork {
+        return GenericEvmNetwork(config)
+    }
+}
+
+class BitcoinNetworkFactory : NetworkFactory {
+    override fun supports(networkType: NetworkType, config: NetworkConfig): Boolean {
+        return networkType == NetworkType.BITCOIN
+    }
+
+    override fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork {
+        val params = if (!config.isTestnet) MainNetParams.get() else TestNet3Params.get()
+        return BitcoinNetwork(config, params)
+    }
+}
+
+class TronNetworkFactory : NetworkFactory {
+    override fun supports(networkType: NetworkType, config: NetworkConfig): Boolean {
+        return networkType == NetworkType.TVM
+    }
+
+    override fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork {
+        return TronNetwork(config)
+    }
+}
 
 
 class BlockchainRegistry @Inject constructor() {
@@ -24,10 +67,19 @@ class BlockchainRegistry @Inject constructor() {
     private val networksByType = mutableMapOf<NetworkType, BlockchainNetwork>()
     private val networksByChainId = mutableMapOf<Long, BlockchainNetwork>()
 
+    /**
+     * مجموعهٔ factoryهای موجود برای ساخت شبکه‌ها.
+     * در حال حاضر به‌صورت داخلی مقداردهی می‌شود، اما در آینده می‌تواند از DI تزریق شود.
+     */
+    private val networkFactories: List<NetworkFactory> = listOf(
+        EvmNetworkFactory(),
+        BitcoinNetworkFactory(),
+        TronNetworkFactory()
+    )
+
 
     fun registerNetwork(network: BlockchainNetwork) {
         val chainId = network.chainId ?: return // فقط شبکه‌های با chainId را ثبت می‌کنیم
-
         // اگر این اولین شبکه از این نوع است، یک Map جدید برای آن بساز
         networks.getOrPut(network.networkType) { mutableMapOf() }
 
@@ -60,6 +112,16 @@ class BlockchainRegistry @Inject constructor() {
         return networksByType[type]
     }
 
+    fun getDefaultNetworkByType(type: NetworkType): BlockchainNetwork? {
+        return getAllNetworks().firstOrNull { it.networkType == type }
+    }
+
+
+    private fun clearAll() {
+        networks.clear()
+        networksByType.clear()
+        networksByChainId.clear()
+    }
 
 
     fun getNetworkTypeForAddress(address: String): NetworkType? {
@@ -87,35 +149,52 @@ class BlockchainRegistry @Inject constructor() {
             return NetworkType.BITCOIN
         }
 
-        // TODO: در آینده، بلاک‌های بررسی برای شبکه‌های دیگر (Solana, Tron, ...) اینجا اضافه می‌شوند.
+        // 3. Tron Addresses (Start with T, 34 chars, Base58)
+        if (address.startsWith("T") && address.length == 34) {
+             try {
+                 Base58.decode(address)
+                 return NetworkType.TVM
+             } catch (e: Exception) {
+                 // Invalid Base58
+             }
+        }
 
-        // ۳. اگر هیچکدام از موارد بالا نبود، آدرس ناشناخته است.
         return null
     }
 
 
-    fun loadNetworksFromAssets(context: Context, fileName: String = "networks.json") {
+    fun loadNetworksFromAssets(
+        context: Context,
+        fileName: String = "networks.json",
+    ) {
+
+        clearAll()
         val configs = loadNetworkConfigs(context, fileName)
 
-        configs.forEach { config ->
-            val networkType=NetworkType.valueOf(config.networkType.uppercase())
+        configs
+            .filter { config -> config.isTestnet == true }
+            .forEach { config ->
+            val networkType = NetworkType.valueOf(config.networkType.uppercase())
             NetworkName.valueOf(config.name.uppercase())
-            val network = when (networkType) {
+
+            val factory = networkFactories.firstOrNull { it.supports(networkType, config) }
+            val network = factory?.create(networkType, config)
+            network?.let { registerNetwork(it) }
+
+           /* val network = when (networkType) {
                 NetworkType.EVM -> GenericEvmNetwork(config)
                 NetworkType.BITCOIN -> {
-                    val params = if (config.isMainnet()) MainNetParams.get() else TestNet3Params.get()
+                    val params = if (!config.isTestnet) MainNetParams.get() else TestNet3Params.get()
                     BitcoinNetwork(config, params)
                 }
+                NetworkType.TVM -> TronNetwork(config)
                 else -> null
             }
-            network?.let { registerNetwork(it) }
+            network?.let { registerNetwork(it) }*/
         }
     }
-
-    fun NetworkConfig.isMainnet(): Boolean {
-        // یک قرارداد: chainId 0 برای بیت‌کوین mainnet، یا هر عدد دیگری برای testnet
-        // برای EVM ها هم می‌توانیم chainId های معروف را چک کنیم.
-        return this.chainId == 0L || this.chainId == 1L || this.chainId == 137L // مثال
-    }
-
 }
+
+
+
+

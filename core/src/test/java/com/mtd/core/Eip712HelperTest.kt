@@ -2,7 +2,6 @@ package com.mtd.core
 
 
 import com.google.gson.Gson
-import com.mtd.core.model.Eip712Signature
 import com.mtd.core.utils.Eip712Helper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -57,7 +56,7 @@ class Eip712HelperTest {
         assertTrue("v should be 27 or 28", signature.v == 27 || signature.v == 28)
 
         // ۲. (مهم‌ترین بخش) بازیابی آدرس
-        val signerAddress = recoverSignerAddress(typedDataJson, signature)
+        val signerAddress = recoverSignerAddress(typedDataJson, result.signature)
 
         assertEquals("Recovered address must match the original signer's address",
             TEST_ADDRESS.lowercase(),
@@ -65,7 +64,7 @@ class Eip712HelperTest {
         )
     }
 
-    private fun recoverSignerAddress(jsonData: String, signature: Eip712Signature): String {
+    private fun recoverSignerAddress(jsonData: String, signature: Eip712Helper.Eip712Signature): String {
         // --- بخش اصلاح شده و صحیح برای ساخت هش ---
         val encoder = StructuredDataEncoder(jsonData)
         val messageHash = encoder.hashStructuredData()

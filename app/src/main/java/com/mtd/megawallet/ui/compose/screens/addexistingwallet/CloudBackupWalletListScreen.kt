@@ -179,6 +179,63 @@ fun WalletListItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+
+            // ۲. اطلاعات کیف پول
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Text(
+                        text = wallet.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.ExtraBold)),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.End,
+                        fontSize = 17.sp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    // ایندیکیتور رنگی کوچک
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(walletColor)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isBalanceLoading || wallet.balanceUsdt.isEmpty()) {
+                        // Progress indicator کوچک به جای "0.00 USDT"
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 1.5.dp,
+                            color = walletColor.copy(alpha = 0.6f)
+                        )
+                    } else {
+                        Text(
+                            text = "${wallet.balanceUsdt} تتر ",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                            color = walletColor,
+                            fontSize = 14.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+            }
+
+
+            Spacer(modifier = Modifier.width(16.dp))
+
             // ۱. چک‌باکس با انیمیشن
             Box(
                 modifier = Modifier
@@ -199,61 +256,6 @@ fun WalletListItem(
                         tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // ۲. اطلاعات کیف پول
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.End
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Text(
-                        text = wallet.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontFamily = FontFamily(Font(R.font.vazirmatn_bold, FontWeight.ExtraBold)),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.End,
-                        fontSize = 17.sp
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    // ایندیکیتور رنگی کوچک
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(walletColor)
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(6.dp))
-                
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isBalanceLoading || wallet.balanceUsdt.isEmpty()) {
-                        // Progress indicator کوچک به جای "0.00 USDT"
-                       CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 1.5.dp,
-                            color = walletColor.copy(alpha = 0.6f)
-                        )
-                    } else {
-                        Text(
-                            text = "${wallet.balanceUsdt} تتر ",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontFamily = FontFamily(Font(R.font.vazirmatn_bold, FontWeight.Bold)),
-                            color = walletColor,
-                            fontSize = 14.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
                 }
             }
         }

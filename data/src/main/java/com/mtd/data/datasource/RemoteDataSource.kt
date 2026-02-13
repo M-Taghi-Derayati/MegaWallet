@@ -68,7 +68,7 @@ class RemoteDataSource @Inject constructor(
         val userRpcList = userPreferencesRepository.getRpcListForChain(chainId)
 
         val defaultNetwork = blockchainRegistry.getNetworkByChainId(chainId)
-        val defaultRpcs = defaultNetwork?.defaultRpcUrls ?: emptyList()
+        val defaultRpcs = defaultNetwork?.RpcUrls ?: emptyList()
         val publicFallback = publicFallbackRpcs[chainId]
 
         if (userRpcList.isNotEmpty()) {

@@ -2,6 +2,8 @@ package com.mtd.megawallet.core
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mtd.core.error.AppError
+import com.mtd.core.error.ErrorMapper
 import com.mtd.core.manager.ErrorAction
 import com.mtd.core.manager.ErrorContext
 import com.mtd.core.manager.ErrorManager
@@ -46,14 +48,14 @@ abstract class BaseViewModel(
     /**
      * هندل کردن action های خطا
      */
-    private suspend fun handleErrorAction(action: ErrorAction, error: com.mtd.core.error.AppError) {
+    private suspend fun handleErrorAction(action: ErrorAction, error: AppError) {
         when (action) {
             is ErrorAction.ShowSnackbar -> {
-                val message = com.mtd.core.error.ErrorMapper.getUserMessage(error)
+                val message = ErrorMapper.getUserMessage(error)
                 _uiEvents.send(UiEvent.ShowErrorSnackbar(message))
             }
             is ErrorAction.ShowRetryDialog -> {
-                val message = com.mtd.core.error.ErrorMapper.getUserMessage(error)
+                val message = ErrorMapper.getUserMessage(error)
                 _uiEvents.send(
                     UiEvent.ShowDialog(
                         title = "خطا",
@@ -154,23 +156,6 @@ abstract class BaseViewModel(
         )
     }
 
-    /**
-     * نمایش Dialog
-     */
-    protected suspend fun showDialog(
-        title: String,
-        message: String,
-        positiveButton: String = "تایید",
-        negativeButton: String? = null,
-        onPositive: () -> Unit = {},
-        onNegative: () -> Unit = {}
-    ) {
-        _uiEvents.send(
-            UiEvent.ShowDialog(
-                title, message, positiveButton, negativeButton, onPositive, onNegative
-            )
-        )
-    }
 
     override fun onCleared() {
         super.onCleared()

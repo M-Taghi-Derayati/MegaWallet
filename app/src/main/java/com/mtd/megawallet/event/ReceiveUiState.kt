@@ -14,8 +14,12 @@ data class AddressGroup(
 
 data class AddressItem(
     val id: String,
+    val symbol: String? = null,
     val networkName: String,
+    val networkFaName: String? = null,
     val address: String,
-    val iconUrl: String?
+    val iconUrl: String?,
+    val supportedNetworkIcons: List<String> = emptyList(),
+    val supportedNetworkIds: List<String> = emptyList()
 )
 }

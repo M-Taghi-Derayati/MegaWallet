@@ -27,7 +27,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mtd.megawallet.ui.compose.components.FloatingShapesBackground
-import com.mtd.megawallet.ui.compose.theme.TextLabel
 import com.mtd.common_ui.R as commonui
 
 /**
@@ -96,7 +95,7 @@ fun OnboardingScreen(
                     style = MaterialTheme.typography.displayMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onBackground,
-                    fontFamily = FontFamily(Font(commonui.font.vazirmatn_medium, FontWeight.Medium))
+                    fontFamily = FontFamily(Font(commonui.font.iransansmobile_fa_regular, FontWeight.Medium))
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -104,8 +103,8 @@ fun OnboardingScreen(
                     text = "یک کیف پول جدید بسازید یا کیف پول موجود خود را اضافه کنید",
                     style = MaterialTheme.typography.labelMedium,
                     textAlign = TextAlign.Center,
-                    color = TextLabel,
-                    fontFamily = FontFamily(Font(commonui.font.vazirmatn_medium, FontWeight.Medium))
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontFamily = FontFamily(Font(commonui.font.iransansmobile_fa_regular, FontWeight.Medium))
                 )
             }
 
@@ -116,15 +115,15 @@ fun OnboardingScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = MaterialTheme.colorScheme.primary
                 ),
                 shape =CircleShape
             ) {
                 Text(
                     "ساخت کیف پول جدید",
                     style = MaterialTheme.typography.titleMedium,
-                    fontFamily = FontFamily(Font(commonui.font.vazirmatn_medium, FontWeight.Medium))
+                    color = MaterialTheme.colorScheme.onPrimary,//TODO اینجا مشکل هاور داره روی متن دکمه
+                    fontFamily = FontFamily(Font(commonui.font.iransansmobile_fa_regular, FontWeight.Medium))
                 )
             }
 
@@ -136,15 +135,15 @@ fun OnboardingScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 shape =CircleShape
             ) {
                 Text(
                     "من کیف پول دارم",
                     style = MaterialTheme.typography.titleMedium,
-                    fontFamily = FontFamily(Font(commonui.font.vazirmatn_medium, FontWeight.Medium))
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontFamily = FontFamily(Font(commonui.font.iransansmobile_fa_regular, FontWeight.Medium))
                 )
             }
 

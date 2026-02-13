@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.tooling.preview.Preview
 import com.mtd.megawallet.ui.compose.animations.constants.ShimmerConstants
 
 
@@ -105,11 +107,13 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = ShimmerConstants.TABS_PADDING_HORIZONTAL)
+                .padding(horizontal = ShimmerConstants.TABS_PADDING_HORIZONTAL),
+            horizontalArrangement = Arrangement.End
         ) {
+
             Box(
                 modifier = Modifier
-                    .width(ShimmerConstants.TAB_WIDTH_1)
+                    .width(ShimmerConstants.TAB_WIDTH_2)
                     .height(ShimmerConstants.TAB_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.TAB_CORNER_RADIUS))
                     .background(brush)
@@ -117,7 +121,7 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
             Spacer(modifier = Modifier.width(ShimmerConstants.TAB_SPACING))
             Box(
                 modifier = Modifier
-                    .width(ShimmerConstants.TAB_WIDTH_2)
+                    .width(ShimmerConstants.TAB_WIDTH_1)
                     .height(ShimmerConstants.TAB_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.TAB_CORNER_RADIUS))
                     .background(brush)
@@ -130,7 +134,7 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
                 bottom = ShimmerConstants.DIVIDER_PADDING_BOTTOM
             ),
             thickness = ShimmerConstants.DIVIDER_THICKNESS,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = ShimmerConstants.DIVIDER_ALPHA)
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         // 3. Shimmer for Asset List Items
@@ -150,18 +154,28 @@ private fun ShimmerAssetItem(brush: Brush) {
             .padding(vertical = ShimmerConstants.ASSET_ITEM_PADDING_VERTICAL),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // آیکون دایره‌ای
-        Box(
-            modifier = Modifier
-                .size(ShimmerConstants.ASSET_ICON_SIZE)
-                .clip(CircleShape)
-                .background(brush)
-        )
 
-        Spacer(modifier = Modifier.width(ShimmerConstants.ASSET_ICON_SPACING))
+        // ستون آخر (قیمت و درصد)
+        Column(horizontalAlignment = Alignment.Start) {
+            Box(
+                modifier = Modifier
+                    .width(ShimmerConstants.ASSET_PRICE_WIDTH)
+                    .height(ShimmerConstants.ASSET_PRICE_HEIGHT)
+                    .clip(RoundedCornerShape(ShimmerConstants.ASSET_NAME_CORNER_RADIUS))
+                    .background(brush)
+            )
+            Spacer(modifier = Modifier.height(ShimmerConstants.ASSET_NAME_SPACING))
+            Box(
+                modifier = Modifier
+                    .width(ShimmerConstants.ASSET_PERCENTAGE_WIDTH)
+                    .height(ShimmerConstants.ASSET_PERCENTAGE_HEIGHT)
+                    .clip(RoundedCornerShape(ShimmerConstants.ASSET_NAME_CORNER_RADIUS))
+                    .background(brush)
+            )
+        }
 
         // ستون وسط (نام ارز)
-        Column(modifier = Modifier.weight(1f)) {
+        Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
             Box(
                 modifier = Modifier
                     .width(ShimmerConstants.ASSET_NAME_WIDTH)
@@ -179,23 +193,27 @@ private fun ShimmerAssetItem(brush: Brush) {
             )
         }
 
-        // ستون آخر (قیمت و درصد)
-        Column(horizontalAlignment = Alignment.End) {
-            Box(
-                modifier = Modifier
-                    .width(ShimmerConstants.ASSET_PRICE_WIDTH)
-                    .height(ShimmerConstants.ASSET_PRICE_HEIGHT)
-                    .clip(RoundedCornerShape(ShimmerConstants.ASSET_NAME_CORNER_RADIUS))
-                    .background(brush)
-            )
-            Spacer(modifier = Modifier.height(ShimmerConstants.ASSET_NAME_SPACING))
-            Box(
-                modifier = Modifier
-                    .width(ShimmerConstants.ASSET_PERCENTAGE_WIDTH)
-                    .height(ShimmerConstants.ASSET_PERCENTAGE_HEIGHT)
-                    .clip(RoundedCornerShape(ShimmerConstants.ASSET_NAME_CORNER_RADIUS))
-                    .background(brush)
-            )
-        }
+
+        Spacer(modifier = Modifier.width(ShimmerConstants.ASSET_ICON_SPACING))
+
+
+        // آیکون دایره‌ای
+        Box(
+            modifier = Modifier
+                .size(ShimmerConstants.ASSET_ICON_SIZE)
+                .clip(CircleShape)
+                .background(brush)
+        )
+
+    }
+}
+
+
+
+@Preview
+@Composable
+fun ShimmerPreview(){
+    MaterialTheme() {
+        ShimmerWalletScreen()
     }
 }

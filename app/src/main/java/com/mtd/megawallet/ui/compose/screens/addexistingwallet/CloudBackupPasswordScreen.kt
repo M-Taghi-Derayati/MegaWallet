@@ -1,4 +1,4 @@
-package com.mtd.megawallet.ui.compose.screens.addexistingwallet
+﻿package com.mtd.megawallet.ui.compose.screens.addexistingwallet
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -41,28 +41,35 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.TopHeader
 
+enum class CloudPasswordMode {
+    CREATE_NEW_BACKUP,
+    APPEND_TO_EXISTING_BACKUP,
+    RESTORE_WALLETS_LIST
+}
+
 @Composable
 fun CloudBackupPasswordScreen(
     onBack: () -> Unit,
     targetColor: Color = MaterialTheme.colorScheme.primary,
     isRecoveryMode: Boolean = true,
-    horizontalPadding: androidx.compose.ui.unit.Dp = 24.dp, // پدینگ قابل تنظیم برای حل مشکل دوبرابری
+    horizontalPadding: androidx.compose.ui.unit.Dp = 24.dp,
     isLoading: Boolean = false,
+    mode: CloudPasswordMode? = null,
+    errorMessage: String? = null,
     onPasswordSubmit: (String) -> Unit
 ) {
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     
-    // شناسایی کاراکترهای ویژه
     val specialChars = "!@#$%^&*()_+=-[]{}|;':\",.<>/? "
     
-    // محاسبه قدرت رمز عبور (۰ تا ۳)
     val strength = remember(password) {
         val hasLetter = password.any { it.isLetter() }
         val hasDigit = password.any { it.isDigit() }
@@ -70,16 +77,19 @@ fun CloudBackupPasswordScreen(
         
         when {
             password.isEmpty() -> 0
-            // سطح ۳: بسیار قوی (حداقل ۱۰ کاراکتر + حرف + عدد + نشانه)
-            password.length >= 10 && hasLetter && hasDigit && hasSpecial -> 3 
-            // سطح ۲: خوب (حداقل ۸ کاراکتر + حرف + عدد)
+            password.length >= 10 && hasLetter && hasDigit && hasSpecial -> 3
             password.length >= 8 && hasLetter && hasDigit -> 2
-            // سطح ۱: ضعیف
             else -> 1
         }
     }
     
-    val isPasswordValid = if (isRecoveryMode) password.length >= 8 else strength >= 2
+    val effectiveMode = mode ?: if (isRecoveryMode) {
+        CloudPasswordMode.RESTORE_WALLETS_LIST
+    } else {
+        CloudPasswordMode.CREATE_NEW_BACKUP
+    }
+    val isExistingPasswordMode = effectiveMode != CloudPasswordMode.CREATE_NEW_BACKUP
+    val isPasswordValid = if (isExistingPasswordMode) password.length >= 8 else strength >= 2
 
     Column(
         modifier = Modifier
@@ -90,28 +100,42 @@ fun CloudBackupPasswordScreen(
     ) {
         Spacer(modifier = Modifier.height(40.dp))
 
-        // ۱. هدر پویا
-        val headerTitle = if (isRecoveryMode) "رمز عبور را وارد کنید" else "انتخاب رمز عبور امن"
-        val headerSubtitle = if (isRecoveryMode) 
-            "برای مشاهده کیف پولهای قابل بازیابی، رمز عبور نسخه پشتیبان گوگل درایو خود را وارد کنید"
-        else 
-            "برای ایمن‌سازی فایل پشتیبان در فضای ابری، یک رمز عبور قوی انتخاب کنید. این رمز برای بازیابی مجدد ضروری است."
-            
+        val headerTitle = when (effectiveMode) {
+            CloudPasswordMode.CREATE_NEW_BACKUP -> "انتخاب رمز عبور امن"
+            CloudPasswordMode.APPEND_TO_EXISTING_BACKUP -> "رمز عبور نسخه پشتیبان را وارد کنید"
+            CloudPasswordMode.RESTORE_WALLETS_LIST -> "رمز عبور را وارد کنید"
+        }
+        val headerSubtitle = when (effectiveMode) {
+            CloudPasswordMode.CREATE_NEW_BACKUP ->
+                "برای ایمن‌سازی فایل پشتیبان در فضای ابری، یک رمز عبور قوی انتخاب کنید. این رمز برای بازیابی مجدد ضروری است"
+
+            CloudPasswordMode.APPEND_TO_EXISTING_BACKUP ->
+                "برای اضافه کردن این کیف پول به نسخه پشتیبان ابری قبلی، رمز عبور فعلی خود را وارد کنید"
+
+            CloudPasswordMode.RESTORE_WALLETS_LIST ->
+                "برای مشاهده لیست کیف پول‌های ذخیره شده، رمز عبور نسخه پشتیبان گوگل درایو را وارد کنید"
+        }
+             
         TopHeader(headerTitle, headerSubtitle)
+
 
         Spacer(modifier = Modifier.height(44.dp))
 
-        // ۲. بخش ورودی رمز عبور
+
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.CenterEnd
         ) {
             if (password.isEmpty()) {
                 Text(
-                    text = if (isRecoveryMode) "رمز عبور" else "رمز عبور جدید",
+                    text = when (effectiveMode) {
+                        CloudPasswordMode.CREATE_NEW_BACKUP -> "رمز عبور جدید"
+                        CloudPasswordMode.APPEND_TO_EXISTING_BACKUP -> "رمز عبور فعلی"
+                        CloudPasswordMode.RESTORE_WALLETS_LIST -> "رمز عبور"
+                    },
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Normal)),
+                    color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.5f),
+                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal)),
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Right,
                     fontSize = 20.sp
@@ -122,26 +146,15 @@ fun CloudBackupPasswordScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = { passwordVisible = !passwordVisible },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = "Toggle Password Visibility",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
                 BasicTextField(
                     value = password,
                     onValueChange = { password = it },
                     modifier = Modifier.weight(1f),
                     textStyle = MaterialTheme.typography.headlineMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = MaterialTheme.colorScheme.tertiary,
                         textAlign = TextAlign.Right,
                         fontSize = 18.sp,
-                        fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Normal))
+                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal))
                     ),
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(
@@ -156,18 +169,38 @@ fun CloudBackupPasswordScreen(
                     cursorBrush = SolidColor(targetColor),
                     singleLine = true
                 )
+
+                IconButton(
+                    onClick = { passwordVisible = !passwordVisible },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = "Toggle Password Visibility",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
-        // ۳. شاخص قدرت رمز و شدت (فقط در حالت ایجاد بک‌آپ)
-        if (!isRecoveryMode) {
+        if (!errorMessage.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFEF4444),
+                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal)),
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        if (effectiveMode == CloudPasswordMode.CREATE_NEW_BACKUP) {
             Spacer(modifier = Modifier.height(16.dp))
             
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.End
             ) {
-                // نمایش شدت به همراه آیکون وای‌فای
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.End
@@ -189,7 +222,7 @@ fun CloudBackupPasswordScreen(
                         text = strengthLabel,
                         style = MaterialTheme.typography.labelMedium,
                         color = labelColor,
-                        fontFamily = FontFamily(Font(R.font.vazirmatn_bold, FontWeight.Bold)),
+                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(end = 8.dp)
                     )
@@ -201,8 +234,8 @@ fun CloudBackupPasswordScreen(
                 Text(
                     text = "برای یک رمز قوی، از ۱۰ کاراکتر یا بیشتر به همراه عدد و یک کاراکتر ویژه (!@#...) استفاده کنید",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily(Font(R.font.vazirmatn_regular, FontWeight.Normal)),
+                    color = MaterialTheme.colorScheme.onTertiary,
+                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal)),
                     fontSize = 11.sp,
                     textAlign = TextAlign.Right,
                     lineHeight = 16.sp
@@ -213,7 +246,10 @@ fun CloudBackupPasswordScreen(
         Spacer(modifier = Modifier.weight(1f))
 
         PrimaryButton(
-            text = "ادامه",
+            text = when (effectiveMode) {
+                CloudPasswordMode.RESTORE_WALLETS_LIST -> "نمایش کیف پول‌ها"
+                else -> "ادامه"
+            },
             onClick = { onPasswordSubmit(password) },
             enabled = isPasswordValid,
             isLoading = isLoading,
@@ -222,17 +258,15 @@ fun CloudBackupPasswordScreen(
     }
 }
 
-/**
- * شاخص قدرت رمز عبور به سبک سیگنال/وای‌فای
- */
+
 @Composable
 fun PasswordStrengthIndicator(
     strength: Int
 ) {
     val barColor = when (strength) {
-        1 -> Color(0xFFEF4444) // قرمز
-        2 -> Color(0xFFF59E0B) // زرد/نارنجی
-        3 -> Color(0xFF22C55E) // سبز
+        1 -> Color(0xFFEF4444)
+        2 -> Color(0xFFF59E0B)
+        3 -> Color(0xFF22C55E)
         else -> Color.Gray.copy(alpha = 0.3f)
     }
 
@@ -240,19 +274,16 @@ fun PasswordStrengthIndicator(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // نوار ۱ (کوتاه)
         Box(
             modifier = Modifier
                 .size(width = 4.dp, height = 8.dp)
                 .background(if (strength >= 1) barColor else Color.Gray.copy(alpha = 0.2f), CircleShape)
         )
-        // نوار ۲ (متوسط)
         Box(
             modifier = Modifier
                 .size(width = 4.dp, height = 12.dp)
                 .background(if (strength >= 2) barColor else Color.Gray.copy(alpha = 0.2f), CircleShape)
         )
-        // نوار ۳ (بلند)
         Box(
             modifier = Modifier
                 .size(width = 4.dp, height = 16.dp)
@@ -260,3 +291,17 @@ fun PasswordStrengthIndicator(
         )
     }
 }
+
+
+@Preview
+@Composable
+fun CloudBackupPreview(){
+    MaterialTheme() {
+        CloudBackupPasswordScreen(
+            onBack = {},
+            mode = CloudPasswordMode.CREATE_NEW_BACKUP,
+            onPasswordSubmit = {}
+        )
+    }
+}
+

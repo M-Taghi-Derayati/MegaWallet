@@ -2,12 +2,11 @@
 package com.mtd.core.utils
 
 import java.math.BigDecimal
-import java.math.BigInteger
 import java.math.RoundingMode
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.max
+import kotlin.math.min
 
 object BalanceFormatter {
 
@@ -22,30 +21,42 @@ object BalanceFormatter {
      * @return یک رشته فرمت شده، e.g., "0.0019 tBTC".
      */
     fun formatBalance(
-        rawBalance: BigInteger,
+        balance: BigDecimal,
         decimals: Int,
         displayDecimals: Int = 6, // تعداد اعشار برای نمایش
         usePersianSeparator: Boolean = false
     ): String {
-        // ۱. تبدیل BigInteger به BigDecimal
-        val balanceDecimal = BigDecimal(rawBalance)
+        val actualValue = balance.stripTrailingZeros()
+        if (actualValue.signum() == 0) return "0"
 
-        // ۲. محاسبه ضریب تبدیل (10^decimals)
-        val divisor = BigDecimal.TEN.pow(decimals)
+        // محاسبه هوشمند تعداد اعشار (همان منطقی که بالاتر توضیح دادم)
+        val finalScale = calculateDynamicScale(actualValue, decimals, displayDecimals)
 
-        // ۳. تقسیم برای به دست آوردن مقدار در واحد اصلی
-        val formattedValue = balanceDecimal.divide(divisor)
-
-        // ۴. گرد کردن به تعداد ارقام اعشار مورد نظر برای نمایش
-        val roundedValue = formattedValue.setScale(displayDecimals, RoundingMode.DOWN)
-        
-        // ۵. استفاده از formatNumberWithSeparator برای اضافه کردن جداکننده هزارگان
+        // حالا از همان تابع فرمت‌کننده استفاده می‌کنیم اما با تنظیمات درست
         return formatNumberWithSeparator(
-            number = roundedValue,
+            number = actualValue,
             usePersianSeparator = usePersianSeparator,
             minFractionDigits = 0,
-            maxFractionDigits = displayDecimals
+            maxFractionDigits = finalScale,
+            roundingMode = RoundingMode.DOWN // برای موجودی همیشه DOWN
         )
+    }
+    private fun calculateDynamicScale(value: BigDecimal, assetDecimals: Int, displayDecimals: Int): Int {
+        if (value >= BigDecimal("1000")) return 2
+        if (value >= BigDecimal("1")) return displayDecimals
+
+        val plainString = value.toPlainString()
+        val decimalPointIndex = plainString.indexOf('.')
+        val firstSignificant = plainString.indexOfFirst { it in '1'..'9' && plainString.indexOf(it) > decimalPointIndex }
+
+        return if (decimalPointIndex != -1 && firstSignificant != -1) {
+            // تغییر این خط: استفاده از max بین دقت شبکه و موقعیت عدد معنادار
+            val neededScale = (firstSignificant - decimalPointIndex) + 2
+            // اینجا اجازه می‌دهیم تا سقف ۱۸ یا ۲۰ رقم باز شود
+            max(displayDecimals, min(max(assetDecimals, 18), neededScale))
+        } else {
+            displayDecimals
+        }
     }
 
     /**
@@ -59,43 +70,35 @@ object BalanceFormatter {
         amount: BigDecimal,
         usePersianSeparator: Boolean = false
     ): String {
+        val isZero = amount.compareTo(BigDecimal.ZERO) == 0
+
+        // اگر عدد بین 0 و 0.01 بود، اعشار را تا 6 رقم باز کن، در غیر این صورت همان 2 رقم
+        val dynamicMaxDecimals = if (!isZero && amount < BigDecimal("0.01")) 6 else 2
+
         return formatNumberWithSeparator(
             number = amount,
             usePersianSeparator = usePersianSeparator,
             minFractionDigits = 2,
-            maxFractionDigits = 2
+            maxFractionDigits = dynamicMaxDecimals
         )
     }
 
-    /**
-     * فرمت کردن عدد با جداکننده هزارگان
-     * پشتیبانی از فارسی (٬) و انگلیسی (,)
-     * 
-     * @param number عدد برای فرمت کردن
-     * @param usePersianSeparator اگر true باشد از جداکننده فارسی (٬) استفاده می‌کند، در غیر این صورت از انگلیسی (,)
-     * @param minFractionDigits حداقل تعداد ارقام اعشار (پیش‌فرض: 0)
-     * @param maxFractionDigits حداکثر تعداد ارقام اعشار (پیش‌فرض: 2)
-     * @return رشته فرمت شده با جداکننده هزارگان
-     */
+    // این همان تابع شماست که کمی اصلاح شده تا منعطف‌تر باشد
     fun formatNumberWithSeparator(
         number: Number,
         usePersianSeparator: Boolean = false,
         minFractionDigits: Int = 0,
-        maxFractionDigits: Int = 2
+        maxFractionDigits: Int = 2,
+        roundingMode: RoundingMode = RoundingMode.HALF_UP
     ): String {
         val format = NumberFormat.getNumberInstance(Locale.US)
         format.minimumFractionDigits = minFractionDigits
         format.maximumFractionDigits = maxFractionDigits
-        format.roundingMode = RoundingMode.HALF_UP
-        
+        format.roundingMode = roundingMode
+
         val formatted = format.format(number)
-        
-        // اگر از جداکننده فارسی استفاده می‌کنیم، کاما انگلیسی را با کاما فارسی جایگزین می‌کنیم
-        return if (usePersianSeparator) {
-            formatted.replace(",", "٬")
-        } else {
-            formatted
-        }
+
+        return if (usePersianSeparator) formatted.replace(",", "٬") else formatted
     }
 }
 

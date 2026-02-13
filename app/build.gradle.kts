@@ -1,5 +1,3 @@
-
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -64,13 +62,23 @@ android {
 
     packaging {
         resources {
+            // حل مشکل مانیفست که قبلاً خوردید
+            pickFirsts.add("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+
+            // موارد تکراری رایج
             pickFirsts.add("META-INF/INDEX.LIST")
-            pickFirsts.add("META-INF/LICENSE.md")
-            pickFirsts.add("META-INF/LICENSE-notice.md")
+            pickFirsts.add("META-INF/LICENSE*")
             pickFirsts.add("META-INF/DEPENDENCIES")
+            pickFirsts.add("META-INF/NOTICE*")
+            pickFirsts.add("META-INF/io.netty.versions.properties")
             pickFirsts.add("META-INF/FastDoubleParser-LICENSE")
             pickFirsts.add("META-INF/FastDoubleParser-NOTICE")
-            pickFirsts.add("META-INF/io.netty.versions.properties")
+
+            // حذف امضاهای BouncyCastle برای جلوگیری از SecurityException
+            excludes += "META-INF/*.SF"
+            excludes += "META-INF/*.DSA"
+            excludes += "META-INF/*.RSA"
+            excludes += "org/bouncycastle/check.properties"
         }
     }
 }
@@ -92,6 +100,7 @@ dependencies {
     androidTestImplementation(composeBom)
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.hilt)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.foundation)
@@ -125,3 +134,4 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }
+

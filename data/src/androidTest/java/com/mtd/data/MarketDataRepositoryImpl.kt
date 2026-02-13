@@ -9,7 +9,8 @@ import com.mtd.data.di.NetworkModule.httpLoggingInterceptorProvider
 import com.mtd.data.di.NetworkModule.provideGson
 import com.mtd.data.di.NetworkModule.provideOkHttpClient
 import com.mtd.data.repository.MarketDataRepositoryImpl
-import com.mtd.data.service.CoinGeckoApiService
+import com.mtd.data.service.CoinDeskApiService
+import com.mtd.data.service.USDTApiService
 import com.mtd.domain.model.ResultResponse
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -41,10 +42,11 @@ class MarketDataRepositoryIntegrationTest {
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
 
-        val coinGeckoApi = retrofit.create(CoinGeckoApiService::class.java)
+        val coinGeckoApi = retrofit.create(CoinDeskApiService::class.java)
+        val coinGeckoUSDTApi = retrofit.create(USDTApiService::class.java)
 
         // ساخت ریپازیتوری با سرویس API واقعی
-        marketDataRepository = MarketDataRepositoryImpl(coinGeckoApi)
+        marketDataRepository = MarketDataRepositoryImpl(coinGeckoApi,coinGeckoUSDTApi)
     }
 
 

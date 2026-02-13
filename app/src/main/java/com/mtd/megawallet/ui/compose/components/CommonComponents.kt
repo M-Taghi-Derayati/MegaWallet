@@ -37,21 +37,22 @@ fun TopHeader(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.End
+        horizontalAlignment = Alignment.Start
     ) {
         Text(
             modifier = Modifier.padding(top = 10.dp),
             text = title,
             style = MaterialTheme.typography.headlineSmall,
-            fontFamily = FontFamily(Font(R.font.vazirmatn_bold, FontWeight.Bold))
+            color = MaterialTheme.colorScheme.tertiary,
+            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold))
         )
         Spacer(modifier = Modifier.height(5.dp))
         Text(
             text = subtitle,
             style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.End,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light))
+            textAlign = TextAlign.Start,
+            color = MaterialTheme.colorScheme.onTertiary,
+            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light))
         )
     }
 }
@@ -61,32 +62,42 @@ fun UnifiedHeader(
     onBack: () -> Unit,
     title: String? = null,
     subtitle: String? = null,
-    isClose: Boolean = false,
+    isClose: Boolean? = false,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier.size(48.dp)
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = if (isClose) Icons.Default.Close else Icons.Default.ArrowBackIosNew,
-                contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(24.dp)
-            )
-        }
 
-        if (title != null) {
+            if (isClose != null) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(48.dp)
 
-            TopHeader(title, subtitle = subtitle?:"")
-        }
+
+                ) {
+                    Icon(
+                        imageVector = if (isClose) Icons.Default.Close else Icons.Default.ArrowBackIosNew,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            if (title != null) {
+                TopHeader(
+                    title,
+                    subtitle = subtitle ?: "",
+                    modifier = Modifier
+                        .weight(1f)
+                )
+            }
+
     }
 }
 
@@ -101,7 +112,7 @@ fun BottomSecuritySection(
         Icon(
             imageVector = Icons.Filled.Shield,
             contentDescription = "Security Shield",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = MaterialTheme.colorScheme.surface,
             modifier = Modifier
                 .size(22.dp)
                 .align(Alignment.TopCenter)
@@ -112,7 +123,7 @@ fun BottomSecuritySection(
                 .zIndex(3f)
                 .padding(12.dp)
                 .threeSidedDashedGradientBorder(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    color = MaterialTheme.colorScheme.surface,
                     cornerRadius = 24.dp,
                     strokeWidth = 1.5.dp
                 )
@@ -121,10 +132,10 @@ fun BottomSecuritySection(
         ) {
             Text(
                 text = message,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                color = MaterialTheme.colorScheme.onTertiary.copy(0.9f),
                 textAlign = TextAlign.Center,
                 fontSize = 10.sp,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light)),
+                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light)),
                 modifier = Modifier
                     .padding(10.dp)
                     .fillMaxWidth()

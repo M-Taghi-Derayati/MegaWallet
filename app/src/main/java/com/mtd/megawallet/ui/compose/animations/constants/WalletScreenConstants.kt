@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.sp
     val TOTAL_BALANCE_PADDING_TOP = 20.dp
     val TOTAL_BALANCE_PADDING_BOTTOM = 20.dp
     val TOTAL_BALANCE_FONT_SIZE = 56.sp
+    val TOTAL_BALANCE_FONT_SIZE_DETAIL = 36.sp
     val TOTAL_BALANCE_LETTER_SPACING = (-1).sp
     val TOTAL_BALANCE_HIDDEN_LETTER_SPACING = 4.sp
     val TOTAL_BALANCE_HIDDEN_PADDING_TOP = 8.dp
@@ -29,8 +30,8 @@ import androidx.compose.ui.unit.sp
     // Tabs Section
     val TABS_PADDING_HORIZONTAL = 16.dp
     val TETHER_PRICE_PADDING_BOTTOM = 0.dp
-    val DIVIDER_THICKNESS = 0.1.dp
-    val DIVIDER_ALPHA = 0.5f
+    val DIVIDER_THICKNESS = 0.4.dp
+    val DIVIDER_ALPHA = 0.7f
     val DIVIDER_SPACING_TOP = 0.dp
     val TABS_SPACING_BOTTOM = 16.dp
     
@@ -39,7 +40,9 @@ import androidx.compose.ui.unit.sp
     val ASSET_ITEM_PADDING_VERTICAL = 14.dp
     val ASSET_ICON_SIZE = 48.dp
     val ASSET_ICON_MAIN_SIZE = 44.dp
+    val ASSET_ICON_MAIN_SIZE_LARGE = 60.dp
     val ASSET_ICON_NETWORK_SIZE = 24.dp
+    val ASSET_ICON_NETWORK_SIZE_LARGE = 26.dp
     val ASSET_ICON_NETWORK_PADDING = 1.1.dp
     val ASSET_ICON_SPACING = 16.dp
     val ASSET_ANIMATION_DURATION = 600

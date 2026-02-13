@@ -26,12 +26,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPasteGo
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,16 +45,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
-import com.mtd.megawallet.ui.compose.theme.FamilyGreen
+import com.mtd.megawallet.ui.compose.theme.Green
 
 /**
  * کارت‌های انیمیشنی که در بالای صفحه "افزودن کیف پول موجود" به صورت پشته‌ای نمایش داده می‌شوند.
@@ -107,14 +112,6 @@ fun WalletStackCard(
 fun WalletStackCardFront() {
     // دایره تزیینی در گوشه بالا سمت چپ
     Box(modifier = Modifier.fillMaxSize()) {
-        // دایره تزیینی در گوشه بالا سمت چپ
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .offset(x = 12.dp, y = 12.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.3f))
-        )
 
         // مستطیل تزیینی کنار دایره
         Box(
@@ -125,6 +122,17 @@ fun WalletStackCardFront() {
                 .background(Color.White.copy(alpha = 0.25f))
         )
 
+        // دایره تزیینی در گوشه بالا سمت چپ
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .offset(x = 12.dp, y = 12.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.3f))
+        )
+
+
+
     }
 }
 
@@ -134,7 +142,6 @@ fun WalletStackCardBackWordKeys(
     phrases: List<String>,
     onPasteClick: () -> Unit,
     modifier: Modifier = Modifier,
-    // بهینه‌سازی: پارامتر برای کنترل نمایش SeedPhraseGrid بعد از انیمیشن
     isAnimationStable: Boolean = false
 ) {
     // لیستی از placeholder ها برای نمایش در حالت اولیه
@@ -148,7 +155,7 @@ fun WalletStackCardBackWordKeys(
     LaunchedEffect(isAnimationStable) {
         if (isAnimationStable) {
             // Delay کوچک اضافی برای اطمینان از ثبات کامل انیمیشن
-            kotlinx.coroutines.delay(200)
+            kotlinx.coroutines.delay(130)
             shouldShowGrid = true
         } else {
             // وقتی انیمیشن تمام نشده، grid را مخفی می‌کنیم
@@ -162,12 +169,15 @@ fun WalletStackCardBackWordKeys(
     ) {
 
         // --- لایه ۱: گرید کلمات ---
-        // بهینه‌سازی: render SeedPhraseGrid فقط بعد از delay برای کاهش lag
         if (shouldShowGrid) {
+
             SeedPhraseGrid(
-                words =  if (phrases.isEmpty()) placeholderPhrases else phrases,
-                modifier = Modifier.fillMaxSize().padding(20.dp)
+                words = if (phrases.isEmpty()) placeholderPhrases else phrases,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp)
             )
+        }
         }
 
         // --- لایه ۲: حاله سبز و دکمه ---
@@ -183,7 +193,7 @@ fun WalletStackCardBackWordKeys(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(FamilyGreen.copy(alpha = 0.8f))
+                        .background(Green.copy(alpha = 0.8f))
                 )
 
                 // دکمه شما
@@ -217,7 +227,7 @@ fun WalletStackCardBackWordKeys(
             }
         }
     }
-}
+
 
 
 @Composable
@@ -230,34 +240,7 @@ fun WalletStackCardBackPrivateKey(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        // --- لایه ۱: نمایش کلید خصوصی ---
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "کلید خصوصی شما",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 18.sp,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light))
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = if (privateKey.isNotEmpty()) privateKey else "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White,
-                fontSize = 18.sp,
-                fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.Start,
-                lineHeight = 25.sp,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        PrivateKeyWallet(privateKey)
 
         // --- لایه ۲: حاله سبز و دکمه ---
         AnimatedVisibility(
@@ -272,7 +255,7 @@ fun WalletStackCardBackPrivateKey(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(FamilyGreen.copy(alpha = 0.8f))
+                        .background(Green.copy(alpha = 0.8f))
                 )
 
                 // دکمه شما
@@ -310,6 +293,40 @@ fun WalletStackCardBackPrivateKey(
 
 
 @Composable
+fun PrivateKeyWallet(
+    secret: String
+) {
+    // --- لایه ۱: نمایش کلید خصوصی ---
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(12.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "کلید خصوصی شما",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 18.sp,
+            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light))
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = if (secret.isNotEmpty()) secret else "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White,
+            fontSize = 18.sp,
+            fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.End,
+            lineHeight = 25.sp,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
 fun SeedPhraseGrid(
     words: List<String>,
     modifier: Modifier = Modifier,
@@ -318,26 +335,27 @@ fun SeedPhraseGrid(
 ) {
     // بهینه‌سازی: استفاده از remember برای cache کردن مقادیر ثابت
     val spacing = remember { 8.dp }
-    
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        horizontalArrangement = Arrangement.spacedBy(spacing),
-        verticalArrangement = Arrangement.spacedBy(spacing),
-        // بهینه‌سازی: استفاده از contentPadding برای padding داخلی
-        contentPadding = PaddingValues(0.dp),
-        modifier = modifier
-    ) {
-        items(
-            count = words.size,
-            // بهینه‌سازی: استفاده از stable key (index برای لیست ثابت کافی است)
-            key = { index -> index }
-        ) { index ->
-            SecretPhraseItem(
-                index = index, 
-                word = words[index], 
-                paddingVertical = paddingVerticalItem, 
-                paddingHorizontal = paddingHorizontalItem
-            )
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            // بهینه‌سازی: استفاده از contentPadding برای padding داخلی
+            contentPadding = PaddingValues(0.dp),
+            modifier = modifier
+        ) {
+            items(
+                count = words.size,
+                // بهینه‌سازی: استفاده از stable key (index برای لیست ثابت کافی است)
+                key = { index -> index }
+            ) { index ->
+                SecretPhraseItem(
+                    index = index,
+                    word = words[index],
+                    paddingVertical = paddingVerticalItem,
+                    paddingHorizontal = paddingHorizontalItem
+                )
+            }
         }
     }
 }
@@ -410,7 +428,7 @@ fun WalletOptionItem(
             .fillMaxWidth()
             .height(90.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(if (enabled) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
+            .background(if (enabled) MaterialTheme.colorScheme.surface else Color.Transparent)
             .border(
                 width = 1.dp,
                 color = if (enabled) Color.Transparent else MaterialTheme.colorScheme.outline.copy(
@@ -421,35 +439,8 @@ fun WalletOptionItem(
             .clickable(enabled = enabled, onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End // RTL: از راست شروع می‌شود
+        horizontalArrangement = Arrangement.Start
     ) {
-        // متن‌ها (سمت راست)
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.End // RTL: راست‌چین
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Bold)),
-                textAlign = TextAlign.End // RTL
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Light
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                lineHeight = 16.sp,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light)),
-                textAlign = TextAlign.End // RTL
-            )
-        }
-
-        Spacer(modifier = Modifier.width(16.dp))
 
         // آیکون (سمت چپ)
         Box(
@@ -465,5 +456,47 @@ fun WalletOptionItem(
                 tint = if (enabled) iconColor else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
+
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        // متن‌ها (سمت راست)
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.Start // RTL: راست‌چین
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (enabled) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onTertiary,
+                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Bold)),
+                textAlign = TextAlign.Start // RTL
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiary,
+                maxLines = 2,
+                lineHeight = 16.sp,
+                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium)),
+                textAlign = TextAlign.Start // RTL
+            )
+        }
+    }
+}
+
+
+@Preview
+@Composable
+fun PreviewWalletOption() {
+    MaterialTheme {
+        WalletOptionItem(
+            icon = Icons.Default.TextFields,
+            iconColor = Color(0xFF22C55E),
+            title = "عبارت بازیابی",
+            subtitle = "وارد کردن کیف پول با عبارت ۱۲/۲۴ کلمه‌ای بازیابی",
+            onClick = {}
+        )
     }
 }

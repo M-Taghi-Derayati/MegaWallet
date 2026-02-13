@@ -21,12 +21,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,6 +41,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
+import com.mtd.megawallet.ui.compose.components.PrimaryButton
+import com.mtd.megawallet.ui.compose.components.TopHeader
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
 
 /**
@@ -79,27 +78,15 @@ fun TermsPart(
             .padding(top = 40.dp)
     ) {
         // Header
-        Text(
-            text = "قوانین امنیتی را تایید کنید",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.vazirmatn_bold, FontWeight.Normal)),
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Right,
-            fontSize = 25.sp
+
+        TopHeader(
+            title = "قوانین امنیتی را تایید کنید",
+            subtitle = "برای ادامه، باید موارد زیر را مطالعه کرده و تایید نمایید"
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
 
-        Text(
-            text = "برای ادامه، باید موارد زیر را مطالعه کرده و تایید نمایید",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.vazirmatn_medium, FontWeight.Light)),
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Right,
-            fontSize = 14.sp
-        )
+
+
 
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -133,8 +120,8 @@ fun TermsPart(
         Text(
             text = "لطفاً با دقت تمام موارد را بررسی کنید، این موارد برای امنیت دارایی شما حیاتی هستند",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.vazirmatn_medium, FontWeight.Light)),
+            color = MaterialTheme.colorScheme.onTertiary,
+            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.iransansmobile_fa_light, FontWeight.Light)),
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Right,
             fontSize = 12.sp
@@ -142,25 +129,14 @@ fun TermsPart(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Continue button
-        Button(
+
+        PrimaryButton(
+            text = "موارد فوق را قبول دارم، ادامه",
             onClick = { viewModel.nextStep() },
             enabled = viewModel.areTermsAccepted,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(AnimationConstants.BUTTON_HEIGHT),
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = animatedButtonColor,
-            )
-        ) {
-            Text(
-                text = "موارد فوق را قبول دارم، ادامه",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.vazirmatn_medium, FontWeight.Bold))
-            )
-        }
+            containerColor = animatedButtonColor
+        )
+
 
     }
 }
@@ -186,17 +162,6 @@ private fun TermItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.vazirmatn_regular, FontWeight.Normal)),
-            modifier = Modifier
-                .weight(1f)
-                .padding(end = 12.dp),
-            textAlign = TextAlign.Right,
-            fontSize = 15.sp
-        )
 
         // Custom animated checkbox
         Box(
@@ -224,5 +189,18 @@ private fun TermItem(
                 )
             }
         }
+
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.tertiary,
+            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.iransansmobile_fa_regular, FontWeight.Normal)),
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp),
+            textAlign = TextAlign.Right,
+            fontSize = 15.sp
+        )
+
     }
 }

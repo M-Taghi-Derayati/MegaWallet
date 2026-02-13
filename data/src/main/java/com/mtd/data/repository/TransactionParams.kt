@@ -19,4 +19,12 @@ sealed class TransactionParams {
         val amountInSatoshi: Long,
         val feeRateInSatsPerByte: Long
     ) : TransactionParams()
+
+    data class Tvm(
+        val networkName: NetworkName,
+        val toAddress: String,
+        val amount: BigInteger,
+        val contractAddress: String? = null, // If null, it's native TRX. If set, it's TRC20.
+        val feeLimit: Long = 10000000 // Default 10 TRX
+    ) : TransactionParams()
 }

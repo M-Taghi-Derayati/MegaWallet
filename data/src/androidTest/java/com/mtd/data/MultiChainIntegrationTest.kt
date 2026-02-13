@@ -2,6 +2,7 @@ package com.mtd.data
 
 
 import android.content.Context
+import android.graphics.Color
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.gson.Gson
@@ -50,7 +51,7 @@ class MultiChainIntegrationTest {
         val retrofitBuilder = provideRetrofitBuilder(okHttpClient,gson)
 
         // ۳. ساخت وابستگی‌های اصلی :data
-        val assetRegistry=AssetRegistry()
+        val assetRegistry=AssetRegistry(blockchainRegistry)
         val dataSourceFactory = ChainDataSourceFactory(blockchainRegistry, retrofitBuilder,assetRegistry,okHttpClient)
         val activeWalletManager = ActiveWalletManager(keyManager)
 
@@ -66,10 +67,10 @@ class MultiChainIntegrationTest {
         // ۵. آماده‌سازی وضعیت اولیه برای هر تست
         // این کار تضمین می‌کند که ActiveWalletManager و KeyManager Cache هر دو مقداردهی شده‌اند.
         runTest {
-            val result = walletRepository.importWalletFromMnemonic(TEST_MNEMONIC)
+            val result = walletRepository.importWalletFromMnemonic(TEST_MNEMONIC,"test",Color.RED)
             // یک Assert کوچک برای اطمینان از صحت مقداردهی اولیه
             assertTrue("Setup failed: Wallet import was not successful.", result is ResultResponse.Success)
-            keyManager.loadKeysIntoCache((result as ResultResponse.Success).data.keys)
+//            keyManager.loadKeysIntoCache((result as ResultResponse.Success).data.keys)
         }
     }
 

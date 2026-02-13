@@ -1,6 +1,5 @@
 package com.mtd.megawallet.ui.compose.screens.addexistingwallet
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -24,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
 import com.mtd.megawallet.event.DriveBackupState
 import com.mtd.megawallet.ui.compose.components.WalletOptionItem
-import com.mtd.megawallet.ui.compose.theme.FamilyGreen
+import com.mtd.megawallet.ui.compose.theme.Green
 
 /**
  * Welcome content for adding existing wallet screen.
@@ -73,13 +72,14 @@ fun WelcomeContent(
         Text(
             text = "افزودن کیف پول موجود",
             style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.tertiary,
             fontFamily = FontFamily(Font(R.font.vazirmatn_bold, FontWeight.Bold))
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "به استفاده از کیف پولی که از قبل دارید ادامه دهید یا هر آدرسی را ردیابی کنید",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onTertiary,
             textAlign = TextAlign.Center,
             fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light))
         )
@@ -90,12 +90,13 @@ fun WelcomeContent(
                 iconColor = Color(0xFF42A5F5),
                 title = "ورود به حساب کاربری",
                 subtitle = "افزودن کیف پول با ورود به حساب خانوادگی موجود",
-                onClick = {}
+                onClick = {},
+                enabled = false
             )
             Spacer(modifier = Modifier.height(16.dp))
             WalletOptionItem(
                 icon = Icons.Default.ArrowDownward,
-                iconColor = FamilyGreen,
+                iconColor = Green,
                 title = "وارد کردن",
                 subtitle = "افزودن کیف پول موجود با عبارت بازیابی یا کلید خصوصی",
                 onClick = onGetStarted
