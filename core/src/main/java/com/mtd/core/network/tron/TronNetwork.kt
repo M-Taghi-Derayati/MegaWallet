@@ -1,11 +1,12 @@
 package com.mtd.core.network.tron
 
-import com.mtd.core.model.NetworkConfig
-import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
-import com.mtd.core.model.WalletKey
+
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.network.tron.TronUtils.Base58.hexDecode
+import com.mtd.domain.model.core.NetworkConfig
+import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.core.WalletKey
 import org.web3j.crypto.Bip32ECKeyPair
 import org.web3j.crypto.ECKeyPair
 import org.web3j.crypto.MnemonicUtils
@@ -21,13 +22,15 @@ class TronNetwork(config: NetworkConfig) : BlockchainNetwork {
     override val iconUrl: String = config.iconUrl
     override val webSocketUrl: String? = config.webSocketUrl
     override val RpcUrls: List<String> = config.rpcUrls
+    override val RpcUrlsEvm: List<String> = config.rpcUrlsEvm
     override val currencySymbol: String = config.currencySymbol
+    override val regex: String? = config.regex
     override val explorers: List<String> = config.explorers
     override val color: String? = config.color
     override val faName: String? = config.faName
     override val isTestnet: Boolean = config.isTestnet
 
-    private val derivationPath = config.derivationPath // "m/44'/195'/0'/0/0"
+    override val derivationPath = config.derivationPath // "m/44'/195'/0'/0/0"
 
     override fun deriveKeyFromMnemonic(mnemonic: String): WalletKey {
         // 1. Generate seed from mnemonic
@@ -61,7 +64,7 @@ class TronNetwork(config: NetworkConfig) : BlockchainNetwork {
             networkName = name,
             networkType = networkType,
             chainId = chainId,
-            derivationPath = null,
+            derivationPath = derivationPath,
             address = address,
             publicKeyHex = toHexStringNoPrefix(keyPair.publicKey)
         )

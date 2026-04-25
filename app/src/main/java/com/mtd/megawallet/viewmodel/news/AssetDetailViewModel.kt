@@ -3,11 +3,11 @@ package com.mtd.megawallet.viewmodel.news
 import androidx.lifecycle.SavedStateHandle
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.repository.IMarketDataRepository
-import com.mtd.domain.wallet.ActiveWalletManager
+import com.mtd.domain.interfaceRepository.IMarketDataRepository
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.megawallet.core.BaseViewModel
-import com.mtd.megawallet.event.AssetItem
-import com.mtd.megawallet.event.HomeUiState.DisplayCurrency
+import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.HomeUiState.DisplayCurrency
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,9 +73,9 @@ class AssetDetailViewModel @Inject constructor(
             )
 
             // لود کردن چارت
-            val coinGeckoId = config?.symbol
+            val baseSymbol = config?.symbol
                 ?: (if (isGroup) assetId.removePrefix("GROUP_").lowercase() else assetId.lowercase())
-            loadChartData(coinGeckoId)
+            loadChartData(baseSymbol)
         }
     }
 
@@ -90,21 +90,21 @@ class AssetDetailViewModel @Inject constructor(
     fun onTimeFrameSelected(days: String) {
         if (_selectedTimeFrame.value == days) return
         _selectedTimeFrame.value = days
-        val coinGeckoId = assetRegistry.getAssetById(_asset.value?.id ?: "")?.symbol
+        val baseSymbol = assetRegistry.getAssetById(_asset.value?.id ?: "")?.symbol
             ?: _asset.value?.symbol?.lowercase() ?: return
 
-        loadChartData(coinGeckoId, days)
+        loadChartData(baseSymbol, days)
     }
 
-    private fun loadChartData(coinId: String, days: String = _selectedTimeFrame.value) {
+    private fun loadChartData(baseSymbol: String, days: String = _selectedTimeFrame.value) {
         launchSafe {
             _isLoadingChart.value = true
-            when (val result = marketDataRepository.getHistoricalPrices(coinId, days)) {
+            when (val result = marketDataRepository.getHistoricalPrices(baseSymbol, days)) {
                 is ResultResponse.Success -> {
-                    _chartData.value = result.data ?: emptyList()
+                    _chartData.value = result.data
                 }
                 is ResultResponse.Error -> {
-                    // هندل کردن خطا
+                    _chartData.value = emptyList()
                 }
             }
             _isLoadingChart.value = false

@@ -46,24 +46,7 @@ object AnimationConstants {
     
     /** Duration for dash phase animation in milliseconds */
     const val DASH_PHASE_DURATION = 5500
-    
-    /** Duration for card content fade animation in milliseconds */
-    const val CARD_CONTENT_FADE_DURATION = 400
-    
-    // ========== Ratios ==========
-    
-    /** Ratio for orbit 1 radius (relative to minimum dimension) */
-    const val ORBIT_1_RATIO = 0.22f
-    
-    /** Ratio for orbit 2 radius (relative to minimum dimension) */
-    const val ORBIT_2_RATIO = 0.32f
-    
-    /** Ratio for orbit 3 radius (relative to minimum dimension) */
-    const val ORBIT_3_RATIO = 0.44f
-    
-    /** Ratio for center radius (relative to minimum dimension) */
-    const val CENTER_RADIUS_RATIO = 0.05f
-    
+
     /** Ratio for reveal radius multiplier */
     const val REVEAL_RADIUS_MULTIPLIER = 1.4f
     
@@ -99,55 +82,16 @@ object AnimationConstants {
     /** Card height in dp (final) */
     val CARD_HEIGHT_FINAL = 250.dp
     
-    /** Text padding in dp (initial) */
-    val TEXT_PADDING_INITIAL = 0.dp
-    
-    /** Text padding in dp (final) */
-    val TEXT_PADDING_FINAL = 24.dp
-    
-    /** Particle size in dp */
-    val PARTICLE_SIZE = 2.5.dp
-    
     /** Button height in dp */
     val BUTTON_HEIGHT = 56.dp
     
-    /** Button capsule height in dp */
-    val BUTTON_CAPSULE_HEIGHT = 38.dp
-    
-    /** Button capsule width in dp */
-    val BUTTON_CAPSULE_WIDTH = 100.dp
+
     
     // ========== Colors ==========
     
     /** Grid color alpha */
     const val GRID_COLOR_ALPHA = 0.2f
-    
-    /** Border color alpha */
-    const val BORDER_COLOR_ALPHA = 0.3f
-    
-    /** White overlay alpha for reveal */
-    const val WHITE_OVERLAY_ALPHA = 0.8f
-    
-    /** White background alpha for card content */
-    const val WHITE_BACKGROUND_ALPHA = 0.15f
-    
-    // ========== Animation Easing ==========
-    
-    /** Easing type for fast out slow in */
-    const val EASING_FAST_OUT_SLOW_IN = "FastOutSlowInEasing"
-    
-    /** Easing type for linear */
-    const val EASING_LINEAR = "LinearEasing"
-    
-    // ========== Spring Animation ==========
-    
-    /** Damping ratio for medium bouncy spring */
-    const val SPRING_DAMPING_RATIO_MEDIUM_BOUNCY = 0.75f
-    
-    /** Damping ratio for low bouncy spring */
-    const val SPRING_DAMPING_RATIO_LOW = 0.8f
-    
-    // ========== Generating Animation Specific ==========
+
     
     /** Vertical offset when card is flipped (in dp, converted to pixels) */
     const val VERTICAL_OFFSET_FLIPPED = -170f
@@ -203,22 +147,6 @@ object AnimationConstants {
     /** Dash path effect intervals for button border */
     val DASH_PATH_INTERVAL_1 = 40f
     val DASH_PATH_INTERVAL_2 = 25f
-    
-    /** Wallet address row background alpha */
-    const val WALLET_ADDRESS_BG_ALPHA = 0.15f
-    
-    /** Wallet address icon size */
-    val WALLET_ADDRESS_ICON_SIZE = 18.dp
-    
-    /** Wallet info text size */
-    val WALLET_INFO_NAME_SIZE = 20.sp
-    val WALLET_INFO_BALANCE_SIZE = 16.sp
-    
-    /** Private key text size */
-    val PRIVATE_KEY_TEXT_SIZE = 18.sp
-    val PRIVATE_KEY_LABEL_SIZE = 18.sp
-    val PRIVATE_KEY_CONTENT_SIZE = 14.sp
-    val PRIVATE_KEY_LINE_HEIGHT = 20.sp
     
     /** Backup tip chip padding */
     val BACKUP_TIP_CHIP_PADDING = 20.dp

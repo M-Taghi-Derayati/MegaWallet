@@ -43,10 +43,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.mtd.megawallet.event.CloudWalletItem
-import com.mtd.megawallet.event.GoogleSignInEvent
-import com.mtd.megawallet.event.ImportData
-import com.mtd.megawallet.event.ImportScreenState
+import com.mtd.domain.model.CloudWalletItem
+import com.mtd.domain.model.GoogleSignInEvent
+import com.mtd.domain.model.ImportData
+import com.mtd.domain.model.ImportScreenState
 import com.mtd.megawallet.ui.compose.components.AnimatedFlipCard
 import com.mtd.megawallet.ui.compose.components.ErrorSnackbarHandler
 import com.mtd.megawallet.ui.compose.components.FlipCardTargets
@@ -414,11 +414,11 @@ fun AddExistingWalletScreen(
                     ) { state ->
                         when (state) {
                             ImportScreenState.SEED_PHRASE_AUTO -> {
-                                // بهینه‌سازی: استفاده از derivedStateOf برای کاهش recomposition
-                                // derivedStateOf باید مستقیماً استفاده شود
+
                                 val isValid by derivedStateOf {
                                     viewModel.isSeedPhraseClipboardValid(viewModel.pastedWords)
                                 }
+
                                 AutoImportWordKeys(
                                     words = viewModel.pastedWords,
                                     isValid = isValid,

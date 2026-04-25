@@ -20,6 +20,46 @@
     "faName": "بیت‌ کوین"
   },
   {
+    "id": "DOGE-DOGE_TESTNET",
+    "name": "Dogecoin Testnet",
+    "symbol": "DOGE",
+    "decimals": 8,
+    "networkId": "doge_testnet",
+    "contractAddress": null,
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/74.png",
+    "faName": "دوج کوین تست نت"
+  },
+  {
+    "id": "DOGE-DOGE_MAINNET",
+    "name": "Dogecoin",
+    "symbol": "DOGE",
+    "decimals": 8,
+    "networkId": "doge_mainnet",
+    "contractAddress": null,
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/74.png",
+    "faName": "دوج کوین"
+  },
+  {
+    "id": "LTC-LITECOIN_TESTNET",
+    "name": "Litecoin Testnet",
+    "symbol": "LTC",
+    "decimals": 8,
+    "networkId": "litecoin_testnet",
+    "contractAddress": null,
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/2.png",
+    "faName": "Litecoin Testnet"
+  },
+  {
+    "id": "LTC-LITECOIN_MAINNET",
+    "name": "Litecoin",
+    "symbol": "LTC",
+    "decimals": 8,
+    "networkId": "litecoin_mainnet",
+    "contractAddress": null,
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/2.png",
+    "faName": "Litecoin"
+  },
+  {
     "id": "ETH-SEPOLIA",
     "name": "Sepolia Ether",
     "symbol": "ETH",
@@ -40,12 +80,32 @@
     "faName": "اتریوم"
   },
   {
+    "id": "ETH-BASE_SEPOLIA",
+    "name": "ETHEREUM",
+    "symbol": "ETH",
+    "decimals": 18,
+    "networkId": "base_sepolia",
+    "contractAddress": null,
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    "faName": "اتریوم"
+  },
+  {
+    "id": "ETH-BASE",
+    "name": "ETHEREUM",
+    "symbol": "ETH",
+    "decimals": 18,
+    "networkId": "base_mainnet",
+    "contractAddress": null,
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    "faName": "اتریوم"
+  },
+  {
     "id": "USDT-SEPOLIA",
     "name": "Tether USD",
     "symbol": "USDT",
     "decimals": 6,
     "networkId": "sepolia",
-    "contractAddress": "0x186cca6904490818AB0DC409ca59D932A2366031",
+    "contractAddress": "0xbDeaD2A70Fe794D2f97b37EFDE497e68974a296d",
     "iconUrl": "https://assets.coingecko.com/coins/images/325/standard/Tether.png",
     "faName": "تتر"
   },
@@ -128,7 +188,8 @@
     "contractAddress": "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
     "iconUrl": "https://assets.coingecko.com/coins/images/325/standard/Tether.png",
     "faName": "تتر"
-  },  {
+  },
+  {
     "id": "USDT-TRON",
     "name": "Tether USD",
     "symbol": "USDT",

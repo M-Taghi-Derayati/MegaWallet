@@ -68,11 +68,13 @@ import androidx.core.graphics.toColorInt
 import coil.compose.AsyncImage
 import coil.imageLoader
 import com.mtd.common_ui.R
-import com.mtd.megawallet.event.AssetItem
-import com.mtd.megawallet.event.HomeUiState
+import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.HomeUiState
+import com.mtd.domain.model.NetworkShare
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
 import com.mtd.megawallet.viewmodel.news.HomeViewModel
+import java.math.BigDecimal
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -574,7 +576,8 @@ private fun AssetListItems(
                                         )
                                     }
                                 ),
-                                animationDuration = WalletScreenConstants.ASSET_ANIMATION_DURATION
+                                animationDuration = WalletScreenConstants.ASSET_ANIMATION_DURATION,
+                                styleVariantKey = displayCurrency
                             )
                             if (displayCurrency == HomeUiState.DisplayCurrency.USDT) {
                                 Text(
@@ -650,120 +653,67 @@ private fun AutoResizeBalanceRow(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
-       /* val maxWidth = constraints.maxWidth.toFloat()
-        val currencyText = when (displayCurrency) {
-            HomeUiState.DisplayCurrency.USDT -> "$"
-            HomeUiState.DisplayCurrency.IRR -> "تومان"
-        }*/
-
-        // اندازه‌گیری با Text مخفی برای محاسبه اندازه فونت
-        // انتخاب فونت متناسب با ارز برای اندازه‌گیری دقیق
-        /*        val measurementFont = if (displayCurrency == HomeUiState.DisplayCurrency.IRR) {
-            FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
-        } else {
-            FontFamily(Font(R.font.inter_regular, FontWeight.Medium))
-        }
-
-        Text(
-            text =totalBalance+ currencyText ,
-            style = MaterialTheme.typography.displayMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = textSize,
-                fontFamily = measurementFont,
-                color = MaterialTheme.colorScheme.tertiary,
-                letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
-            ),
-            maxLines = 1,
-            softWrap = false,
-            onTextLayout = { textLayoutResult ->
-                val textWidth = textLayoutResult.size.width
-                if (textWidth > maxWidth && textSize.value > minTextSize.value) {
-                    // اگر متن بزرگتر از فضا بود، فونت را کوچک می‌کنیم
-                    val newSizeValue = (textSize.value * 0.95f).coerceAtLeast(minTextSize.value)
-                    textSize = newSizeValue.sp
-                }
-            },
-            modifier = Modifier.alpha(0f)
-        )*/
 
         // نمایش واقعی Row با اندازه فونت تنظیم شده
         Row(
             verticalAlignment = Alignment.Top,
             modifier = Modifier.wrapContentWidth()
         ) {
-            when (displayCurrency) {
-                // حالت دلار: علامت $ در سمت چپ و بالا
-                HomeUiState.DisplayCurrency.USDT -> {
-                    AnimatedCounter(
-                        text = totalBalance,
-                        style = MaterialTheme.typography.displayMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = textSize,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Medium)),
-                            letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
-                        ),
-                        animationDuration = animationDuration,
-                        modifier = Modifier.wrapContentWidth()
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
 
-                    Text(
-                        text = "$",
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontSize = WalletScreenConstants.CURRENCY_SYMBOL_FONT_SIZE,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(
-                                Font(
-                                    R.font.inter_regular,
-                                    FontWeight.Medium
-                                )
+
+            AnimatedCounter(
+                text = totalBalance,
+                style = MaterialTheme.typography.displayMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = textSize,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontFamily = when (displayCurrency) {
+                        HomeUiState.DisplayCurrency.USDT -> FontFamily(
+                            Font(
+                                R.font.inter_regular,
+                                FontWeight.Medium
                             )
-                        ),
-                        modifier = Modifier.padding(
-                            top = WalletScreenConstants.CURRENCY_SYMBOL_PADDING_TOP
                         )
-                    )
 
-
-
-                }
-
-                // حالت تومان: "تومان" در سمت راست و بالا
-                HomeUiState.DisplayCurrency.IRR -> {
-
-                    AnimatedCounter(
-                        text = totalBalance,
-                        style = MaterialTheme.typography.displayMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = textSize,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium)),
-                            letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
-                        ),
-                        animationDuration = animationDuration,
-                        modifier = Modifier.wrapContentWidth()
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = "تومان",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = WalletScreenConstants.TOMAN_FONT_SIZE,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(
-                                Font(
-                                    R.font.iransansmobile_fa_regular,
-                                    FontWeight.Medium
-                                )
+                        HomeUiState.DisplayCurrency.IRR -> FontFamily(
+                            Font(
+                                R.font.iransansmobile_fa_regular,
+                                FontWeight.Medium
                             )
-                        ),
-                        modifier = Modifier.padding(
-                            top = WalletScreenConstants.TOMAN_PADDING_TOP
                         )
-                    )
-                }
+                    },
+                    letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
+                ),
+                animationDuration = animationDuration,
+                styleVariantKey = displayCurrency,
+                modifier = Modifier.wrapContentWidth()
+            )
+            if (displayCurrency == HomeUiState.DisplayCurrency.USDT) {
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = "$",
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = WalletScreenConstants.CURRENCY_SYMBOL_FONT_SIZE,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Medium))
+                    ),
+                    modifier = Modifier.padding(top = WalletScreenConstants.CURRENCY_SYMBOL_PADDING_TOP)
+                )
+
+            }
+            if (displayCurrency == HomeUiState.DisplayCurrency.IRR) {
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = "تومان",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = WalletScreenConstants.TOMAN_FONT_SIZE,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    ),
+                    modifier = Modifier.padding(top = WalletScreenConstants.TOMAN_PADDING_TOP)
+                )
             }
         }
     }
@@ -798,6 +748,8 @@ fun getNetworkIconResId(networkId: String): Int {
         "bsc_testnet", "bsc_mainnet" -> R.drawable.ic_bnb
         "polygon_testnet", "polygon_mainnet" -> R.drawable.ic_pol
         "tron_mainnet", "shasta_testnet" -> R.drawable.ic_trx
+        "doge_testnet", "doge_mainnet" -> R.drawable.ic_doge
+        "base_sepolia", "base_mainnet" -> R.drawable.ic_base
         else -> R.drawable.ic_wallet // پیش‌فرض
     }
 }
@@ -808,7 +760,7 @@ fun getNetworkIconResId(networkId: String): Int {
  */
 @Composable
 private fun NetworkDistributionChart(
-    distribution: List<com.mtd.megawallet.event.NetworkShare>,
+    distribution: List<NetworkShare>,
     size: Dp = WalletScreenConstants.ASSET_NETWORK_CHART_SIZE
 ) {
     Canvas(
@@ -902,8 +854,8 @@ fun PreviewAssetsDetails() {
             balanceIrr = "250,000 تومان",
             formattedDisplayBalance = "$5.85",
             priceChange24h = 0.0,
-            balanceRaw = java.math.BigDecimal("0.006469"),
-            priceUsdRaw = java.math.BigDecimal("904.52"),
+            balanceRaw = BigDecimal("0.006469"),
+            priceUsdRaw = BigDecimal("904.52"),
             decimals = 18,
             contractAddress = null,
             isNativeToken = true

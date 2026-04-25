@@ -24,7 +24,6 @@
                 android:thicknessRatio="10"
                 android:useLevel="true">
                 <solid
-                    android:color="@color/kraken_brand_purple"
 
                     />
             </shape>

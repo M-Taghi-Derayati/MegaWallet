@@ -1,5 +1,6 @@
 package com.mtd.megawallet
 
+import android.util.Log
 import androidx.multidex.MultiDexApplication
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -15,8 +16,19 @@ import timber.log.Timber
 class MegaWalletApplication: MultiDexApplication() , ImageLoaderFactory{
     override fun onCreate() {
         super.onCreate()
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.BUILD_TYPE == "debug") {
             Timber.plant(Timber.DebugTree())
+        } else {
+            Timber.plant(
+                object : Timber.Tree() {
+                    override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                        if (priority >= Log.INFO) {
+                            Log.println(priority, tag ?: "MegaWallet", message)
+                            t?.let { Log.println(priority, tag ?: "MegaWallet", Log.getStackTraceString(it)) }
+                        }
+                    }
+                }
+            )
         }
     }
 

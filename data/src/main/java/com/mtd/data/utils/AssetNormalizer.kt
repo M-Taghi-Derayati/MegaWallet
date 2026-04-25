@@ -1,6 +1,6 @@
 package com.mtd.data.utils
 
-import com.mtd.core.model.NetworkName
+import com.mtd.domain.model.core.NetworkName
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
@@ -31,7 +31,12 @@ object AssetNormalizer {
 
                 // ۳. شبکه‌های UTXO مثل بیت‌کوین
                 // معمولاً مقدار را به صورت عدد صحیح (Satoshi) در قالب String یا Long می‌دهند
-                networkName ==NetworkName.BITCOINTESTNET || networkName ==NetworkName.BITCOIN-> {
+                networkName == NetworkName.BITCOINTESTNET ||
+                    networkName == NetworkName.BITCOIN ||
+                    networkName == NetworkName.DOGE ||
+                    networkName == NetworkName.DOGETESTNET ||
+                    networkName == NetworkName.LITECOIN ||
+                    networkName == NetworkName.LTCTESTNET -> {
                     toBigDecimal(rawAmount)
                 }
 
@@ -53,7 +58,9 @@ object AssetNormalizer {
             NetworkName.BINANCESMARTCHAIN,
             NetworkName.POLTESTNET,
             NetworkName.SEPOLIA,
-            NetworkName.ETHEREUM
+            NetworkName.ETHEREUM,
+            NetworkName.BASE,
+            NetworkName.BASESEPOLIA
         )
         return evmNetworks.contains(network)
     }

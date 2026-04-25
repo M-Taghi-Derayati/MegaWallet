@@ -1,22 +1,26 @@
 package com.mtd.data.datasource
 
-import com.mtd.core.model.NetworkName.BSCTESTNET
-import com.mtd.core.model.NetworkName.POLTESTNET
-import com.mtd.core.model.NetworkName.SEPOLIA
+import com.mtd.domain.model.core.NetworkName.BASE
+import com.mtd.domain.model.core.NetworkName.BASESEPOLIA
+import com.mtd.domain.model.core.NetworkName.BSCTESTNET
+import com.mtd.domain.model.core.NetworkName.POLTESTNET
+import com.mtd.domain.model.core.NetworkName.SEPOLIA
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.registry.AssetRegistry
+import com.mtd.core.utils.AddressRegexUtils
 import com.mtd.data.datasource.IChainDataSource.FeeData
-import com.mtd.data.dto.BlockscoutTokenTransferDto
-import com.mtd.data.dto.BlockscoutTransactionDto
-import com.mtd.data.repository.TransactionParams
+import com.mtd.data.dto.EVMTokenTransferDto
+import com.mtd.data.dto.EVMTransactionDto
 import com.mtd.data.service.BSCscanApiService
-import com.mtd.data.service.BlockscoutApiService
+import com.mtd.data.service.EVMApiService
 import com.mtd.data.utils.AssetNormalizer.normalize
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.EvmTransaction
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
+import com.mtd.domain.model.assets.AssetConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -26,12 +30,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import org.web3j.abi.FunctionEncoder
+import org.web3j.abi.TypeReference
 import org.web3j.abi.datatypes.Address
+import org.web3j.abi.datatypes.DynamicBytes
 import org.web3j.abi.datatypes.Function
 import org.web3j.abi.datatypes.generated.Uint256
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.RawTransaction
 import org.web3j.crypto.TransactionEncoder
+import org.web3j.crypto.WalletUtils
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
 import org.web3j.protocol.core.methods.request.Transaction
@@ -51,6 +58,10 @@ class EvmDataSource(
     private val okHttpClient: OkHttpClient
 ) : IChainDataSource {
 
+    companion object {
+        private const val RPC_FAILOVER_TIMEOUT_MS = 15_000L
+    }
+
     private val currentRpcIndex = AtomicInteger(0)
     private var currentWeb3j: Web3j? = null
 
@@ -69,8 +80,8 @@ class EvmDataSource(
     @Synchronized
     private fun getOrUpdateWeb3j(): Web3j {
         if (currentWeb3j == null) {
-            val index = currentRpcIndex.get() % network.RpcUrls.size
-            val rpcUrl = network.RpcUrls[index]
+            val index = currentRpcIndex.get() % network.RpcUrlsEvm.size
+            val rpcUrl = network.RpcUrlsEvm[index]
             Timber.i("Initializing Web3j with RPC: $rpcUrl")
             currentWeb3j = Web3j.build(HttpService(rpcUrl, okHttpClient, false))
         }
@@ -81,11 +92,11 @@ class EvmDataSource(
         var lastException: Exception? = null
 
         // همیشه لیست را از ابتدا (اولویت بالا) به انتها تست می‌کنیم
-        val rpcList = network.RpcUrls
+        val rpcList = network.RpcUrlsEvm
 
         for (url in rpcList) {
             try {
-                return withTimeout(6000) { // تایم‌اوت ۶ ثانیه‌ای برای هر RPC
+                return withTimeout(RPC_FAILOVER_TIMEOUT_MS) { // تایم‌اوت ۶ ثانیه‌ای برای هر RPC
                     val web3j = Web3jFactory.getOrCreate(url, okHttpClient)
                     // اجرای عملیات اصلی
                     block(web3j)
@@ -105,7 +116,7 @@ class EvmDataSource(
         for (explorer in network.explorers) {
             try {
                 val result = when (network.name) {
-                    SEPOLIA, POLTESTNET -> fetchBlockscoutTransactions(explorer, address)
+                    SEPOLIA, POLTESTNET -> fetchEVMTransactions(explorer, address)
                     BSCTESTNET -> fetchBscScanTransactions(explorer, address)
                     else -> null
                 }
@@ -117,8 +128,8 @@ class EvmDataSource(
         return ResultResponse.Error(Exception("All explorers failed"))
     }
 
-    private suspend fun fetchBlockscoutTransactions(baseUrl: String, address: String): ResultResponse<List<TransactionRecord>> {
-         val api = retrofitBuilder.baseUrl(baseUrl).build().create(BlockscoutApiService::class.java)
+    private suspend fun fetchEVMTransactions(baseUrl: String, address: String): ResultResponse<List<TransactionRecord>> {
+         val api = retrofitBuilder.baseUrl(baseUrl).build().create(EVMApiService::class.java)
          return coroutineScope {
             val nativeTxsDeferred = async(Dispatchers.IO) { api.getTransactions(address) }
             val tokenTxsDeferred = async(Dispatchers.IO) { api.getTokenTransfers(address) }
@@ -128,10 +139,10 @@ class EvmDataSource(
             val allRecords = mutableListOf<TransactionRecord>()
 
             if (nativeTxsResponse.isSuccessful) {
-                nativeTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address)) }
+                nativeTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address, network.name)) }
             }
             if (tokenTxsResponse.isSuccessful) {
-                tokenTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address)) }
+                tokenTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address, network.name)) }
             }
             
             if (!nativeTxsResponse.isSuccessful && !tokenTxsResponse.isSuccessful) {
@@ -154,7 +165,8 @@ class EvmDataSource(
                     fee = (dto.gasUsed.toBigIntegerOrNull() ?: BigInteger.ZERO) * (dto.gasPrice.toBigIntegerOrNull() ?: BigInteger.ZERO),
                     timestamp = dto.timeStamp.toLongOrNull() ?: 0L,
                     isOutgoing = dto.from.equals(address, ignoreCase = true),
-                    status = if (dto.isError == "0") TransactionStatus.CONFIRMED else TransactionStatus.FAILED
+                    status = if (dto.isError == "0") TransactionStatus.CONFIRMED else TransactionStatus.FAILED,
+                    networkName = network.name
                 )
             }
             return ResultResponse.Success(records)
@@ -164,7 +176,7 @@ class EvmDataSource(
 
     private suspend fun getNonce(address: String): BigInteger {
         return executeWithFailover { web3j ->
-            web3j.ethGetTransactionCount(address, DefaultBlockParameterName.LATEST).sendAsync().await().transactionCount
+            web3j.ethGetTransactionCount(address, DefaultBlockParameterName.PENDING).sendAsync().await().transactionCount
         }
     }
 
@@ -178,11 +190,26 @@ class EvmDataSource(
 
     override suspend fun sendTransaction(params: TransactionParams, privateKeyHex: String): ResultResponse<String> {
         if (params !is TransactionParams.Evm) return ResultResponse.Error(IllegalArgumentException("Invalid params"))
+        val normalizedTo = params.to.trim()
+        val isValidByRegex = AddressRegexUtils.matchesAddress(network.regex, normalizedTo)
+        if (!isValidByRegex && !WalletUtils.isValidAddress(normalizedTo)) {
+            return ResultResponse.Error(IllegalArgumentException("Invalid recipient address"))
+        }
+        if (params.gasPrice <= BigInteger.ZERO || params.gasLimit <= BigInteger.ZERO) {
+            return ResultResponse.Error(IllegalArgumentException("Invalid gas values"))
+        }
+        if (params.amount < BigInteger.ZERO) {
+            return ResultResponse.Error(IllegalArgumentException("Amount cannot be negative"))
+        }
+        if (params.amount == BigInteger.ZERO && params.data.isNullOrBlank()) {
+            return ResultResponse.Error(IllegalArgumentException("Either amount or data must be provided"))
+        }
         return try {
-            val credentials = Credentials.create(privateKeyHex)
+            val normalizedKey = privateKeyHex.removePrefix("0x")
+            val credentials = Credentials.create(normalizedKey)
             val nonce = getNonce(credentials.address)
             val rawTransaction = RawTransaction.createTransaction(
-                nonce, params.gasPrice, params.gasLimit, params.to, params.amount, params.data ?: ""
+                nonce, params.gasPrice, params.gasLimit, normalizedTo, params.amount, params.data ?: ""
             )
             val signedTx = TransactionEncoder.signMessage(rawTransaction, network.chainId!!, credentials)
             ResultResponse.Success(sendRawTransaction(Numeric.toHexString(signedTx)))
@@ -243,7 +270,7 @@ class EvmDataSource(
 
                     // 1. آماده‌سازی تمام درخواست‌ها به صورت تخت
                     val allRequests =
-                        mutableListOf<Triple<String, com.mtd.core.assets.AssetConfig, org.web3j.protocol.core.Request<*, *>>>()
+                        mutableListOf<Triple<String, AssetConfig, org.web3j.protocol.core.Request<*, *>>>()
 
                     addresses.forEach { address ->
                         supportedAssets.forEach { assetConfig ->
@@ -351,27 +378,79 @@ class EvmDataSource(
         }
     }
 
+    private suspend fun getPriorityFee(): BigInteger {
+        return try {
+            executeWithFailover { web3j ->
+                web3j.ethMaxPriorityFeePerGas().sendAsync().await().maxPriorityFeePerGas
+            }
+        } catch (e: Exception) {
+            BigInteger.valueOf(1_500_000_000L) // Safe fallback: 1.5 Gwei
+        }
+    }
+
     override suspend fun getFeeOptions(fromAddress: String?, toAddress: String?, asset: Asset?): ResultResponse<List<FeeData>> {
         return try {
-            val baseGasPrice = getGasPrice().coerceAtLeast(BigInteger.ONE)
-            val priorityFee = BigInteger("2000000000") // Simplified for now
-            val maxFeePerGas = baseGasPrice.add(priorityFee)
+            val networkGasPrice = getGasPrice()
+            val networkPriorityFee = getPriorityFee()
 
             val gasLimit: BigInteger = if (asset?.contractAddress == null) {
                 BigInteger.valueOf(21_000L)
             } else {
                 val function = Function("transfer", listOf(Address(toAddress), Uint256(BigInteger.ONE)), emptyList())
-                estimateGasLimit(fromAddress?:"", asset.contractAddress!!, FunctionEncoder.encode(function))
+                estimateGasLimit(fromAddress ?: "", asset.contractAddress!!, FunctionEncoder.encode(function))
+            }
+            // ضرایب منطقی برای لایه ۲ (باعث می‌شود قیمت خیلی فضایی نشود اما تایید تراکنش تضمین شود)
+            val normalMaxFee = networkGasPrice.multiply(BigInteger.valueOf(120)).divide(BigInteger.valueOf(100))
+                .add(networkPriorityFee)
+
+            val fast = networkGasPrice.multiply(BigInteger.valueOf(150)).divide(BigInteger.valueOf(100))
+                .add(networkPriorityFee.multiply(BigInteger.valueOf(120)).divide(BigInteger.valueOf(100)))
+
+            val urgent = networkGasPrice.multiply(BigInteger.valueOf(200)).divide(BigInteger.valueOf(100))
+                .add(networkPriorityFee.multiply(BigInteger.valueOf(2)))
+
+// محاسبه هزینه L1 با ضریب اطمینان ۱۰ درصدی برای پوشش نوسانات لحظه‌ای
+            val rawL1Fee = if (isL2StackOptimism()) {
+                val txData = if (asset?.contractAddress == null) "" else {
+                    FunctionEncoder.encode(Function("transfer", listOf(Address(toAddress ?: "0x0000000000000000000000000000000000000000"), Uint256(BigInteger.ONE)), emptyList()))
+                }
+                getL1DataFee(toAddress ?: "0x0000000000000000000000000000000000000000", BigInteger.ONE, txData)
+            } else {
+                BigInteger.ZERO
             }
 
-            val normal = maxFeePerGas
-            val fast = maxFeePerGas.add(priorityFee.divide(BigInteger.valueOf(2)))
-            val urgent = maxFeePerGas.add(priorityFee.multiply(BigInteger.valueOf(2)))
+// اعمال ضریب اطمینان ۱.۱ (۱۰ درصد اضافه) برای هزینه L1
+            val l1DataFeeWithBuffer = rawL1Fee.toBigDecimal().multiply(BigDecimal("1.10")).toBigInteger()
 
             ResultResponse.Success(listOf(
-                FeeData(level = "عادی 🐢", gasPrice =  normal, gasLimit =  gasLimit, feeInSmallestUnit =  (normal * gasLimit).toBigDecimal(), feeInCoin = normalize ((normal * gasLimit),asset?.decimals?:18,network.name), feeInUsd =  null, estimatedTime =  "~ 30s"),
-                FeeData(level = "سریع 🚀", gasPrice =  fast, gasLimit =  gasLimit, feeInSmallestUnit =  (fast * gasLimit).toBigDecimal(), feeInCoin =  normalize ((fast * gasLimit),asset?.decimals?:18,network.name), feeInUsd =  null, estimatedTime =  "~ 15s"),
-                FeeData(level = "درلحظه 🔥", gasPrice =  urgent, gasLimit =  gasLimit, feeInSmallestUnit = ( urgent * gasLimit).toBigDecimal(), feeInCoin =   normalize ((urgent * gasLimit),asset?.decimals?:18,network.name), feeInUsd =  null, estimatedTime =  "< 10s"),
+                FeeData(
+                    level = "عادی",
+                    gasPrice = normalMaxFee,
+                    gasLimit = gasLimit,
+                    // هزینه کل = (L2 Gas * Limit) + L1 Data Fee
+                    feeInSmallestUnit = (normalMaxFee * gasLimit + l1DataFeeWithBuffer).toBigDecimal(),
+                    feeInCoin = normalize((normalMaxFee * gasLimit + l1DataFeeWithBuffer), network.decimals, network.name),
+                    feeInUsd = null,
+                    estimatedTime = "~ 30 ثانیه"
+                ),
+                FeeData(
+                    level = "سریع",
+                    gasPrice = fast,
+                    gasLimit = gasLimit,
+                    feeInSmallestUnit = (fast * gasLimit + l1DataFeeWithBuffer).toBigDecimal(),
+                    feeInCoin = normalize((fast * gasLimit + l1DataFeeWithBuffer), network.decimals, network.name),
+                    feeInUsd = null,
+                    estimatedTime = "~ 15 ثانیه"
+                ),
+                FeeData(
+                    level = "در لحظه",
+                    gasPrice = urgent,
+                    gasLimit = gasLimit,
+                    feeInSmallestUnit = (urgent * gasLimit + l1DataFeeWithBuffer).toBigDecimal(),
+                    feeInCoin = normalize((urgent * gasLimit + l1DataFeeWithBuffer), network.decimals, network.name),
+                    feeInUsd = null,
+                    estimatedTime = "< 10 ثانیه"
+                ),
             ))
         } catch (e: Exception) {
             ResultResponse.Error(e)
@@ -380,24 +459,97 @@ class EvmDataSource(
 
     override fun getWeb3jInstance(): Web3j = getOrUpdateWeb3j()
 
+    private fun isL2StackOptimism(): Boolean {
+        return network.name == BASE || network.name == BASESEPOLIA
+    }
 
-    private fun BlockscoutTransactionDto.toDomainModel(userAddress: String): EvmTransaction {
-        val fee = (this.gasUsed?.toBigIntegerOrNull() ?: BigInteger.ZERO) * (this.gasPrice?.toBigIntegerOrNull() ?: BigInteger.ZERO)
-        val timestamp = try { Instant.parse(this.timestamp).epochSecond } catch (e: Exception) { 0L }
+    private suspend fun getL1DataFee(to: String, value: BigInteger, data: String): BigInteger {
+        return executeWithFailover { web3j ->
+            try {
+                // Create a dummy raw transaction to get its length/RLP
+                val dummyRawTx = RawTransaction.createTransaction(
+                    BigInteger.ZERO, // nonce
+                    BigInteger.valueOf(1_000_000_000L), // gasPrice
+                    BigInteger.valueOf(21_000L), // gasLimit
+                    to,
+                    value,
+                    data
+                )
+                val encodedTx = TransactionEncoder.encode(dummyRawTx)
+
+                val function = Function(
+                    "getL1Fee",
+                    listOf(DynamicBytes(encodedTx)),
+                    listOf(object : TypeReference<Uint256>() {})
+                )
+
+                val encodedFunction = FunctionEncoder.encode(function)
+                val response = web3j.ethCall(
+                    Transaction.createEthCallTransaction(null, "0x420000000000000000000000000000000000000F", encodedFunction),
+                    DefaultBlockParameterName.LATEST
+                ).sendAsync().await()
+
+                if (response.hasError()) {
+                    Timber.w("L1 Fee Oracle Error: ${response.error.message}")
+                    BigInteger.ZERO
+                } else {
+                    try {
+                        val hexResult = response.result
+                        if (hexResult != null && hexResult.startsWith("0x")) {
+                            BigInteger(hexResult.substring(2), 16)
+                        } else {
+                            BigInteger.ZERO
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "Manual decode failed")
+                        BigInteger.ZERO
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to get L1 Data Fee")
+                BigInteger.ZERO
+            }
+        }
+    }
+
+
+    private fun EVMTransactionDto.toDomainModel(userAddress: String, networkName: com.mtd.domain.model.core.NetworkName): EvmTransaction {
+        val feeValue = (this.gasUsed?.toBigIntegerOrNull() ?: BigInteger.ZERO) * (this.gasPrice?.toBigIntegerOrNull() ?: BigInteger.ZERO)
+        val timestampValue = try { Instant.parse(this.timestamp).epochSecond } catch (e: Exception) { 0L }
         return EvmTransaction(
-            this.hash, timestamp, fee, 
-            if (this.status.equals("ok", true)) TransactionStatus.CONFIRMED else TransactionStatus.FAILED,
-            this.from.hash, this.to?.hash ?: "Contract Creation", this.value, 
-            this.from.hash.equals(userAddress, true)
+            hash = this.hash, 
+            timestamp = timestampValue, 
+            fee = feeValue, 
+            status = if (this.status.equals("ok", true)) TransactionStatus.CONFIRMED else TransactionStatus.FAILED,
+            fromAddress = this.from.hash, 
+            toAddress = this.to?.hash ?: "Contract Creation", 
+            amount = this.value, 
+            isOutgoing = this.from.hash.equals(userAddress, true),
+            networkName = networkName
         )
     }
 
-    private fun BlockscoutTokenTransferDto.toDomainModel(userAddress: String): EvmTransaction {
-        val timestamp = try { Instant.parse(this.timestamp).epochSecond } catch (e: Exception) { 0L }
+    private fun EVMTokenTransferDto.toDomainModel(userAddress: String, networkName: com.mtd.domain.model.core.NetworkName): EvmTransaction {
+        val timestampValue = try { Instant.parse(this.timestamp).epochSecond } catch (e: Exception) { 0L }
         return EvmTransaction(
-            this.txHash, timestamp, BigInteger.ZERO, TransactionStatus.CONFIRMED,
-            this.from.hash, this.to.hash, this.total.value.toBigIntegerOrNull() ?: BigInteger.ZERO,
-            this.from.hash.equals(userAddress, true), this.token.address
+            hash = this.txHash,
+            timestamp = timestampValue,
+            fee = BigInteger.ZERO,
+            status = TransactionStatus.CONFIRMED,
+            fromAddress = this.fromAddress.hash,
+            toAddress = this.toAddress.hash,
+            amount = this.total.value.toBigIntegerOrNull() ?: BigInteger.ZERO,
+            isOutgoing = this.fromAddress.hash.equals(userAddress, true),
+            contractAddress = this.token.address,
+            networkName = networkName,
+            tokenTransferDetails = com.mtd.domain.model.TokenTransferDetails(
+                from = this.fromAddress.hash,
+                to = this.toAddress.hash,
+                amount = this.total.value.toBigIntegerOrNull() ?: BigInteger.ZERO,
+                tokenSymbol = this.token.symbol ?: "",
+                tokenDecimals = this.token.decimals?.toIntOrNull() ?: 18,
+                contractAddress = this.token.address ?: ""
+            )
         )
     }
 }

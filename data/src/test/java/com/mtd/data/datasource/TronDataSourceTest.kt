@@ -1,6 +1,6 @@
 package com.mtd.data.datasource
 
-import com.mtd.core.model.NetworkConfig
+import com.mtd.domain.model.core.NetworkConfig
 import com.mtd.core.network.tron.TronNetwork
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -17,6 +17,7 @@ class TronDataSourceTest {
         networkType = "TVM",
         chainId = 2494104990,
         derivationPath = "m/44'/195'/0'/0/0",
+        rpcUrlsEvm = emptyList(),
         rpcUrls = listOf("https://api.shasta.trongrid.io"), 
         currencySymbol = "TRX",
         webSocketUrl = "",

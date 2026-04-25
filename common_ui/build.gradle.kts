@@ -41,6 +41,7 @@ dependencies {
     api(libs.qrgen)
     api(libs.rxbinding)
     api(libs.slidetoact)
+    api(libs.splash)
     implementation(libs.material)
 
     testImplementation(libs.junit)

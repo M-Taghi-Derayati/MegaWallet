@@ -2,13 +2,13 @@ package com.mtd.megawallet.core
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mtd.core.error.AppError
-import com.mtd.core.error.ErrorMapper
 import com.mtd.core.manager.ErrorAction
 import com.mtd.core.manager.ErrorContext
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.manager.ErrorSeverity
-import com.mtd.core.ui.UiEvent
+import com.mtd.domain.model.error.AppError
+import com.mtd.domain.model.error.ErrorMapper
+import com.mtd.domain.model.ui.UiEvent
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -91,8 +91,24 @@ abstract class BaseViewModel(
     /**
      * متد امن برای اجرای کوروتین‌ها
      * از این به جای viewModelScope.launch استفاده کنید
+     * @param checkNetwork اگر true باشد، قبل از اجرا اتصال به اینترنت چک می‌شود
      */
-    protected fun launchSafe(block: suspend CoroutineScope.() -> Unit): Job {
+    protected fun launchSafe(
+        checkNetwork: Boolean = true,
+        block: suspend CoroutineScope.() -> Unit
+    ): Job {
+        return viewModelScope.launch(exceptionHandler) {
+            if (checkNetwork && !errorManager.ensureOnline()) {
+                return@launch
+            }
+            block()
+        }
+    }
+
+    /**
+     * متد برای اجرای کوروتین‌های محلی (بدون نیاز به چک کردن اینترنت)
+     */
+    protected fun launchLocal(block: suspend CoroutineScope.() -> Unit): Job {
         return viewModelScope.launch(exceptionHandler) {
             block()
         }
@@ -154,6 +170,13 @@ abstract class BaseViewModel(
                 errorTitle = errorTitle
             )
         )
+    }
+
+    /**
+     * نمایش سریع Snackbar بدون نیاز به بلاک suspend (استفاده از launchLocal)
+     */
+    protected fun showSnackbarMessage(message: String) {
+        launchLocal { showErrorSnackbar(message) }
     }
 
 

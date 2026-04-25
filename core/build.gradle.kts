@@ -38,14 +38,14 @@ android {
 }
 
 dependencies {
+    implementation(project(":domain"))
 
-    
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
 
     implementation(platform(libs.okhttp.bom))
     implementation(libs.bundles.okhttp)
-    implementation(libs.retrofit)
 
     api(libs.timber)
     api("org.bouncycastle:bcprov-jdk15to18:1.70")
@@ -58,7 +58,7 @@ dependencies {
 
     api(libs.bitcoin.kmp)
     api(libs.bitcoin.jni)
-    api(libs.bundles.gson)
+
 
     api(libs.bundles.google.auth)
 

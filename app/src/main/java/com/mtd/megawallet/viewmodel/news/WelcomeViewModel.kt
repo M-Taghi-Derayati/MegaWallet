@@ -1,8 +1,8 @@
 package com.mtd.megawallet.viewmodel.news
 
 import androidx.lifecycle.ViewModel
-import com.mtd.data.repository.IWalletRepository
-import com.mtd.megawallet.event.ImportData
+import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.ImportData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import javax.inject.Inject

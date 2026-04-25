@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import com.mtd.common_ui.R
-import com.mtd.megawallet.event.CloudWalletItem
+import com.mtd.domain.model.CloudWalletItem
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.TopHeader
 

@@ -9,29 +9,29 @@ import androidx.core.graphics.toColorInt
 import com.blankj.utilcode.util.ClipboardUtils
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.mtd.core.assets.AssetConfig
+import com.mtd.domain.model.assets.AssetConfig
 import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.keymanager.MnemonicHelper
-import com.mtd.core.model.Bip39Words
-import com.mtd.core.model.NetworkType
+import com.mtd.domain.model.core.Bip39Words
+import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.datasource.ICloudDataSource
-import com.mtd.data.repository.IBackupRepository
-import com.mtd.data.repository.IWalletRepository
-import com.mtd.domain.model.AssetPrice
+import com.mtd.domain.interfaceRepository.IAuthManager
+import com.mtd.domain.interfaceRepository.IBackupRepository
+import com.mtd.domain.interfaceRepository.IMarketDataRepository
+import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.assets.AssetPriceDto
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.repository.IAuthManager
-import com.mtd.domain.repository.IMarketDataRepository
 import com.mtd.megawallet.core.BaseViewModel
-import com.mtd.megawallet.event.CloudWalletItem
-import com.mtd.megawallet.event.CloudWalletMetadata
-import com.mtd.megawallet.event.DriveBackupState
-import com.mtd.megawallet.event.GoogleSignInEvent
-import com.mtd.megawallet.event.ImportData
-import com.mtd.megawallet.event.ImportScreenState
+import com.mtd.domain.model.CloudWalletItem
+import com.mtd.domain.model.CloudWalletMetadata
+import com.mtd.domain.model.DriveBackupState
+import com.mtd.domain.model.GoogleSignInEvent
+import com.mtd.domain.model.ImportData
+import com.mtd.domain.model.ImportScreenState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -201,7 +201,7 @@ class WalletImportViewModel @Inject constructor(
     fun importWallet() {
         val words = if (screenState == ImportScreenState.SEED_PHRASE_AUTO) pastedWords else manualWords
         if (words.isEmpty() || !MnemonicHelper.isValidMnemonic(words.joinToString(" "))) {
-            launchSafe { showErrorSnackbar("کلمات بازیابی نامعتبر است") }
+            showSnackbarMessage("کلمات بازیابی نامعتبر است")
             return
         }
 
@@ -211,7 +211,7 @@ class WalletImportViewModel @Inject constructor(
 
     fun importPrivateKey() {
         if (!isPrivateKeyClipboardValid(getClipboardText())) {
-            launchSafe { showErrorSnackbar("کلید خصوصی نامعتبر است") }
+            showSnackbarMessage("کلید خصوصی نامعتبر است")
             return
         }
 
@@ -384,7 +384,7 @@ class WalletImportViewModel @Inject constructor(
     private suspend fun calculateSingleWalletBalance(
         cloudWallet: CloudWalletItem,
         allAssets: List<AssetConfig>,
-        pricesMap: Map<String, AssetPrice>
+        pricesMap: Map<String, AssetPriceDto>
     ): BigDecimal {
         var total = BigDecimal.ZERO
         

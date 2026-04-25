@@ -1,9 +1,10 @@
 package com.mtd.core.network.bitcoin
 
 
-import com.mtd.core.model.NetworkConfig
-import com.mtd.core.model.WalletKey
+
 import com.mtd.core.network.BlockchainNetwork
+import com.mtd.domain.model.core.NetworkConfig
+import com.mtd.domain.model.core.WalletKey
 import org.bitcoinj.base.LegacyAddress
 import org.bitcoinj.base.SegwitAddress
 import org.bitcoinj.core.NetworkParameters
@@ -23,12 +24,15 @@ abstract class AbstractUtxoNetwork(
     override val id = config.id
     override val chainId: Long? = config.chainId // شبکه‌های UTXO معمولاً chainId ندارند
     override val RpcUrls = config.rpcUrls
+    override val RpcUrlsEvm=config.rpcUrlsEvm
     override val decimals=config.decimals
     override val iconUrl=config.iconUrl
     override val webSocketUrl=config.webSocketUrl
+    override val derivationPath=config.derivationPath
     override val currencySymbol = config.currencySymbol
     override val explorers = config.explorers
     override val color = config.color
+    override val regex = config.regex
     override val faName = config.faName
     override val isTestnet: Boolean = config.isTestnet
 
@@ -113,7 +117,7 @@ abstract class AbstractUtxoNetwork(
             networkName = name,
             networkType = networkType,
             chainId = chainId,
-            derivationPath = null, // مسیر استخراج برای کلید خصوصی وارد شده، مشخص نیست
+            derivationPath = config.derivationPath,
             address = address,
             publicKeyHex = publicKeyHex
         )

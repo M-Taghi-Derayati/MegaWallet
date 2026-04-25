@@ -8,7 +8,7 @@ import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.api.services.drive.DriveScopes
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.repository.IAuthManager
+import com.mtd.domain.interfaceRepository.IAuthManager
 
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.tasks.await

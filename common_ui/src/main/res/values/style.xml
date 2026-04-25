@@ -10,25 +10,7 @@
         <item name="android:elevation">@dimen/_5sdp</item> <!-- سایه لطیف -->
     </style>
 
-    <style name="KrakenButton.Primary" parent="KrakenButton">
-        <item name="android:background">@drawable/bg_btn_kraken_primary_selector</item>
-        <item name="android:textColor">@color/kraken_text_on_primary</item>
-    </style>
 
-    <style name="KrakenButton.Glass" parent="KrakenButton">
-        <item name="android:background">@drawable/bg_btn_kraken_glass_selector</item>
-        <item name="android:textColor">@color/kraken_text_on_glass</item>
-    </style>
-    <style name="megawalletButton" parent="Widget.Material3.Button.Icon">
-        <item name="android:layout_width">0dp</item>
-        <item name="android:layout_height">@dimen/_35sdp</item>
-        <item name="android:layout_weight">1</item>
-        <item name="android:textColor">@color/text_primary</item>
-        <item name="backgroundTint">@color/surface_1</item>
-        <item name="cornerRadius">@dimen/_40sdp</item>
-        <item name="iconGravity">top</item>
-        <item name="iconTint">@color/text_primary</item>
-    </style>
 
 
     <!--region TextView Styles-->

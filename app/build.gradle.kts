@@ -7,6 +7,17 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+val releaseStoreFilePath = providers.gradleProperty("MEGAWALLET_RELEASE_STORE_FILE").orNull
+val releaseStorePassword = providers.gradleProperty("MEGAWALLET_RELEASE_STORE_PASSWORD").orNull
+val releaseKeyAlias = providers.gradleProperty("MEGAWALLET_RELEASE_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.gradleProperty("MEGAWALLET_RELEASE_KEY_PASSWORD").orNull
+val hasReleaseSigningConfig = listOf(
+    releaseStoreFilePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.mtd.megawallet"
     compileSdk = 36
@@ -21,25 +32,33 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    flavorDimensions += "env"
-
-    productFlavors {
-        create("prod") {
-            dimension = "env"
-            applicationIdSuffix = ".prod"
-            versionNameSuffix = "-prod"
-        }
-
-        create("dev") {
-            dimension = "env"
-            applicationIdSuffix = ".dev"
-            versionNameSuffix = "-dev"
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigningConfig) {
+                storeFile = file(releaseStoreFilePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+            }
         }
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            isDebuggable = true
+        }
+
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -91,6 +110,7 @@ dependencies {
     implementation(project(":core"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
 
@@ -134,4 +154,3 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }
-

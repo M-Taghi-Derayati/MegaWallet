@@ -11,29 +11,29 @@ import androidx.core.graphics.toColorInt
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.mtd.core.assets.AssetConfig
 import com.mtd.core.keymanager.MnemonicHelper
 import com.mtd.core.manager.ErrorManager
-import com.mtd.core.model.NetworkType
-import com.mtd.core.model.WalletKey
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.datasource.ICloudDataSource
-import com.mtd.data.repository.IBackupRepository
-import com.mtd.data.repository.IWalletRepository
-import com.mtd.domain.model.AssetPrice
+import com.mtd.domain.interfaceRepository.IAuthManager
+import com.mtd.domain.interfaceRepository.IBackupRepository
+import com.mtd.domain.interfaceRepository.IMarketDataRepository
+import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.CloudWalletItem
+import com.mtd.domain.model.CloudWalletMetadata
+import com.mtd.domain.model.CreateWalletStep
+import com.mtd.domain.model.GoogleSignInEvent
+import com.mtd.domain.model.ImportData
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.model.Wallet
-import com.mtd.domain.repository.IAuthManager
-import com.mtd.domain.repository.IMarketDataRepository
+import com.mtd.domain.model.assets.AssetConfig
+import com.mtd.domain.model.assets.AssetPriceDto
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.core.Wallet
+import com.mtd.domain.model.core.WalletKey
 import com.mtd.megawallet.core.BaseViewModel
-import com.mtd.megawallet.event.CloudWalletItem
-import com.mtd.megawallet.event.CloudWalletMetadata
-import com.mtd.megawallet.event.CreateWalletStep
-import com.mtd.megawallet.event.GoogleSignInEvent
-import com.mtd.megawallet.event.ImportData
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
 import com.mtd.megawallet.ui.compose.screens.createwallet.BackupAnimationState
 import com.mtd.megawallet.ui.compose.screens.createwallet.BackupMethodType
@@ -230,7 +230,7 @@ class CreateWalletViewModel @Inject constructor(
                 }
 
             } catch (e: Exception) {
-                launchSafe {
+                launchLocal {
                     showErrorSnackbar(
                         shortMessage = "خطا در بازیابی کیف پول",
                         detailedMessage = e.message ?: "خطای نامشخص",
@@ -355,7 +355,7 @@ class CreateWalletViewModel @Inject constructor(
                     navigateToCloudPasswordStep()
                 }
             } catch (e: Exception) {
-                launchSafe {
+                launchLocal {
                     showErrorSnackbar("خطا در بررسی اتصال به گوگل درایو: ${e.message}")
                 }
             }
@@ -373,15 +373,15 @@ class CreateWalletViewModel @Inject constructor(
                         // بعد از اتصال موفق، با بررسی وضعیت بکاپ به صفحه رمز عبور می‌رویم
                         navigateToCloudPasswordStep()
                     } catch (e: Exception) {
-                        launchSafe {
+                        launchLocal {
                             showErrorSnackbar("خطا در اتصال به گوگل درایو: ${e.message}")
                         }
                     }
                 }
 
                 is ResultResponse.Error -> {
-                    launchSafe {
-                        showErrorSnackbar("ورود به گوگل ناموفق بود. لطفاً دوباره تلاش کنید.")
+                    launchLocal {
+                        showSnackbarMessage("ورود به گوگل ناموفق بود. لطفاً دوباره تلاش کنید.")
                     }
                 }
             }
@@ -416,7 +416,7 @@ class CreateWalletViewModel @Inject constructor(
                     seedWords.isNotEmpty() && importData == null -> {
                         val mnemonic = seedWords.joinToString(" ")
                         if (!MnemonicHelper.isValidMnemonic(mnemonic)) {
-                            launchSafe { showErrorSnackbar("عبارت بازیابی نامعتبر است") }
+                            showSnackbarMessage("عبارت بازیابی نامعتبر است")
                             backupAnimationState = BackupAnimationState.IDLE
                             return@launch
                         }
@@ -438,7 +438,7 @@ class CreateWalletViewModel @Inject constructor(
                                 val mnemonic =
                                     pendingImport.words.joinToString(" ")
                                 if (!MnemonicHelper.isValidMnemonic(mnemonic)) {
-                                    launchSafe { showErrorSnackbar("عبارت بازیابی نامعتبر است") }
+                                    showSnackbarMessage("عبارت بازیابی نامعتبر است")
                                     backupAnimationState = BackupAnimationState.IDLE
                                     return@launch
                                 }
@@ -456,7 +456,7 @@ class CreateWalletViewModel @Inject constructor(
 
                             is ImportData.PrivateKey -> {
                                 if (!MnemonicHelper.isPrivateKeyValid(pendingImport.key)) {
-                                    launchSafe { showErrorSnackbar("کلید خصوصی نامعتبر است") }
+                                    showSnackbarMessage("کلید خصوصی نامعتبر است")
                                     backupAnimationState = BackupAnimationState.IDLE
                                     return@launch
                                 }
@@ -473,7 +473,7 @@ class CreateWalletViewModel @Inject constructor(
                             }
 
                             null -> {
-                                launchSafe { showErrorSnackbar("اطلاعات کیف پول یافت نشد") }
+                                showSnackbarMessage("اطلاعات کیف پول یافت نشد")
                                 backupAnimationState = BackupAnimationState.IDLE
                                 return@launch
                             }
@@ -481,7 +481,7 @@ class CreateWalletViewModel @Inject constructor(
                     }
 
                     else -> {
-                        launchSafe { showErrorSnackbar("اطلاعات کیف پول یافت نشد") }
+                        showSnackbarMessage("اطلاعات کیف پول یافت نشد")
                         backupAnimationState = BackupAnimationState.IDLE
                         return@launch
                     }
@@ -619,7 +619,7 @@ class CreateWalletViewModel @Inject constructor(
     private suspend fun calculateSingleWalletBalance(
         keys: List<WalletKey>,
         allAssets: List<AssetConfig>,
-        pricesMap: Map<String, AssetPrice>
+        pricesMap: Map<String, AssetPriceDto>
     ): BigDecimal {
         var total = BigDecimal.ZERO
 
@@ -668,7 +668,7 @@ class CreateWalletViewModel @Inject constructor(
                 if (!cloudDataSource.isInitialized()) {
                     val intent = authManager.getSignInIntent()
                     _googleSignInEvent.send(GoogleSignInEvent.LaunchIntent(intent))
-                    showErrorSnackbar("ابتدا به Google Drive متصل شوید")
+                    showSnackbarMessage("ابتدا به Google Drive متصل شوید")
                     return@launch
                 }
 

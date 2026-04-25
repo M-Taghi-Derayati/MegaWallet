@@ -26,7 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
-import com.mtd.core.model.Bip39Words
+import com.mtd.domain.model.core.Bip39Words
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 

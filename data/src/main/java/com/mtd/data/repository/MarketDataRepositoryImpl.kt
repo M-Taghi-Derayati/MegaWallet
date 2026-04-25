@@ -1,23 +1,25 @@
 package com.mtd.data.repository
 
-import com.mtd.data.service.CoinDeskApiService
+import com.mtd.data.dto.OhlcCandle
+import com.mtd.data.service.CoinDetailApiService
 import com.mtd.data.service.USDTApiService
 import com.mtd.data.utils.safeApiCall
-import com.mtd.domain.model.AssetPrice
+import com.mtd.domain.interfaceRepository.IMarketDataRepository
+import com.mtd.domain.model.assets.AssetPriceDto
 import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.repository.IMarketDataRepository
 import java.math.BigDecimal
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
 
 @Singleton
 class MarketDataRepositoryImpl @Inject constructor(
-    private val coinGeckoApi: CoinDeskApiService,
+    private val coinGeckoApi: CoinDetailApiService,
     private val usdtPriceApi: USDTApiService
 ) : IMarketDataRepository {
-    override suspend fun getLatestPrices(assetIds: List<String>): ResultResponse<List<AssetPrice>> {
+    override suspend fun getLatestPrices(assetIds: List<String>): ResultResponse<List<AssetPriceDto>> {
         return safeApiCall {
             val idsString = assetIds.joinToString(",") { if (it=="USDT") "$it-USD" else "$it-USDT" }
             val response = coinGeckoApi.getPrices(vsCurrencies = idsString)
@@ -26,7 +28,7 @@ class MarketDataRepositoryImpl @Inject constructor(
             }
             val priceMap = response.body()!!
             priceMap.data.map { (assetId, assets) ->
-                AssetPrice(
+                AssetPriceDto(
                     assetId = assetId.replace("-USDT","").replace("-USD",""),
                     priceUsd = assets.priceUsd,
                     priceChanges24h = assets.priceChanges24h
@@ -63,25 +65,67 @@ class MarketDataRepositoryImpl @Inject constructor(
 
     override suspend fun getHistoricalPrices(coinId: String, days: String): ResultResponse<List<Pair<Long, Double>>> {
         return safeApiCall {
-            val timeframe = when (days) {
-                "1" -> "24_hours"
-                "7" -> "7_days"
-                "30" -> "30_days"
-                "90" -> "90_days"
-                else -> null
-            }
-            val response =    coinGeckoApi.getWebMarketChart(vsCurrencies = "")
+            val symbol = coinId.trim().uppercase(Locale.US)
 
-            if (!response.isSuccessful || response.body() == null) {
-                throw Exception("Failed to fetch chart data.")
+            val rawCandles: List<OhlcCandle> = when (days) {
+                "1" -> fetchHourlyCandles(symbol, limit = 24)
+                "7" -> fetchDailyCandles(symbol, limit = 7)
+                "30" -> fetchDailyCandles(symbol, limit = 30)
+                "90" -> fetchDailyCandles(symbol, limit = 90)
+                "365" -> fetchDailyCandles(symbol, limit = 365)
+                else -> fetchDailyCandles(symbol, limit = 30)
             }
-            
-            val body = response.body()!!
-            val rawPrices = body.prices ?: body.stats ?: emptyList()
-            
-            rawPrices.mapNotNull { 
-                if (it.size >= 2) Pair(it[0].toLong(), it[1]) else null
+
+            rawCandles
+                .mapNotNull { candle ->
+                    val ts = candle.timestamp ?: return@mapNotNull null
+                    val closePrice = candle.close ?: candle.open ?: return@mapNotNull null
+                    Pair(ts, closePrice)
+                }
+                .sortedBy { it.first }
+        }
+    }
+
+    private suspend fun fetchHourlyCandles(symbol: String, limit: Int): List<OhlcCandle> {
+        var lastError: String? = null
+        for (instrument in buildInstrumentCandidates(symbol)) {
+            val response = coinGeckoApi.getHistoricalHours(
+                instrument = instrument,
+                limit = limit
+            )
+            if (response.isSuccessful) {
+                val candles = response.body()?.data.orEmpty()
+                if (candles.isNotEmpty()) return candles
+            } else {
+                lastError = "HTTP ${response.code()}"
             }
+        }
+        throw Exception("Failed to fetch hourly chart data for $symbol. ${lastError ?: ""}".trim())
+    }
+
+    private suspend fun fetchDailyCandles(symbol: String, limit: Int): List<OhlcCandle> {
+        var lastError: String? = null
+        for (instrument in buildInstrumentCandidates(symbol)) {
+            val response = coinGeckoApi.getHistoricalDays(
+                instrument = instrument,
+                limit = limit
+            )
+            if (response.isSuccessful) {
+                val candles = response.body()?.data.orEmpty()
+                if (candles.isNotEmpty()) return candles
+            } else {
+                lastError = "HTTP ${response.code()}"
+            }
+        }
+        throw Exception("Failed to fetch daily chart data for $symbol. ${lastError ?: ""}".trim())
+    }
+
+    private fun buildInstrumentCandidates(baseSymbol: String): List<String> {
+        val base = baseSymbol.trim().uppercase(Locale.US)
+        return if (base == "USDT") {
+            listOf("USDT-USD")
+        } else {
+            listOf("$base-USDT", "$base-USD")
         }
     }
 }

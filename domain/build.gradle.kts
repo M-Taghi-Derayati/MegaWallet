@@ -36,7 +36,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":core"))
+
 
 
     implementation(libs.androidx.core.ktx)
@@ -44,7 +44,8 @@ dependencies {
     implementation(libs.material)
     implementation(libs.dagger.hilt)
     ksp(libs.dagger.hilt.compiler)
-
+    api(libs.retrofit)
+    api(libs.bundles.gson)
 
     implementation(libs.coroutines)
 

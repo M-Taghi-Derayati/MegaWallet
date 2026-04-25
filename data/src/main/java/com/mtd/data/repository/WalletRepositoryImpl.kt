@@ -4,16 +4,18 @@ import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.keymanager.MnemonicHelper
 import com.mtd.core.keymanager.MnemonicHelper.isPrivateKeyValid
-import com.mtd.core.model.NetworkName
+import com.mtd.domain.model.core.NetworkName
 import com.mtd.core.network.tron.TronUtils.Base58.hexToBase58
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.utils.safeApiCall
+import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
-import com.mtd.domain.model.Wallet
-import com.mtd.domain.wallet.ActiveWalletManager
+import com.mtd.domain.model.core.Wallet
+import com.mtd.core.wallet.ActiveWalletManager
 import org.web3j.utils.Numeric
 import javax.inject.Inject
 
@@ -427,20 +429,22 @@ class WalletRepositoryImpl @Inject constructor(
         ): ResultResponse<String> {
             return safeApiCall {
                 val chainId = when (params) {
-                    is TransactionParams.Evm -> blockchainRegistry.getNetworkByName(params.networkName)?.chainId!!
+                    is TransactionParams.Evm -> blockchainRegistry.getNetworkByName(params.networkName)?.chainId
                     is TransactionParams.Utxo -> params.chainId
-                    is TransactionParams.Tvm -> blockchainRegistry.getNetworkByName(params.networkName)?.chainId!!
+                    is TransactionParams.Tvm -> blockchainRegistry.getNetworkByName(params.networkName)?.chainId
                 }
-                val network = blockchainRegistry.getNetworkByChainId(chainId)
-                    ?: throw IllegalStateException("Network not found")
+                    ?: throw IllegalStateException("Network chain id is missing for transaction params")
                 val privateKey =
-                    keyManager.getCredentialsForChain(network.chainId!!)?.ecKeyPair?.privateKey?.toString(
+                    keyManager.getCredentialsForChain(chainId)?.ecKeyPair?.privateKey?.toString(
                         16
                     )
                         ?: throw IllegalStateException("Wallet is locked or key not found for this chain.")
                 val dataSource = dataSourceFactory.create(chainId)
                 val result = dataSource.sendTransaction(params, privateKey)
-                if (result is ResultResponse.Success) result.data else throw Exception("Transaction failed")
+                return@safeApiCall when (result) {
+                    is ResultResponse.Success -> result.data
+                    is ResultResponse.Error -> throw Exception(result.exception)
+                }
             }
         }
 

@@ -18,7 +18,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.card.MaterialCardView
-import com.mtd.core.ui.UiEvent
+import com.mtd.domain.model.ui.UiEvent
 
 /**
  * Helper class for displaying custom top snackbar in View-based UI (Activity/Fragment)

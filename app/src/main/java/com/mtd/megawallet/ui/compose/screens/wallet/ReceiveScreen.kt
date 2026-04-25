@@ -42,7 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -62,7 +62,7 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.mtd.common_ui.R
-import com.mtd.megawallet.event.ReceiveUiState
+import com.mtd.domain.model.ReceiveUiState
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 import com.mtd.megawallet.viewmodel.news.ReceiveViewModel
@@ -76,7 +76,7 @@ fun ReceiveScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val selectedAddress by viewModel.selectedAddress.collectAsState()
-    val clipboardManager = LocalClipboardManager.current
+    val clipboardManager = LocalClipboard.current
 
     // Handle system back button
     BackHandler {
@@ -100,9 +100,7 @@ fun ReceiveScreen(
                 // Header - Stylish Black Header
 
 
-                    UnifiedHeader(onBack = onDismiss,"دریافت")
-
-
+                UnifiedHeader(onBack = onDismiss, "دریافت", isClose = true)
 
 
                 // Network Selector Row
@@ -133,7 +131,7 @@ fun ReceiveScreen(
                     ReceiveCard(
                         addressItem = selectedAddress!!,
                         onCopy = {
-                            clipboardManager.setText(AnnotatedString(selectedAddress!!.address))
+                            clipboardManager.nativeClipboard.text=AnnotatedString(selectedAddress!!.address)
                         }
                     )
                 }

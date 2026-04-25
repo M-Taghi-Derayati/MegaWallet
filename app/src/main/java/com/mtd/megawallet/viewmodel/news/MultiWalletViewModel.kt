@@ -1,26 +1,27 @@
 package com.mtd.megawallet.viewmodel.news
 
 import android.content.Intent
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.mtd.core.manager.CacheManager
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.data.datasource.ICloudDataSource
-import com.mtd.data.repository.IBackupRepository
-import com.mtd.data.repository.IWalletRepository
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.mtd.domain.interfaceRepository.IAuthManager
+import com.mtd.domain.interfaceRepository.IBackupRepository
+import com.mtd.domain.interfaceRepository.IMarketDataRepository
+import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.Asset
-import com.mtd.domain.model.AssetPrice
+import com.mtd.domain.model.assets.AssetPriceDto
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.model.Wallet
-import com.mtd.domain.repository.IAuthManager
-import com.mtd.domain.repository.IMarketDataRepository
-import com.mtd.domain.wallet.ActiveWalletManager
+import com.mtd.domain.model.core.Wallet
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.megawallet.core.BaseViewModel
-import com.mtd.megawallet.event.CachedAssetBalance
-import com.mtd.megawallet.event.CloudWalletMetadata
+import com.mtd.domain.model.CachedAssetBalance
+import com.mtd.domain.model.CloudWalletMetadata
+import com.mtd.domain.model.core.NetworkName
 import com.mtd.megawallet.viewmodel.news.HomeViewModel.Companion.CACHE_KEY_PREFIX
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -226,7 +227,7 @@ class MultiWalletViewModel @Inject constructor(
         updateWalletsUi(wallets, activeId)
     }
 
-    private suspend fun updateAssetPriceCache(walletId: String, assetId: String, priceInfo: AssetPrice) {
+    private suspend fun updateAssetPriceCache(walletId: String, assetId: String, priceInfo: AssetPriceDto) {
         val cacheKey = "${CACHE_KEY_PREFIX}${walletId}_${assetId}"
         val oldCache = cacheManager.get(cacheKey, CachedAssetBalance::class.java)
         
@@ -241,7 +242,7 @@ class MultiWalletViewModel @Inject constructor(
         cacheManager.put(cacheKey, updated)
     }
 
-    private suspend fun updateAssetBalanceCache(walletId: String, asset: Asset, networkName: com.mtd.core.model.NetworkName) {
+    private suspend fun updateAssetBalanceCache(walletId: String, asset: Asset, networkName: NetworkName) {
         val networkId = blockchainRegistry.getNetworkByName(networkName)?.id ?: return
         val assetConfig = assetRegistry.getAssetsForNetwork(networkId).find { 
             if (it.contractAddress == null) asset.contractAddress == null && it.symbol.equals(asset.symbol, true)

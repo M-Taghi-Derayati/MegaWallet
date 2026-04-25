@@ -24,9 +24,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.mtd.megawallet.event.CreateWalletStep
-import com.mtd.megawallet.event.GoogleSignInEvent
-import com.mtd.megawallet.event.ImportData
+import com.mtd.domain.model.CreateWalletStep
+import com.mtd.domain.model.GoogleSignInEvent
+import com.mtd.domain.model.ImportData
 import com.mtd.megawallet.ui.compose.components.ErrorSnackbarHandler
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudBackupPasswordScreen

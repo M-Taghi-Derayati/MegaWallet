@@ -60,7 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.mtd.common_ui.R
-import com.mtd.domain.model.Wallet
+import com.mtd.domain.model.core.Wallet
 import com.mtd.megawallet.ui.compose.components.AnimatedFlipCard
 import com.mtd.megawallet.ui.compose.components.FlipCardTargets
 import com.mtd.megawallet.ui.compose.components.PrivateKeyWallet
@@ -402,7 +402,6 @@ private fun WalletCardContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(21.dp))
                     .background(Color.Black.copy(alpha = 0.45f))
                     .zIndex(5f)
                     .clickable(
@@ -432,6 +431,7 @@ private fun WalletCardContent(
                     BasicTextField(
                         value = walletName,
                         onValueChange = onNameChange,
+                        singleLine = true,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             color = Color.White,
                             fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
@@ -483,11 +483,10 @@ private fun WalletCardContent(
                     ) {
                         Text(
                             text = "ثبت",
-                            color = Color.Black,
+                            color = MaterialTheme.colorScheme.onTertiary,
                             style = TextStyle(
                                 fontSize = 11.sp,
-                                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
-                                platformStyle = PlatformTextStyle(includeFontPadding = false)
+                                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
                             )
                         )
                     }

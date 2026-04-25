@@ -1,8 +1,8 @@
 package com.mtd.core.keymanager
 
-import com.mtd.core.model.NetworkType
-import com.mtd.core.model.WalletKey
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.core.WalletKey
 import org.web3j.crypto.Credentials
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject

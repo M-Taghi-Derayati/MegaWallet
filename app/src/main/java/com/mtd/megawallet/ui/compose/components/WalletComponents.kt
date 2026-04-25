@@ -495,7 +495,7 @@ fun PreviewWalletOption() {
             icon = Icons.Default.TextFields,
             iconColor = Color(0xFF22C55E),
             title = "عبارت بازیابی",
-            subtitle = "وارد کردن کیف پول با عبارت ۱۲/۲۴ کلمه‌ای بازیابی",
+            subtitle = "وارد کردن کیف پول با عبارت ۱۲ کلمه‌ای بازیابی",
             onClick = {}
         )
     }

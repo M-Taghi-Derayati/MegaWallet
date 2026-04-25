@@ -3,7 +3,7 @@ package com.mtd.data.service
 import android.Manifest
 import androidx.annotation.RequiresPermission
 import com.mtd.core.di.ApplicationScope
-import com.mtd.core.model.NetworkType
+import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.notification.NotificationService
 import com.mtd.core.registry.AssetRegistry
@@ -11,7 +11,7 @@ import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.socket.IWebSocketClient
 import com.mtd.core.utils.GlobalEvent
 import com.mtd.core.utils.GlobalEventBus
-import com.mtd.data.repository.IWalletRepository
+import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.ResultResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

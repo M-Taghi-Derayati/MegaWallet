@@ -1,11 +1,12 @@
 package com.mtd.megawallet.viewmodel.news
 
-import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
+import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.core.Wallet
 import com.mtd.core.registry.BlockchainRegistry
-import com.mtd.domain.wallet.ActiveWalletManager
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.megawallet.core.BaseViewModel
-import com.mtd.megawallet.event.ReceiveUiState
+import com.mtd.domain.model.ReceiveUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,7 +41,7 @@ class ReceiveViewModel @Inject constructor(
         }
     }
 
-    private fun loadReceiveAddresses(activeWallet: com.mtd.domain.model.Wallet) {
+    private fun loadReceiveAddresses(activeWallet: Wallet) {
         launchSafe {
             _uiState.value = ReceiveUiState.Loading
             

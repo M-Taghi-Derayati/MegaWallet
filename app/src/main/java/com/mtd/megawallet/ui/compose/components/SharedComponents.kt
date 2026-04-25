@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,7 +42,7 @@ fun PrimaryButton(
     isLoading: Boolean = false,
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.primary,
-    contentColor: Color = Color.White,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
     height: androidx.compose.ui.unit.Dp = AnimationConstants.BUTTON_HEIGHT
 ) {
     Button(
@@ -67,6 +68,7 @@ fun PrimaryButton(
         } else {
             Text(
                 text = text,
+                color =LocalContentColor.current,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold))

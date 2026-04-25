@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
-    <style name="Theme.MegaWallet" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="Theme.MegaWallet" parent="Theme.Material3.Light.NoActionBar">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/brand_primary</item>
         <item name="colorPrimaryVariant">@color/brand_secondary</item>
@@ -13,11 +13,25 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
         <!-- Background color. -->
-       <!-- <item name="android:windowBackground">@drawable/gradient_background</item>-->
+<!--        <item name="android:windowBackground">@drawable/gradient_background</item>-->
         <!-- Text Colors -->
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
 
         <!-- Customize your theme here. -->
+    </style>
+
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- رنگ پس‌زمینه باید دقیقاً با رنگ بک‌گراند انیمیشن یکی باشد -->
+        <item name="windowSplashScreenBackground">@color/background</item>
+
+        <!-- قرار دادن لوگوی استاتیکی که قبلاً ساختیم -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_screen</item>
+
+        <!-- مدت زمان نمایش (اختیاری) -->
+        <item name="windowSplashScreenAnimationDuration">100</item>
+
+        <!-- تم اصلی که بعد از لود شدن باید اعمال شود -->
+        <item name="postSplashScreenTheme">@style/Theme.MegaWallet</item>
     </style>
 </resources>

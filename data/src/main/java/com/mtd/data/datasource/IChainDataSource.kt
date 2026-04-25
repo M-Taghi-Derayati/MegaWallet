@@ -1,6 +1,6 @@
 package com.mtd.data.datasource
 
-import com.mtd.data.repository.TransactionParams
+import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionRecord

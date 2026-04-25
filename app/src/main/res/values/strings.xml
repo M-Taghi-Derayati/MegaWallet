@@ -3,7 +3,7 @@
     
     <!-- Wallet Import Strings -->
     <string name="import_wallet_title">وارد کردن کیف پول</string>
-    <string name="import_wallet_subtitle_12_key">لطفا جهت افزودن کیف پول ۱۲/۲۴ کلمه بازیابی خود را وارد کنید</string>
+    <string name="import_wallet_subtitle_12_key">لطفا جهت افزودن کیف پول ۱۲ کلمه بازیابی خود را وارد کنید</string>
     <string name="import_wallet_subtitle_private_key">لطفا جهت افزودن کیف پول  کلید خصوصی خود را وارد کنید</string>
     <string name="import_wallet_security_note">پس از وارد کردن عبارت بازیابی مخفی خود\nمیتوانید فرآیند وارد کردن را ادامه دهید</string>
     <string name="import_wallet_manual_entry">وارد کردن دستی</string>

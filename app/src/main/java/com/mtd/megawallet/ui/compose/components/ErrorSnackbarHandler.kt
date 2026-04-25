@@ -2,7 +2,7 @@ package com.mtd.megawallet.ui.compose.components
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import com.mtd.core.ui.UiEvent
+import com.mtd.domain.model.ui.UiEvent
 import kotlinx.coroutines.flow.Flow
 
 /**

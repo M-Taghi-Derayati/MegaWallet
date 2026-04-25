@@ -3,24 +3,36 @@ package com.mtd.domain.model
 
 interface IUserPreferencesRepository {
 
-    /**
-     * لیست اولویت‌بندی شده RPC ها را برای یک شبکه خاص برمی‌گرداند.
-     * اگر کاربر هیچ تنظیماتی ذخیره نکرده باشد، لیست خالی برمی‌گرداند.
-     */
-    suspend fun getRpcListForChain(chainId: Long): List<RpcConfig>
 
     /**
-     * لیست جدید RPC ها را برای یک شبکه خاص ذخیره می‌کند.
+     * وضعیت فعال بودن قفل اپ.
      */
-    suspend fun saveRpcListForChain(chainId: Long, rpcs: List<RpcConfig>)
+    suspend fun isAppLockEnabled(): Boolean
+    suspend fun setAppLockEnabled(enabled: Boolean)
 
     /**
-     * شناسه شبکه منتخب فعلی را برمی‌گرداند.
+     * هش و salt مربوط به passcode.
      */
-    suspend fun getSelectedNetworkId(): String?
+    suspend fun getPasscodeHash(): String?
+    suspend fun getPasscodeSalt(): String?
+    suspend fun savePasscodeHash(hash: String, salt: String)
+    suspend fun clearPasscode()
 
     /**
-     * شناسه شبکه منتخب فعلی را ذخیره می‌کند.
+     * تنظیمات بیومتریک و تایم‌اوت.
      */
-    suspend fun setSelectedNetworkId(networkId: String)
+    suspend fun isBiometricUnlockEnabled(): Boolean
+    suspend fun setBiometricUnlockEnabled(enabled: Boolean)
+    suspend fun getLockTimeoutSeconds(): Int
+    suspend fun setLockTimeoutSeconds(seconds: Int)
+
+    /**
+     * وضعیت موقت امنیتی (برای لاک‌اوت و زمان بک‌گراند).
+     */
+    suspend fun getLastBackgroundAt(): Long
+    suspend fun setLastBackgroundAt(timestampMs: Long)
+    suspend fun getFailedUnlockAttempts(): Int
+    suspend fun setFailedUnlockAttempts(count: Int)
+    suspend fun getLockoutUntil(): Long
+    suspend fun setLockoutUntil(timestampMs: Long)
 }

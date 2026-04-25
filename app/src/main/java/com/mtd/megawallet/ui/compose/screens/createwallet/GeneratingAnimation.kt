@@ -99,11 +99,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
-import com.mtd.core.model.WalletKey
+import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.core.WalletKey
 import com.mtd.megawallet.R
-import com.mtd.megawallet.event.ImportData
+import com.mtd.domain.model.ImportData
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedFlipCard
 import com.mtd.megawallet.ui.compose.components.FlipCardTargets
@@ -960,6 +960,7 @@ private fun getIconForSymbol(symbol: String): Int {
         "eth" -> R.drawable.ic_eth_light
         "usdt" -> R.drawable.ic_usdt_light
         //"bnb" -> R.drawable.ic_bnb_light
+        "doge" -> R.drawable.ic_doge_light
         "trx" -> R.drawable.ic_trx_light
         else -> R.drawable.ic_eth_light // fallback
     }

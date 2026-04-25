@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
-import com.mtd.megawallet.event.DriveBackupState
+import com.mtd.domain.model.DriveBackupState
 import com.mtd.megawallet.ui.compose.components.WalletOptionItem
 import com.mtd.megawallet.ui.compose.theme.Green
 
@@ -88,8 +88,8 @@ fun WelcomeContent(
             WalletOptionItem(
                 icon = Icons.Default.Person,
                 iconColor = Color(0xFF42A5F5),
-                title = "ورود به حساب کاربری",
-                subtitle = "افزودن کیف پول با ورود به حساب خانوادگی موجود",
+                title = "حساب کاربری",
+                subtitle = "این ویژگی در به روزرسانی های آتی در دسترس خواهد بود",
                 onClick = {},
                 enabled = false
             )
@@ -126,8 +126,8 @@ fun WelcomeContent(
             WalletOptionItem(
                 icon = Icons.Default.Visibility,
                 iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                title = "مشاهده",
-                subtitle = "پیگیری کیف پول با آدرس یا نام ENS",
+                title = "پیگیری کیف با آدرس",
+                subtitle = "این ویژگی در به روزرسانی های آتی در دسترس خواهد بود",
                 onClick = {},
                 enabled = false
             )

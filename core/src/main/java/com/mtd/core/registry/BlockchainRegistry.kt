@@ -1,25 +1,25 @@
 package com.mtd.core.registry
 
 import android.content.Context
-import com.mtd.core.model.NetworkConfig
-import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.network.bitcoin.BitcoinNetwork
+import com.mtd.core.network.bitcoin.UtxoNetworkParametersResolver
 import com.mtd.core.network.evm.GenericEvmNetwork
 import com.mtd.core.network.tron.TronNetwork
+import com.mtd.core.utils.AddressRegexUtils
 import com.mtd.core.utils.loadNetworkConfigs
+import com.mtd.domain.model.core.NetworkConfig
+import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkType
 import fr.acinq.bitcoin.Base58
-import org.bitcoinj.base.exceptions.AddressFormatException
-import org.bitcoinj.params.MainNetParams
-import org.bitcoinj.params.TestNet3Params
+import org.bitcoinj.base.Address
 import org.web3j.crypto.WalletUtils
 import javax.inject.Inject
 
 
 /**
- * Strategy-style factory for creating [BlockchainNetwork] instances from [NetworkConfig].
- * این اینترفیس کمک می‌کند از whenهای بزرگ وابسته به [NetworkType] دور شویم
+ * Strategy-style factory for creating [BlockchainNetwork] instances from [com.mtd.domain.model.core.NetworkConfig].
+ * این اینترفیس کمک می‌کند از whenهای بزرگ وابسته به [com.mtd.domain.model.core.NetworkType] دور شویم
  * و منطق ساخت هر شبکه را در یک کلاس جداگانه نگه داریم.
  */
 interface NetworkFactory {
@@ -43,7 +43,20 @@ class BitcoinNetworkFactory : NetworkFactory {
     }
 
     override fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork {
-        val params = if (!config.isTestnet) MainNetParams.get() else TestNet3Params.get()
+        val networkName = NetworkName.valueOf(config.name.uppercase())
+        val params = UtxoNetworkParametersResolver.resolve(networkName)
+        return BitcoinNetwork(config, params)
+    }
+}
+
+class UtxoNetworkFactory : NetworkFactory {
+    override fun supports(networkType: NetworkType, config: NetworkConfig): Boolean {
+        return networkType == NetworkType.UTXO
+    }
+
+    override fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork {
+        val networkName = NetworkName.valueOf(config.name.uppercase())
+        val params = UtxoNetworkParametersResolver.resolve(networkName)
         return BitcoinNetwork(config, params)
     }
 }
@@ -64,8 +77,11 @@ class BlockchainRegistry @Inject constructor() {
 
     private val networks = mutableMapOf<NetworkType, MutableMap<Long, BlockchainNetwork>>()
 
+    private val networksById = mutableMapOf<String, BlockchainNetwork>()
     private val networksByType = mutableMapOf<NetworkType, BlockchainNetwork>()
     private val networksByChainId = mutableMapOf<Long, BlockchainNetwork>()
+    private val addressRegexByNetworkId = mutableMapOf<String, Regex>()
+    private val addressRegexByNetworkType = mutableMapOf<NetworkType, MutableList<Regex>>()
 
     /**
      * مجموعهٔ factoryهای موجود برای ساخت شبکه‌ها.
@@ -74,19 +90,26 @@ class BlockchainRegistry @Inject constructor() {
     private val networkFactories: List<NetworkFactory> = listOf(
         EvmNetworkFactory(),
         BitcoinNetworkFactory(),
+        UtxoNetworkFactory(),
         TronNetworkFactory()
     )
 
 
     fun registerNetwork(network: BlockchainNetwork) {
-        val chainId = network.chainId ?: return // فقط شبکه‌های با chainId را ثبت می‌کنیم
-        // اگر این اولین شبکه از این نوع است، یک Map جدید برای آن بساز
-        networks.getOrPut(network.networkType) { mutableMapOf() }
+        // Register by ID (universal)
+        networksById[network.id] = network
 
-        // شبکه را در Map داخلی بر اساس chainId آن ثبت کن
-        networks[network.networkType]!![chainId] = network
-        networksByChainId[chainId] = network
-        networksByType[network.networkType] = network
+        val chainId = network.chainId
+        if (chainId != null) {
+            // Register in the nested map and chainId map for Ethereum-like networks
+            networks.getOrPut(network.networkType) { mutableMapOf() }[chainId] = network
+            networksByChainId[chainId] = network
+        }
+
+        // Register as default for type
+        if (!networksByType.containsKey(network.networkType) || !network.isTestnet) {
+            networksByType[network.networkType] = network
+        }
     }
 
 
@@ -95,7 +118,7 @@ class BlockchainRegistry @Inject constructor() {
     }
 
     fun getNetworkById(id: String): BlockchainNetwork? {
-        return networks.values.flatMap { it.values }.find { it.id==id }
+        return networksById[id]
     }
 
 
@@ -105,7 +128,7 @@ class BlockchainRegistry @Inject constructor() {
 
 
     fun getAllNetworks(): List<BlockchainNetwork> {
-        return networks.values.flatMap { it.values }
+        return networksById.values.toList()
     }
 
     fun getNetworkByType(type: NetworkType): BlockchainNetwork? {
@@ -119,45 +142,113 @@ class BlockchainRegistry @Inject constructor() {
 
     private fun clearAll() {
         networks.clear()
+        networksById.clear()
         networksByType.clear()
         networksByChainId.clear()
+        addressRegexByNetworkId.clear()
+        addressRegexByNetworkType.clear()
     }
 
 
     fun getNetworkTypeForAddress(address: String): NetworkType? {
-        // ۱. بررسی آدرس‌های سازگار با EVM (مثل اتریوم)
-        if (WalletUtils.isValidAddress(address)) {
+        val normalized = address.trim()
+        if (normalized.isBlank()) return null
+
+        NetworkType.values().forEach { type ->
+            val match = addressRegexByNetworkType[type]?.any { regex ->
+                regex.matches(normalized)
+            } == true
+            if (match) return type
+        }
+
+        if (WalletUtils.isValidAddress(normalized)) {
             return NetworkType.EVM
         }
 
-        // ۲. بررسی آدرس‌های بیت‌کوین (Base58 Legacy/SegWit-in-P2SH و Bech32 Native SegWit)
-        try {
-            // کتابخانه bitcoinj خودش هر دو فرمت mainnet و testnet را مدیریت می‌کند.
-            // اگر آدرس قابل پارس کردن باشد، یعنی یک آدرس بیت‌کوین معتبر است.
-            Base58.decode(address) // این یک چک سریع برای فرمت Base58 است.
-            // یک اعتبارسنجی کامل‌تر می‌تواند شامل پارس کردن با NetworkParameters باشد.
-            return NetworkType.BITCOIN
-        } catch (e: AddressFormatException) {
-            // این آدرس Base58 بیت‌کوین نیست.
-        } catch (e: Exception) {
-            // خطاهای دیگر
+        // TRON addresses are Base58 too, so detect before generic Base58 checks.
+        if (normalized.startsWith("T") && normalized.length == 34) {
+            try {
+                Base58.decode(normalized)
+                return NetworkType.TVM
+            } catch (_: Exception) {
+                // ignore
+            }
         }
 
-        // Bech32 check for Native SegWit (bc1..., tb1...)
-        if (address.startsWith("bc1", true) || address.startsWith("tb1", true)) {
-            // TODO: افزودن یک کتابخانه اعتبارسنجی Bech32 برای دقت بیشتر
+        if (normalized.startsWith("bc1", true) || normalized.startsWith("tb1", true)) {
             return NetworkType.BITCOIN
         }
 
-        // 3. Tron Addresses (Start with T, 34 chars, Base58)
-        if (address.startsWith("T") && address.length == 34) {
-             try {
-                 Base58.decode(address)
-                 return NetworkType.TVM
-             } catch (e: Exception) {
-                 // Invalid Base58
-             }
+        val utxoCandidates = listOf(
+            NetworkName.BITCOIN to NetworkType.BITCOIN,
+            NetworkName.BITCOINTESTNET to NetworkType.BITCOIN,
+            NetworkName.LITECOIN to NetworkType.UTXO,
+            NetworkName.LTCTESTNET to NetworkType.UTXO,
+            NetworkName.DOGE to NetworkType.UTXO,
+            NetworkName.DOGETESTNET to NetworkType.UTXO
+        )
+        utxoCandidates.forEach { (networkName, type) ->
+            runCatching {
+                Address.fromString(UtxoNetworkParametersResolver.resolve(networkName), normalized)
+            }.onSuccess {
+                return type
+            }
         }
+
+        return null
+    }
+
+    fun getNetworkType(address: String? = null, networkId: String? = null): NetworkType? {
+        address?.let { getNetworkTypeForAddress(it) }?.let { return it }
+
+        val normalizedNetworkId = networkId?.trim()?.lowercase().orEmpty()
+        if (normalizedNetworkId.isBlank()) return null
+
+        return getNetworkById(normalizedNetworkId)?.networkType
+            ?: inferNetworkTypeFromNetworkId(normalizedNetworkId)
+    }
+
+    fun isValidAddressForNetworkId(address: String, networkId: String): Boolean {
+        val normalizedAddress = address.trim()
+        val normalizedNetworkId = networkId.trim().lowercase()
+        if (normalizedAddress.isBlank() || normalizedNetworkId.isBlank()) return false
+
+        addressRegexByNetworkId[normalizedNetworkId]?.let { regex ->
+            return regex.matches(normalizedAddress)
+        }
+
+        val targetType = getNetworkType(networkId = normalizedNetworkId) ?: return false
+        return getNetworkTypeForAddress(normalizedAddress) == targetType
+    }
+
+    private fun inferNetworkTypeFromNetworkId(networkId: String): NetworkType? {
+        if (
+            networkId.contains("tron") ||
+            networkId.contains("shasta") ||
+            networkId.contains("nile") ||
+            networkId.contains("tvm")
+        ) return NetworkType.TVM
+
+        if (
+            networkId.contains("bitcoin") ||
+            networkId == "btc" ||
+            networkId.startsWith("btc_")
+        ) return NetworkType.BITCOIN
+
+        if (
+            networkId.contains("doge") ||
+            networkId.contains("dogecoin") ||
+            networkId.contains("litecoin") ||
+            networkId == "ltc" ||
+            networkId.startsWith("ltc_")
+        ) return NetworkType.UTXO
+
+        val evmHints = listOf(
+            "ethereum", "sepolia", "evm", "bsc", "binance", "polygon", "matic",
+            "arbitrum", "optimism", "base", "avalanche", "avax", "fantom", "linea",
+            "zksync", "scroll", "opbnb"
+        )
+        if (evmHints.any { networkId.contains(it) }) return NetworkType.EVM
 
         return null
     }
@@ -170,30 +261,40 @@ class BlockchainRegistry @Inject constructor() {
 
         clearAll()
         val configs = loadNetworkConfigs(context, fileName)
+        indexAddressRegex(configs)
 
         configs
             .filter { config -> config.isTestnet == true }
             .forEach { config ->
-            val networkType = NetworkType.valueOf(config.networkType.uppercase())
-            NetworkName.valueOf(config.name.uppercase())
-
+                val networkType =
+                    runCatching { NetworkType.valueOf(config.networkType.uppercase()) }.getOrNull()
+                        ?: return@forEach
             val factory = networkFactories.firstOrNull { it.supports(networkType, config) }
             val network = factory?.create(networkType, config)
             network?.let { registerNetwork(it) }
-
-           /* val network = when (networkType) {
-                NetworkType.EVM -> GenericEvmNetwork(config)
-                NetworkType.BITCOIN -> {
-                    val params = if (!config.isTestnet) MainNetParams.get() else TestNet3Params.get()
-                    BitcoinNetwork(config, params)
-                }
-                NetworkType.TVM -> TronNetwork(config)
-                else -> null
             }
-            network?.let { registerNetwork(it) }*/
+    }
+
+    private fun indexAddressRegex(configs: List<NetworkConfig>) {
+        configs.forEach { config ->
+            val normalizedId = config.id.trim().lowercase()
+            if (normalizedId.isBlank()) return@forEach
+
+            val networkType = runCatching {
+                NetworkType.valueOf(config.networkType.uppercase())
+            }.getOrNull() ?: return@forEach
+
+            val compiledRegex =
+                AddressRegexUtils.compileAddressRegex(config.regex) ?: return@forEach
+
+            addressRegexByNetworkId[normalizedId] = compiledRegex
+            addressRegexByNetworkType.getOrPut(networkType) { mutableListOf() }.add(compiledRegex)
         }
     }
 }
+
+
+
 
 
 

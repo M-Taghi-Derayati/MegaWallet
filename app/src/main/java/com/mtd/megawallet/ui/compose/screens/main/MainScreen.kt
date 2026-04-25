@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -77,10 +78,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mtd.common_ui.R
-import com.mtd.megawallet.event.ImportData
+import com.mtd.domain.model.ImportData
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWalletScreen
 import com.mtd.megawallet.ui.compose.screens.createwallet.CreateWalletScreen
+import com.mtd.megawallet.ui.compose.screens.history.TransactionHistoryScreen
+import com.mtd.megawallet.ui.compose.screens.send.SendScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.AssetDetailScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.MultiWalletScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.ReceiveScreen
@@ -125,7 +128,7 @@ fun MainScreen(
     MainDashboardContent(
         walletName = activeWallet?.name ?: "کیف پول",
         walletColor = activeWallet?.color?.let { Color(it) }
-            ?: MainScreenConstants.DEFAULT_WALLET_COLOR,
+            ?: MaterialTheme.colorScheme.primary,
         onNavigateToWalletManagement = onNavigateToWalletManagement,
         onScanClick = onScanClick,
         onSearchClick = onSearchClick,
@@ -196,6 +199,8 @@ private fun MainDashboardContent(
 
     var isHeaderExpanded by remember { mutableStateOf(false) }
     var isFabExpanded by remember { mutableStateOf(false) }
+    var showSendScreen by remember { mutableStateOf(false) }
+    var sendInitialAssetId by remember { mutableStateOf<String?>(null) }
     var showReceiveScreen by remember { mutableStateOf(false) }
     var showMultiWalletScreen by remember { mutableStateOf(false) }
     
@@ -208,8 +213,9 @@ private fun MainDashboardContent(
     var isFromMultiWallet by remember { mutableStateOf(false) }
 
     // مدیریت دکمه Back برای بستن لایه‌های مختلف
-    BackHandler(enabled = showMultiWalletScreen || showReceiveScreen || showCreateWalletScreen || showImportWalletScreen || selectedAssetId != null) {
+    BackHandler(enabled = showSendScreen || showMultiWalletScreen || showReceiveScreen || showCreateWalletScreen || showImportWalletScreen || selectedAssetId != null) {
         when {
+            showSendScreen -> showSendScreen = false
             showCreateWalletScreen -> {
                 // اگر دیتای ایمپورت داشتیم و کنسل کردیم، به صفحه ایمپورت برگرد
                 if (pendingImportData != null) {
@@ -343,16 +349,21 @@ private fun MainDashboardContent(
                 },
                 bottomBar = {
                     MainBottomNavigation(
-                        selectedTab = MainTab.WALLET,
-                        onWalletClick = { /* Already on wallet tab */ },
-                        onHistoryClick = onHistoryClick,
-                        onExploreClick = onExploreClick
+                        selectedTab = mainViewModel.selectedTab.collectAsState().value,
+                        onWalletClick = { mainViewModel.selectTab(MainTab.WALLET) },
+                        onHistoryClick = { mainViewModel.selectTab(MainTab.HISTORY) },
+                        onExploreClick = { mainViewModel.selectTab(MainTab.EXPLORE) }
                     )
                 },
                 floatingActionButton = {
                     MorphingFabMenu(
                         isExpanded = isFabExpanded,
                         onToggle = { isFabExpanded = !isFabExpanded },
+                        onSendClick = {
+                            sendInitialAssetId = null
+                            showSendScreen = true
+                            isFabExpanded = false
+                        },
                         onReceiveClick = { 
                             showReceiveScreen = true
                             isFabExpanded = false
@@ -361,14 +372,42 @@ private fun MainDashboardContent(
                 },
                 contentWindowInsets = WindowInsets.statusBars
             ) { innerPadding ->
-                // نمایش محتویات اصلی لیست
-                MainScreenContent(
-                    padding = innerPadding,
-                    mainViewModel = mainViewModel,
-                    homeViewModel = homeViewModel,
-                    selectedAssetId = selectedAssetId,
-                    isTransitioning = selectedAssetId != null
-                )
+                val currentTab by mainViewModel.selectedTab.collectAsState()
+
+                androidx.compose.animation.AnimatedContent(
+                    targetState = currentTab,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.98f))
+                            .togetherWith(fadeOut(animationSpec = tween(300)))
+                    },
+                    label = "TabTransition"
+                ) { targetTab ->
+                    Box(modifier = Modifier.padding(innerPadding).fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                        when (targetTab) {
+                            MainTab.WALLET -> {
+                                MainScreenContent(
+                                    padding = PaddingValues(0.dp), // Padding already handled by parent Box
+                                    mainViewModel = mainViewModel,
+                                    homeViewModel = homeViewModel,
+                                    selectedAssetId = selectedAssetId,
+                                    isTransitioning = selectedAssetId != null
+                                )
+                            }
+                            MainTab.HISTORY -> {
+                                TransactionHistoryScreen()
+                            }
+                            MainTab.EXPLORE -> {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        "Explore Screen Coming Soon",
+                                        color = MaterialTheme.colorScheme.onTertiary,
+                                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -417,11 +456,33 @@ private fun MainDashboardContent(
                     AssetDetailScreen(
                         assetId = id,
                         onNavigateBack = { mainViewModel.onNavigateBack() },
+                        onSendClick = { asset ->
+                            sendInitialAssetId = asset.id
+                            showSendScreen = true
+                        },
                         isExpandedStable = isHeaderExpanded,
                         homeViewModel = homeViewModel
                     )
                 }
             }
+        }
+
+        // --- لایه 3: Send Screen Overlay ---
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showSendScreen,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier.zIndex(1800f)
+        ) {
+            SendScreen(
+                homeViewModel = homeViewModel,
+                initialSelectedAssetId = sendInitialAssetId,
+                onDismiss = {
+                    showSendScreen = false
+                    sendInitialAssetId = null
+                },
+                onScanClick = onScanClick
+            )
         }
 
         // --- لایه ۴: Receive Screen Overlay ---
@@ -886,10 +947,10 @@ fun MorphingFabMenu(
                     ) {
                         FabMenuItem(
                             painter = painterResource(id = R.drawable.ic_send),
-                            iconBgColor = MainScreenConstants.FAB_SEND_COLOR,
+                            iconBgColor = MaterialTheme.colorScheme.secondary,
                             title = "ارسال",
                             description = "ارز های خود را به هر آدرسی ارسال کنید",
-                            onClick = { onToggle() }
+                            onClick = onSendClick
                         )
                         FabMenuItem(
                             painter = painterResource(id = R.drawable.ic_swap),
@@ -900,7 +961,7 @@ fun MorphingFabMenu(
                         )
                         FabMenuItem(
                             painter = painterResource(id = R.drawable.ic_download),
-                            iconBgColor = MainScreenConstants.FAB_RECEIVE_COLOR,
+                            iconBgColor = MaterialTheme.colorScheme.primary,
                             title = "دریافت",
                             description = "دارایی های دیجیتال را از طریق آدرس منحصر به فرد خود دریافت کنید",
                             onClick = onReceiveClick

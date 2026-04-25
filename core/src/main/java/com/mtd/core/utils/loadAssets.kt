@@ -4,7 +4,7 @@ package com.mtd.core.utils
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.mtd.core.assets.AssetConfig
+import com.mtd.domain.model.assets.AssetConfig
 
 fun loadAssets(context: Context, fileName: String = "assets.json"): List<AssetConfig> {
     return try {

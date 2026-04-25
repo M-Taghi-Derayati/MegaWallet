@@ -17,6 +17,9 @@ class MainScreenViewModel @Inject constructor(errorManager: ErrorManager): BaseV
     private val _selectedAssetId = MutableStateFlow<String?>(null)
     val selectedAssetId: StateFlow<String?> = _selectedAssetId.asStateFlow()
 
+    private val _selectedTab = MutableStateFlow(com.mtd.megawallet.ui.compose.screens.main.MainTab.WALLET)
+    val selectedTab: StateFlow<com.mtd.megawallet.ui.compose.screens.main.MainTab> = _selectedTab.asStateFlow()
+
     var lastSelectedId: String? = null
         private set
 
@@ -30,5 +33,9 @@ class MainScreenViewModel @Inject constructor(errorManager: ErrorManager): BaseV
 
     fun onNavigateBack() {
         _selectedAssetId.value = null
+    }
+
+    fun selectTab(tab: com.mtd.megawallet.ui.compose.screens.main.MainTab) {
+        _selectedTab.value = tab
     }
 }

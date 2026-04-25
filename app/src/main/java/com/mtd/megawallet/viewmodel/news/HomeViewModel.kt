@@ -1,9 +1,10 @@
 package com.mtd.megawallet.viewmodel.news
 
-import com.mtd.core.assets.AssetConfig
+import com.mtd.domain.model.assets.AssetConfig
 import com.mtd.core.manager.CacheManager
 import com.mtd.core.manager.CacheManager.Companion.ASSETS_TTL
 import com.mtd.core.manager.ErrorManager
+import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.BalanceFormatter
@@ -11,17 +12,18 @@ import com.mtd.core.utils.GlobalEvent
 import com.mtd.core.utils.GlobalEventBus
 import com.mtd.core.utils.formatWithSeparator
 import com.mtd.data.datasource.ChainDataSourceFactory
-import com.mtd.data.repository.IWalletRepository
-import com.mtd.domain.model.AssetPrice
+import com.mtd.domain.interfaceRepository.IMarketDataRepository
+import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.assets.AssetPriceDto
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.model.Wallet
-import com.mtd.domain.repository.IMarketDataRepository
-import com.mtd.domain.wallet.ActiveWalletManager
+import com.mtd.domain.model.core.Wallet
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.megawallet.core.BaseViewModel
-import com.mtd.megawallet.event.AssetItem
-import com.mtd.megawallet.event.CachedAssetBalance
-import com.mtd.megawallet.event.HomeUiState
-import com.mtd.megawallet.event.HomeUiState.DisplayCurrency
+import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.CachedAssetBalance
+import com.mtd.domain.model.HomeUiState
+import com.mtd.domain.model.HomeUiState.DisplayCurrency
+import com.mtd.domain.model.NetworkShare
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,12 +62,12 @@ class HomeViewModel @Inject constructor(
     // Cache برای نرخ تتر به تومان
     private var cachedIrrRate: BigDecimal? = null
     private var lastIrrRateUpdateTime: Long = 0
-    
+
     // زمان‌بندی‌های مجزا برای رفرش دیتای خودکار
     private val RR_PRICE_REFRESH_INTERVAL = 5 * 60 * 1000L // 2 دقیقه برای قیمت‌ها
     private val RR_BALANCE_REFRESH_INTERVAL = 10 * 60 * 1000L // 5 دقیقه برای موجودی‌ها
     private val IRR_RATE_CACHE_DURATION_MS = 3 * 60 * 1000L // 3 دقیقه
-    
+
     // کلیدهای ذخیره زمان آخرین آپدیت در کش
     private val LAST_PRICE_SYNC_TIME_KEY = "last_price_sync_time"
     private val LAST_BALANCE_SYNC_TIME_KEY = "last_balance_sync_time"
@@ -89,9 +91,9 @@ class HomeViewModel @Inject constructor(
         loadWalletIfNeeded()
         observeActiveWallet()
         listenToGlobalEvents()
-        
+
         // Start the UI update consumer
-        launchSafe {
+        launchSafe(checkNetwork = false) {
             uiUpdateChannel.receiveAsFlow().collect {
                 processUiUpdate()
                 // Throttle updates: wait 100ms before processing the next batch
@@ -109,6 +111,14 @@ class HomeViewModel @Inject constructor(
         synchronized(assetsLock) {
             return fullRawAssets.find { it.id == id }
         }
+    }
+
+    fun getNetworkTypeForAddress(address: String): NetworkType? {
+        return blockchainRegistry.getNetworkType(address = address)
+    }
+
+    fun getNetworkTypeForNetworkId(networkId: String): NetworkType? {
+        return blockchainRegistry.getNetworkType(networkId = networkId)
     }
 
     private fun loadWalletIfNeeded() {
@@ -132,7 +142,7 @@ class HomeViewModel @Inject constructor(
             activeWalletManager.activeWallet.collect { wallet ->
                 // کنسل کردن کارهای قبلی برای جلوگیری از نشت دیتا بین والت‌ها
                 dataFetchJob?.cancel()
-                
+
                 if (wallet != null) {
                     currentWalletId = wallet.id
                     dataFetchJob = launchSafe {
@@ -151,7 +161,7 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadHomePageData(activeWallet: Wallet, forceUpdate: Boolean = false) {
         val allSupportedAssets = assetRegistry.getAllAssets()
-        
+
         // ۱. لود از کش
         val cachedAssetsMap = mutableMapOf<String, CachedAssetBalance>()
         allSupportedAssets.forEach { config ->
@@ -159,7 +169,7 @@ class HomeViewModel @Inject constructor(
                 cachedAssetsMap[config.id] = it
             }
         }
-        
+
         val hasAnyCache = cachedAssetsMap.isNotEmpty()
 
         // ۲. ساخت لیست بر اساس کش یا مقادیر اولیه
@@ -215,26 +225,26 @@ class HomeViewModel @Inject constructor(
         //  عدم بلاک کردن UI برای دریافت نرخ ارز
         val savedRate = cacheManager.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull()
         val irrRate = cachedIrrRate ?: savedRate ?: BigDecimal("0")
-        val usdtRate = BigDecimal.ONE 
+        val usdtRate = BigDecimal.ONE
 
         // محاسبه اولیه برای نمایش سریع کش
         val initialAggregated = createAggregatedListWithRates(localAssets, usdtRate, irrRate)
-        
+
         val totalUsd = localAssets.sumOf { it.balanceRaw * it.priceUsdRaw }
         val totalUsdt = if (usdtRate > BigDecimal.ZERO) totalUsd / usdtRate else BigDecimal.ZERO
         val totalIrr = totalUsd * irrRate
 
         // ۳. تصمیم‌گیری برای آپدیت خودکار بر اساس زمان آخرین همگام‌سازی
         val currentTime = System.currentTimeMillis()
-        
+
         val lastPriceSync = cacheManager.get(LAST_PRICE_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
         val lastBalanceSync = cacheManager.get(LAST_BALANCE_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
-        
+
         val isPriceStale = currentTime - lastPriceSync > RR_PRICE_REFRESH_INTERVAL
         val isBalanceStale = currentTime - lastBalanceSync > RR_BALANCE_REFRESH_INTERVAL
-        
+
         val shouldUpdateOnline = forceUpdate || !hasAnyCache || isPriceStale || isBalanceStale
-        
+
         _uiState.value = HomeUiState.Success(
             totalBalanceUsdt = if (totalUsdt > BigDecimal.ZERO) BalanceFormatter.formatUsdValue(totalUsdt, false) else "...",
             totalBalanceIrr = if (totalIrr > BigDecimal.ZERO) totalIrr.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true) else "...",
@@ -249,7 +259,7 @@ class HomeViewModel @Inject constructor(
         if (forceUpdate || !hasAnyCache || isPriceStale) {
             refreshPrices()
         }
-        
+
         if (forceUpdate || !hasAnyCache || isBalanceStale) {
             refreshBalances(activeWallet)
         }
@@ -268,36 +278,36 @@ class HomeViewModel @Inject constructor(
 
             val allAssets = assetRegistry.getAllAssets()
             val allCoinIds = allAssets.map { it.symbol }.distinct()
-            
+
             val result = marketDataRepository.getLatestPrices(allCoinIds)
             if (result is ResultResponse.Success) {
                 val pricesMap = result.data.associateBy { it.assetId }
-                
+
                 synchronized(assetsLock) {
                     fullRawAssets.forEachIndexed { index, assetItem ->
                         val config = allAssets.find { it.id == assetItem.id }
                         val priceInfo = config?.symbol?.let { pricesMap[it] }
-                        
+
                         if (priceInfo != null) {
                             val currentPrice = priceInfo.priceUsd
                             val usdValue = assetItem.balanceRaw * currentPrice
                             val irrValue = usdValue * irrRate
-                            
+
                             val updatedItem = assetItem.copy(
                                 priceUsdRaw = currentPrice,
                                 priceChange24h = priceInfo.priceChanges24h.toDouble(),
                                 balanceUsdt = "${BalanceFormatter.formatUsdValue(usdValue)} ",
                                 balanceIrr = "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} ",
-                                formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR) 
-                                    "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else 
+                                formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR)
+                                    "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else
                                     "${BalanceFormatter.formatUsdValue(usdValue)} "
                             )
                             fullRawAssets[index] = updatedItem
-                            
+
                             // همگام‌سازی با کش دیسک برای استفاده در صفحات دیگر
                             launchSafe {
                                 cacheManager.put(getAssetCacheKey(currentWalletId ?: "", updatedItem.id), CachedAssetBalance(
-                                    assetId = updatedItem.id, walletId = currentWalletId ?: "", 
+                                    assetId = updatedItem.id, walletId = currentWalletId ?: "",
                                     balanceRaw = updatedItem.balanceRaw,
                                     priceUsdRaw = updatedItem.priceUsdRaw,
                                     balance = updatedItem.balance, balanceUsdt = updatedItem.balanceUsdt,
@@ -319,7 +329,7 @@ class HomeViewModel @Inject constructor(
     private fun refreshBalances(wallet: Wallet) {
         launchSafe {
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
-            
+
             // ابتدا از همان نرخ IRR کش شده استفاده می‌کنیم
             val irrRate = cachedIrrRate ?: cacheManager.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull() ?: BigDecimal.ZERO
             val usdtRate = BigDecimal.ONE
@@ -330,10 +340,10 @@ class HomeViewModel @Inject constructor(
                     if (result is ResultResponse.Success) {
                         val walletAssets = result.data[wallet.id] ?: return@launchSafe
                         val assetsInNetwork = assetRegistry.getAssetsForNetwork(network.id)
-                        
+
                         walletAssets.forEach { asset ->
                             val config = assetsInNetwork.find {
-                                it.symbol.equals(asset.symbol, ignoreCase = true) && 
+                                it.symbol.equals(asset.symbol, ignoreCase = true) &&
                                 (it.contractAddress?.equals(asset.contractAddress, true) ?: (asset.contractAddress == null))
                             }
                             if (config != null) {
@@ -344,7 +354,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
             }
-            
+
             jobs.filter { it.isActive }.joinAll()
             cacheManager.put(LAST_BALANCE_SYNC_TIME_KEY, System.currentTimeMillis())
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = false) else it }
@@ -355,7 +365,7 @@ class HomeViewModel @Inject constructor(
         walletId: String,
         assetConfig: AssetConfig,
         balance: BigDecimal,
-        pricesMap: Map<String, AssetPrice>,
+        pricesMap: Map<String, AssetPriceDto>,
         usdtRate: BigDecimal,
         irrRate: BigDecimal
     ) {
@@ -366,15 +376,15 @@ class HomeViewModel @Inject constructor(
         synchronized(assetsLock) {
             val index = fullRawAssets.indexOfFirst { it.id == assetConfig.id }
             val priceInfo = assetConfig.symbol.let { pricesMap[it] }
-            
+
             // ۱. تعیین قیمت فعلی (بسیار مهم: اگر قیمت جدید نداریم، قیمت قبلی را حفظ کن)
             val existingAsset = if (index != -1) fullRawAssets[index] else null
-            
+
             var currentPrice = priceInfo?.priceUsd
             if (currentPrice == null || currentPrice == BigDecimal.ZERO) {
                 currentPrice = existingAsset?.priceUsdRaw
             }
-            
+
             // اگر هنوز قیمت پیدا نشد، از کش بخون (آخرین شانس)
             if (currentPrice == null || currentPrice == BigDecimal.ZERO) {
                  // توجه: این فراخوانی سینک است چون داخل لود اولیه هم چک شده
@@ -383,7 +393,7 @@ class HomeViewModel @Inject constructor(
             }
 
             val currentChange = priceInfo?.priceChanges24h?.toDouble() ?: existingAsset?.priceChange24h ?: 0.0
-            
+
             val usdValue = balance * currentPrice
             val irrValue = usdValue * irrRate
 
@@ -393,15 +403,15 @@ class HomeViewModel @Inject constructor(
                     balance = BalanceFormatter.formatBalance(balance, assetConfig.decimals),
                     balanceUsdt = "${BalanceFormatter.formatUsdValue(usdValue)} ",
                     balanceIrr = "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} ",
-                    formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR) 
-                        "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else 
+                    formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR)
+                        "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else
                         "${BalanceFormatter.formatUsdValue(usdValue)} ",
                     balanceRaw = balance,
                     priceUsdRaw = currentPrice,
                     priceChange24h = currentChange
                 )
                 fullRawAssets[index] = updatedAsset
-                
+
                 // به‌روزرسانی در کش
                 launchSafe {
                     cacheManager.put(getAssetCacheKey(walletId, assetConfig.id), CachedAssetBalance(
@@ -425,8 +435,8 @@ class HomeViewModel @Inject constructor(
                     balance = BalanceFormatter.formatBalance(balance, assetConfig.decimals),
                     balanceUsdt = "${BalanceFormatter.formatUsdValue(usdValue)} ",
                     balanceIrr = "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} ",
-                    formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR) 
-                        "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else 
+                    formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR)
+                        "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else
                         "${BalanceFormatter.formatUsdValue(usdValue)} ",
                     balanceRaw = balance,
                     priceUsdRaw = currentPrice,
@@ -456,13 +466,13 @@ class HomeViewModel @Inject constructor(
             if (currentState is HomeUiState.Success) {
                 // کپی امن از لیست برای محاسبات
                 val currentRawAssets = synchronized(assetsLock) { fullRawAssets.toList() }
-                
+
                 // محاسبات سنگین تجمیع و گروه‌بندی
                 val reAggregated = createAggregatedListWithRates(currentRawAssets, usdtRate, irrRate)
-                
+
                 val expansionState = currentState.assets.filter { it.isGroupHeader }.associate { it.symbol to it.isExpanded }
-                val finalAssets = reAggregated.map { 
-                    if (it.isGroupHeader && expansionState[it.symbol] == true) it.copy(isExpanded = true) else it 
+                val finalAssets = reAggregated.map {
+                    if (it.isGroupHeader && expansionState[it.symbol] == true) it.copy(isExpanded = true) else it
                 }
 
                 // محاسبه مجموع کل به صورت صریح و امن
@@ -470,7 +480,7 @@ class HomeViewModel @Inject constructor(
                 currentRawAssets.forEach {
                     totalUsd = totalUsd.add(it.balanceRaw.multiply(it.priceUsdRaw))
                 }
-                
+
                 val totalIrr = totalUsd.multiply(irrRate)
 
                 currentState.copy(
@@ -492,11 +502,11 @@ class HomeViewModel @Inject constructor(
                     val totalUsd = totalBal * first.priceUsdRaw
                     val totalUsdt = if (usdtRate > BigDecimal.ZERO) totalUsd / usdtRate else BigDecimal.ZERO
                     val totalIrr = totalUsd * irrRate
-                    
+
                     val activeAssets = assets.filter { it.balanceRaw > BigDecimal.ZERO }
                     val finalNetworkId: String
                     val finalNetworkName: String
-                    
+
                     when {
                         totalBal == BigDecimal.ZERO -> {
                             val ethAsset = assets.find { it.networkId.contains("ethereum", true) || it.networkId.contains("sepolia", true) }
@@ -515,9 +525,9 @@ class HomeViewModel @Inject constructor(
                         }
                     }
 
-                    val dist = assets.filter { it.balanceRaw > BigDecimal.ZERO }.map { 
+                    val dist = assets.filter { it.balanceRaw > BigDecimal.ZERO }.map {
                         val pct = (it.balanceRaw.toFloat() / totalBal.toFloat()) * 100f
-                        com.mtd.megawallet.event.NetworkShare(
+                        NetworkShare(
                             it.networkId, it.networkName.removePrefix("on ").trim(),
                             blockchainRegistry.getNetworkById(it.networkId)?.color ?: "#888888", pct
                         )
@@ -529,11 +539,11 @@ class HomeViewModel @Inject constructor(
                         balance = BalanceFormatter.formatBalance(totalBal, first.decimals),
                         balanceUsdt = "${BalanceFormatter.formatUsdValue(totalUsdt, false)} ",
                         balanceIrr = "${totalIrr.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} ",
-                        formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR) 
+                        formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR)
                             "${totalIrr.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else
                             "${BalanceFormatter.formatUsdValue(totalUsdt, false)} ",
                         balanceRaw = totalBal, priceUsdRaw = first.priceUsdRaw, priceChange24h = first.priceChange24h,
-                        decimals = first.decimals, isGroupHeader = true, groupAssets = assets, networkDistribution = dist
+                        decimals = first.decimals, isNativeToken = first.isNativeToken, isGroupHeader = true, groupAssets = assets, networkDistribution = dist
                     )
                 } else assets.first()
             } else null
@@ -552,7 +562,7 @@ class HomeViewModel @Inject constructor(
         _uiState.update { state ->
             if (state is HomeUiState.Success) {
                 val next = if (state.displayCurrency == DisplayCurrency.USDT) DisplayCurrency.IRR else DisplayCurrency.USDT
-                state.copy(displayCurrency = next, assets = state.assets.map { 
+                state.copy(displayCurrency = next, assets = state.assets.map {
                     it.copy(formattedDisplayBalance = if (next == DisplayCurrency.USDT) it.balanceUsdt else it.balanceIrr)
                 })
             } else state
@@ -568,12 +578,12 @@ class HomeViewModel @Inject constructor(
      */
     suspend fun getUsdToIrrRate(): BigDecimal {
         val currentTime = System.currentTimeMillis()
-        
+
         // بررسی cache: اگر نرخ cache شده وجود دارد و کمتر از 3 دقیقه گذشته است
         if (cachedIrrRate != null && cachedIrrRate!= BigDecimal.ZERO && (currentTime - lastIrrRateUpdateTime) < IRR_RATE_CACHE_DURATION_MS) {
             return cachedIrrRate!!
         }
-        
+
         // از API بگیر و cache را به‌روز کن
         val rate = (marketDataRepository.getUsdToIrrRate() as? ResultResponse.Success)?.data?.rate ?: BigDecimal.ZERO
         cachedIrrRate = rate
@@ -582,13 +592,13 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun listenToGlobalEvents() {
-        launchSafe {
+        launchSafe(checkNetwork = false) {
             globalEventBus.events.collect { if (it is GlobalEvent.WalletNeedsRefresh) refreshData() }
         }
     }
 
     fun refreshData() {
-        activeWalletManager.activeWallet.value?.let { 
+        activeWalletManager.activeWallet.value?.let {
             dataFetchJob?.cancel()
             dataFetchJob = launchSafe {
                 // در رفرش دستی، هر دو را اجباری آپدیت می‌کنیم
@@ -598,3 +608,5 @@ class HomeViewModel @Inject constructor(
         }
     }
 }
+
+

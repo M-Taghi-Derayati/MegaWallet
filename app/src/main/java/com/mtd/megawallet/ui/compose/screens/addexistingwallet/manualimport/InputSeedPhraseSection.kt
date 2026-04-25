@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.mtd.core.model.Bip39Words
+import com.mtd.domain.model.core.Bip39Words
 
 /**
  * Section for inputting seed phrase words with auto-complete.

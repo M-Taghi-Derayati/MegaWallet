@@ -1,7 +1,7 @@
 package com.mtd.core.manager
 
-import com.mtd.core.error.AppError
-import com.mtd.core.error.ErrorMapper
+import com.mtd.domain.model.error.AppError
+import com.mtd.domain.model.error.ErrorMapper
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import timber.log.Timber
@@ -14,10 +14,35 @@ import javax.inject.Singleton
  */
 @Singleton
 class ErrorManager @Inject constructor(
-    private val errorMapper: ErrorMapper
+    private val errorMapper: ErrorMapper,
+    private val networkManager: NetworkManager
 ) {
     private val _errorEvents = MutableSharedFlow<ErrorEvent>(replay = 0)
     val errorEvents = _errorEvents.asSharedFlow()
+
+    /**
+     * بررسی وضعیت آنلاین بودن
+     */
+    fun isOnline(): Boolean = networkManager.isOnline()
+
+    /**
+     * بررسی اتصال به اینترنت و نمایش Snackbar در صورت قطع بودن
+     * @return true اگر وصل باشد، false اگر قطع باشد (و اسنک‌بار نمایش داده شود)
+     */
+    suspend fun ensureOnline(): Boolean {
+        if (!isOnline()) {
+            _errorEvents.emit(
+                ErrorEvent(
+                    error = AppError.Network.NoInternet,
+                    action = ErrorAction.ShowSnackbar,
+                    context = ErrorContext(component = "ErrorManager", userAction = "Connectivity Check"),
+                    severity = ErrorSeverity.LOW
+                )
+            )
+            return false
+        }
+        return true
+    }
 
     /**
      * هندل کردن خطا و تصمیم‌گیری در مورد action مناسب

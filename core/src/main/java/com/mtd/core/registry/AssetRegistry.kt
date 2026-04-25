@@ -1,8 +1,8 @@
 package com.mtd.core.registry
 
 import android.content.Context
-import com.mtd.core.assets.AssetConfig
 import com.mtd.core.utils.loadAssets
+import com.mtd.domain.model.assets.AssetConfig
 import javax.inject.Inject
 import javax.inject.Singleton
 

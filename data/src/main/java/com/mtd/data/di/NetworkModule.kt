@@ -2,8 +2,8 @@ package com.mtd.data.di
 
 import android.content.Context
 import com.google.gson.Gson
-import com.mtd.data.service.CoinDeskApiService
-import com.mtd.data.service.SwapApiService
+import com.mtd.data.service.CoinDetailApiService
+import com.mtd.data.service.GaslessApiService
 import com.mtd.data.service.USDTApiService
 import dagger.Module
 import dagger.Provides
@@ -30,7 +30,7 @@ annotation class ForWebSocket
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    val serverIp="195.78.49.45"
+    val serverIp="192.168.92.1"
 //    val serverIp="10.0.2.2"
 //    val serverIp="localhost"
     //val serverIp="127.0.0.1"
@@ -52,11 +52,10 @@ object NetworkModule {
                 Timber.log(Timber.treeCount, message)
                 Timber.tag("Network").e(message)
             })).apply {
-                level=HttpLoggingInterceptor.Level.BODY /*= if (BuildConfig.DEBUG)*/
-
-                /*else
-                    HttpLoggingInterceptor.Level.NONE
-*/            }
+                level = HttpLoggingInterceptor.Level.BODY
+                redactHeader("Authorization")
+                redactHeader("Cookie")
+            }
         }
 
         // --- ارائه‌دهنده‌های شبکه ---
@@ -93,13 +92,13 @@ object NetworkModule {
         fun provideCoinDeskApiService(
             retrofitBuilder: Retrofit.Builder,
             gson: Gson
-        ): CoinDeskApiService {
+        ): CoinDetailApiService {
             return retrofitBuilder
                 .baseUrl("https://data-api.coindesk.com/") // Base URL مخصوص CoinGecko
                 .addConverterFactory(ScalarsConverterFactory.create())
                 .addConverterFactory(GsonConverterFactory.create(gson))
                 .build()
-                .create(CoinDeskApiService::class.java)
+                .create(CoinDetailApiService::class.java)
         }
 
     @Provides
@@ -113,18 +112,20 @@ object NetworkModule {
     }
 
 
+
+
     @Provides
     @Singleton
-    fun provideSwapApiService(
+    fun provideGaslessApiService(
         retrofitBuilder: Retrofit.Builder,
         gson: Gson
-    ): SwapApiService {
+    ): GaslessApiService {
         return retrofitBuilder
-            .baseUrl("http://${serverIp}:3000/") // Base URL مخصوص CoinGecko
+            .baseUrl("http://${serverIp}:3000/")
             .addConverterFactory(ScalarsConverterFactory.create())
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
-            .create(SwapApiService::class.java)
+            .create(GaslessApiService::class.java)
     }
 
 

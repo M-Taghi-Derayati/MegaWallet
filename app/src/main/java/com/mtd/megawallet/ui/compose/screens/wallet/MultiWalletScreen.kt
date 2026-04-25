@@ -91,6 +91,7 @@ import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletManagementM
 import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletPersonalizationContent
 import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletRecoveryMethodsContent
 import com.mtd.megawallet.ui.compose.theme.Green
+import com.mtd.megawallet.viewmodel.news.AppLockViewModel
 import com.mtd.megawallet.viewmodel.news.MultiWalletViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -119,6 +120,8 @@ fun MultiWalletScreen(
     onImportExisting: () -> Unit,
     viewModel: MultiWalletViewModel = hiltViewModel()
 ) {
+    val appLockViewModel: AppLockViewModel = hiltViewModel()
+    val appLockUiState by appLockViewModel.uiState.collectAsState()
     val wallets by viewModel.wallets.collectAsState()
     val activeWalletId by viewModel.activeWalletId.collectAsState()
 
@@ -144,6 +147,8 @@ fun MultiWalletScreen(
     var isCloudBackupLoading by remember { mutableStateOf(false) }
     var pendingCloudSignInFlow by remember { mutableStateOf(false) }
     var cloudPasswordError by remember { mutableStateOf<String?>(null) }
+    var pendingSecureReveal by remember { mutableStateOf(false) }
+    var pendingSecureRevealNonce by remember { mutableStateOf(0L) }
 
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -172,6 +177,39 @@ fun MultiWalletScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadWallets()
+    }
+
+    val triggerSecretReveal: () -> Unit = {
+        backupFlowStep = BackupFlowStep.Revealing
+        scope.launch {
+            selectedWalletId?.let { id ->
+                val secret = viewModel.getMnemonic(id)
+                if (secret != null) {
+                    secretData = secret
+                } else {
+                    backupFlowStep = BackupFlowStep.None
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(pendingSecureReveal, appLockUiState.isLocked) {
+        if (pendingSecureReveal && !appLockUiState.isLocked) {
+            pendingSecureReveal = false
+            if (appLockUiState.authCancelNonce == pendingSecureRevealNonce) {
+                triggerSecretReveal()
+            } else {
+                backupFlowStep = BackupFlowStep.None
+            }
+        }
+    }
+
+    LaunchedEffect(appLockUiState.authCancelNonce) {
+        if (pendingSecureReveal && appLockUiState.authCancelNonce > 0L) {
+            pendingSecureReveal = false
+            pendingSecureRevealNonce = appLockUiState.authCancelNonce
+            backupFlowStep = BackupFlowStep.None
+        }
     }
 
     val handleBack = {
@@ -263,7 +301,7 @@ fun MultiWalletScreen(
                     wallets.chunked(2).forEach { rowWallets ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(18.dp)
+                            horizontalArrangement = Arrangement.spacedBy(25.dp)
                         ) {
                             rowWallets.forEach { item ->
                                 val isExpanded = selectedWalletId == item.wallet.id
@@ -487,21 +525,19 @@ fun MultiWalletScreen(
             SecretRecoveryPromptBottomSheet(
                 visible = showSecretPromptSheet,
                 isMnemonic = selectedWalletUiItem?.wallet?.hasMnemonic == true,
-                onDismiss = { showSecretPromptSheet = false },
-                onReveal = {
-                    backupFlowStep = BackupFlowStep.Revealing
+                onDismiss = {
                     showSecretPromptSheet = false
-
-                    scope.launch {
-                        selectedWalletId?.let { id ->
-                            val secret = viewModel.getMnemonic(id)
-                            if (secret != null) {
-                                secretData = secret
-                            } else {
-                                // اگر به هر دلیلی خالی بود، انیمیشن را برمی‌گردانیم
-                                backupFlowStep = BackupFlowStep.None
-                            }
-                        }
+                    pendingSecureReveal = false
+                    pendingSecureRevealNonce = appLockUiState.authCancelNonce
+                },
+                onReveal = {
+                    showSecretPromptSheet = false
+                    if (appLockUiState.snapshot.appLockEnabled) {
+                        pendingSecureReveal = true
+                        pendingSecureRevealNonce = appLockUiState.authCancelNonce
+                        appLockViewModel.lockNowForSensitiveAction()
+                    } else {
+                        triggerSecretReveal()
                     }
                 }
             )

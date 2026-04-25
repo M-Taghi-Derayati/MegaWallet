@@ -53,9 +53,6 @@ import androidx.compose.ui.unit.sp
     val FAB_EXPANDED_BACKGROUND = Color(0xFF0B0B0B)
     val FAB_COLLAPSED_DARK = Color(0xFF222222)
     val FAB_MENU_ITEM_BACKGROUND = Color(0xFF2D2D2D)
-    val FAB_SEND_COLOR = Color(0xFF007AFF)
+
     val FAB_SWAP_COLOR = Color(0xFF444444)
-    val FAB_RECEIVE_COLOR = Color(0xFF22C55E)
-    val DEFAULT_WALLET_COLOR = Color(0xFF22C55E)
-    val PREVIEW_WALLET_COLOR = Color(0xFFF47272)
 }

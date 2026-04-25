@@ -1,6 +1,6 @@
 package com.mtd.data.utils
 
-import com.mtd.core.error.ErrorMapper
+import com.mtd.domain.model.error.ErrorMapper
 import com.mtd.domain.model.ResultResponse
 import timber.log.Timber
 

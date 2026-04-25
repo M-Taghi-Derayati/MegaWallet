@@ -1,10 +1,11 @@
 package com.mtd.core.network.evm
 
-import com.mtd.core.model.NetworkConfig
-import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
-import com.mtd.core.model.WalletKey
+
 import com.mtd.core.network.BlockchainNetwork
+import com.mtd.domain.model.core.NetworkConfig
+import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.core.WalletKey
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.ECKeyPair
 
@@ -17,12 +18,14 @@ class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
     override val iconUrl=config.iconUrl
     override val webSocketUrl=config.webSocketUrl
     override val RpcUrls=config.rpcUrls
+    override val RpcUrlsEvm=config.rpcUrlsEvm
     override val currencySymbol= config.currencySymbol
     override val explorers=config.explorers
     override val color = config.color
+    override val regex = config.regex
     override val faName = config.faName
     override val isTestnet: Boolean = config.isTestnet
-    private val derivationPath = config.derivationPath
+    override val derivationPath = config.derivationPath
 
     override fun deriveKeyFromMnemonic(mnemonic: String): WalletKey {
         val keyPair: ECKeyPair = EvmKeyDerivation.deriveKeyPairFromMnemonic(mnemonic, derivationPath)

@@ -37,8 +37,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,10 +80,12 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import com.mtd.common_ui.R
 import com.mtd.core.utils.formatWithSeparator
-import com.mtd.megawallet.event.AssetItem
-import com.mtd.megawallet.event.HomeUiState
+import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.HomeUiState
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
+import com.mtd.megawallet.ui.compose.components.PrimaryButton
+import com.mtd.megawallet.ui.compose.screens.send.ChooseBalanceBottomSheet
 import com.mtd.megawallet.viewmodel.news.AssetDetailViewModel
 import com.mtd.megawallet.viewmodel.news.HomeViewModel
 import kotlinx.coroutines.delay
@@ -99,6 +99,7 @@ import java.util.Locale
 fun AssetDetailScreen(
     assetId: String,
     onNavigateBack: () -> Unit,
+    onSendClick: (AssetItem) -> Unit = {},
     isExpandedStable: Boolean = false,
     viewModel: AssetDetailViewModel = hiltViewModel(),
     homeViewModel: HomeViewModel? = null
@@ -107,6 +108,7 @@ fun AssetDetailScreen(
     val chartData by viewModel.chartData.collectAsState()
     val isLoadingChart by viewModel.isLoadingChart.collectAsState()
     var isContentVisible by remember { mutableStateOf(false) }
+    var showChooseBalance by remember { mutableStateOf<AssetItem?>(null) }
 
     // State برای تعامل با نمودار (Scrubbing)
     var scrubbedPoint by remember { mutableStateOf<Pair<Long, Double>?>(null) }
@@ -226,48 +228,47 @@ fun AssetDetailScreen(
                         .fillMaxWidth()
                 ) {
 
-                    Button(
-                        onClick = {},
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(56.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiary,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        shape = CircleShape
-                    ) {
-                        Text(
-                            "ارسال",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
-                        )
-                    }
 
+                    PrimaryButton("ارسال", onClick =  {
+                        asset?.let {
+                            if (it.isGroupHeader) {
+                                val withBalance = it.groupAssets.filter { sub -> sub.balanceRaw > BigDecimal.ZERO }
+                                val itemsToShow = withBalance.ifEmpty { it.groupAssets }
 
+                                if (itemsToShow.size == 1) {
+                                    onSendClick(itemsToShow.first())
+                                } else if (itemsToShow.isEmpty()) {
+                                    onSendClick(it)
+                                } else {
+                                    showChooseBalance = it
+                                }
+                            } else {
+                                onSendClick(it)
+                            }
+                        }
+                    },true,false,  Modifier
+                        .weight(1f)
+                        .height(56.dp), MaterialTheme.colorScheme.secondary,MaterialTheme.colorScheme.background)
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    Button(
-                        onClick = {},
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(56.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.White
-                        ),
-                        shape = CircleShape
-                    ) {
-                        Text(
-                            "تبدیل",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
-                        )
-                    }
+                    PrimaryButton("تبدیل", {},true,false,  Modifier
+                        .weight(1f)
+                        .height(56.dp), MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.background)
+
                 }
             }
         }
+
+        // --- Choose Balance Bottom Sheet ---
+        ChooseBalanceBottomSheet(
+            asset = showChooseBalance,
+            onDismiss = { showChooseBalance = null },
+            onNetworkSelected = { selectedSubAsset ->
+                showChooseBalance = null
+                onSendClick(selectedSubAsset)
+            }
+        )
     }
 }
 
@@ -338,7 +339,8 @@ private fun AssetDetailHeader(
                                 colorFilter = null
                             )
                         }
-                    } else {
+                    }
+                    else {
                         Box(
                             modifier = Modifier.size(iconSize),
                             contentAlignment = Alignment.Center
@@ -974,10 +976,6 @@ private fun AutoResizeBalanceRows(
     textSize:TextUnit=WalletScreenConstants.TOTAL_BALANCE_FONT_SIZE_DETAIL,
     alignment: Alignment = Alignment.CenterEnd
 ) {
-    var textSize by remember(textSize) {
-        mutableStateOf(textSize)
-    }
-
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = alignment
@@ -988,80 +986,57 @@ private fun AutoResizeBalanceRows(
             verticalAlignment = Alignment.Top,
             modifier = Modifier.wrapContentWidth()
         ) {
-            when (displayCurrency) {
-                // حالت دلار: علامت $ در سمت چپ و بالا
-                HomeUiState.DisplayCurrency.USDT -> {
-
-
-
-                    Text(
-                        text = "$",
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontSize = USDTFontSize,
-                            lineHeight = USDTFontSize, // Fix vertical alignment
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(
-                                Font(
-                                    R.font.inter_regular,
-                                    FontWeight.Medium
-                                )
-                            )
-                        ),
-                        modifier = Modifier.padding(top =WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END)
+            Text(
+                text = if (displayCurrency == HomeUiState.DisplayCurrency.USDT) "$" else "تومان",
+                style = if (displayCurrency == HomeUiState.DisplayCurrency.USDT) {
+                    MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = USDTFontSize,
+                        lineHeight = USDTFontSize,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Medium))
                     )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    AnimatedCounter(
-                        text = totalBalance,
-                        style = MaterialTheme.typography.displayMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = textSize,
-                            lineHeight = textSize,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Medium)),
-                            letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
-                        ),
-                        animationDuration = animationDuration,
-                        modifier = Modifier.wrapContentWidth()
+                } else {
+                    MaterialTheme.typography.titleMedium.copy(
+                        fontSize = TMNFontSize,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = TMNFontSize,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
                     )
-                }
+                },
+                modifier = Modifier.padding(top = WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END)
+            )
+            Spacer(modifier = Modifier.width(3.dp))
 
-                // حالت تومان: "تومان" در سمت راست و بالا
-                HomeUiState.DisplayCurrency.IRR -> {
-                    Text(
-                        text = "تومان",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = TMNFontSize,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = TMNFontSize, // Fix vertical alignment
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(
-                                Font(
-                                    R.font.iransansmobile_fa_regular,
-                                    FontWeight.Medium
-                                )
+            AnimatedCounter(
+                text = totalBalance,
+                style = MaterialTheme.typography.displayMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = textSize,
+                    lineHeight = textSize,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontFamily = when (displayCurrency) {
+                        HomeUiState.DisplayCurrency.USDT -> FontFamily(
+                            Font(
+                                R.font.inter_regular,
+                                FontWeight.Medium
                             )
-                        ),
-                        modifier = Modifier.padding(
-                            top = WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END
                         )
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    AnimatedCounter(
-                        text = totalBalance,
-                        style = MaterialTheme.typography.displayMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = textSize,
-                            lineHeight = textSize,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium)),
-                            letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
-                        ),
-                        animationDuration = animationDuration,
-                        modifier = Modifier.wrapContentWidth()
-                    )
-                }
-            }
+
+                        HomeUiState.DisplayCurrency.IRR -> FontFamily(
+                            Font(
+                                R.font.iransansmobile_fa_regular,
+                                FontWeight.Medium
+                            )
+                        )
+                    },
+                    letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
+                ),
+                animationDuration = animationDuration,
+                styleVariantKey = displayCurrency,
+                modifier = Modifier.wrapContentWidth()
+            )
         }
     }
 }

@@ -15,10 +15,10 @@ import com.mtd.data.di.NetworkConnectionInterceptor
 import com.mtd.data.di.NetworkModule.httpLoggingInterceptorProvider
 import com.mtd.data.di.NetworkModule.provideOkHttpClient
 import com.mtd.data.di.NetworkModule.provideRetrofitBuilder
-import com.mtd.data.repository.IWalletRepository
+import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.data.repository.WalletRepositoryImpl
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.wallet.ActiveWalletManager
+import com.mtd.core.wallet.ActiveWalletManager
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
 import org.junit.Before

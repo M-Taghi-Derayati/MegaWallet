@@ -1,13 +1,11 @@
 package com.mtd.data.datasource
 
-import com.mtd.core.model.NetworkName.BITCOINTESTNET
-import com.mtd.core.model.NetworkType
+import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.network.BlockchainNetwork
+import com.mtd.core.network.bitcoin.UtxoNetworkParametersResolver
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import okhttp3.OkHttpClient
-import org.bitcoinj.params.MainNetParams
-import org.bitcoinj.params.TestNet3Params
 import retrofit2.Retrofit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,7 +26,7 @@ class ChainDataSourceFactory @Inject constructor(
     private val assetRegistry: AssetRegistry,
     private val okHttpClient: OkHttpClient
 ) {
-    private val dataSourceCache = mutableMapOf<Long, IChainDataSource>()
+    private val dataSourceCache = mutableMapOf<String, IChainDataSource>()
 
     /**
      * مجموعهٔ providerهای موجود برای ساخت datasourceها.
@@ -48,16 +46,13 @@ class ChainDataSourceFactory @Inject constructor(
             },
             object : ChainDataSourceProvider {
                 override fun supports(network: BlockchainNetwork): Boolean {
-                    return network.networkType == NetworkType.BITCOIN
+                    return network.networkType == NetworkType.BITCOIN ||
+                        network.networkType == NetworkType.UTXO
                 }
 
                 override fun create(network: BlockchainNetwork): IChainDataSource {
-                    val networkParams = if (network.name == BITCOINTESTNET) {
-                        TestNet3Params.get()
-                    } else {
-                        MainNetParams.get()
-                    }
-                    return BitcoinDataSource(network, retrofitBuilder, networkParams)
+                    val networkParams = UtxoNetworkParametersResolver.resolve(network.name)
+                    return BitcoinDataSource(network, retrofitBuilder, networkParams,okHttpClient)
                 }
             },
             object : ChainDataSourceProvider {
@@ -73,39 +68,19 @@ class ChainDataSourceFactory @Inject constructor(
     }
 
     fun create(chainId: Long): IChainDataSource {
-
-        dataSourceCache[chainId]?.let { return it }
-
         val network = blockchainRegistry.getNetworkByChainId(chainId)
-            ?: throw IllegalArgumentException("Network not found for id: $chainId")
+            ?: throw IllegalArgumentException("Network not found for chainId: $chainId")
+        return create(network)
+    }
 
-
-       /* val newDataSource = when (network.networkType) {
-            NetworkType.EVM -> {
-                // تغییر مهم: پاس دادن okHttpClient به جای ساختن Web3j در اینجا
-                EvmDataSource(network, retrofitBuilder, assetRegistry, okHttpClient)
-            }
-            NetworkType.BITCOIN -> {
-                val networkParams= if (network.name==BITCOINTESTNET){
-                    TestNet3Params.get()
-                }else{
-                    MainNetParams.get()
-                }
-                BitcoinDataSource(network, retrofitBuilder,networkParams)
-            }
-            NetworkType.TVM -> {
-                TronDataSource(network, retrofitBuilder, okHttpClient, assetRegistry)
-            }
-            else -> throw IllegalArgumentException("Unsupported network type: ${network.networkType}")
-        }*/
+    fun create(network: BlockchainNetwork): IChainDataSource {
+        dataSourceCache[network.id]?.let { return it }
 
         val provider = providers.firstOrNull { it.supports(network) }
             ?: throw IllegalArgumentException("Unsupported network type: ${network.networkType}")
 
         val newDataSource = provider.create(network)
-
-
-        dataSourceCache[chainId] = newDataSource
+        dataSourceCache[network.id] = newDataSource
         return newDataSource
     }
 }

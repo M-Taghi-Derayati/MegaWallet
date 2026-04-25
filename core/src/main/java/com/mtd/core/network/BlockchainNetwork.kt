@@ -1,8 +1,9 @@
 package com.mtd.core.network
 
-import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
-import com.mtd.core.model.WalletKey
+import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.core.WalletKey
+
 
 interface BlockchainNetwork {
     val id: String
@@ -12,10 +13,13 @@ interface BlockchainNetwork {
     val decimals: Int
     val iconUrl:String
     val webSocketUrl: String?
+    val RpcUrlsEvm: List<String>
     val RpcUrls: List<String>
+    val derivationPath: String
     val currencySymbol: String
     val explorers: List<String>
     val color: String?
+    val regex: String?
     val faName: String?
     val isTestnet: Boolean
     /**

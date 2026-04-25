@@ -53,7 +53,7 @@ fun ImportOptionsContent(
                 icon = Icons.Default.TextFields,
                 iconColor = Color(0xFF22C55E),
                 title = "عبارت بازیابی",
-                subtitle = "وارد کردن کیف پول با عبارت ۱۲/۲۴ کلمه‌ای بازیابی",
+                subtitle = "وارد کردن کیف پول با عبارت ۱۲ کلمه‌ای بازیابی",
                 onClick = onImportSeed
             )
             Spacer(modifier = Modifier.height(16.dp))

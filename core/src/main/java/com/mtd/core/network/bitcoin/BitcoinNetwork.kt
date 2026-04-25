@@ -1,9 +1,10 @@
 package com.mtd.core.network.bitcoin
 
 
-import com.mtd.core.model.NetworkConfig
-import com.mtd.core.model.NetworkName
-import com.mtd.core.model.NetworkType
+
+import com.mtd.domain.model.core.NetworkConfig
+import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkType
 import org.bitcoinj.core.NetworkParameters
 
 class BitcoinNetwork(

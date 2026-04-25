@@ -1,9 +1,9 @@
 package com.mtd.megawallet.viewmodel.news
 
 import com.mtd.core.manager.ErrorManager
-import com.mtd.data.repository.IWalletRepository
+import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.megawallet.core.BaseViewModel
-import com.mtd.megawallet.event.MainNavigationEvent
+import com.mtd.domain.model.MainNavigationEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
