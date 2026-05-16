@@ -1,26 +1,31 @@
 package com.mtd.data.datasource
 
-import com.mtd.domain.model.core.NetworkName.BASE
-import com.mtd.domain.model.core.NetworkName.BASESEPOLIA
-import com.mtd.domain.model.core.NetworkName.BSCTESTNET
-import com.mtd.domain.model.core.NetworkName.POLTESTNET
-import com.mtd.domain.model.core.NetworkName.SEPOLIA
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.utils.AddressRegexUtils
 import com.mtd.data.datasource.IChainDataSource.FeeData
 import com.mtd.data.dto.EVMTokenTransferDto
 import com.mtd.data.dto.EVMTransactionDto
+import com.mtd.data.dto.NodeRealTransactionDto
 import com.mtd.data.service.BSCscanApiService
 import com.mtd.data.service.EVMApiService
 import com.mtd.data.utils.AssetNormalizer.normalize
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.EvmTransaction
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.TokenTransferDetails
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.domain.model.assets.AssetConfig
+import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkName.BASE
+import com.mtd.domain.model.core.NetworkName.BASESEPOLIA
+import com.mtd.domain.model.core.NetworkName.BSC
+import com.mtd.domain.model.core.NetworkName.BSCTESTNET
+import com.mtd.domain.model.core.NetworkName.ETHEREUM
+import com.mtd.domain.model.core.NetworkName.POLTESTNET
+import com.mtd.domain.model.core.NetworkName.SEPOLIA
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -116,8 +121,8 @@ class EvmDataSource(
         for (explorer in network.explorers) {
             try {
                 val result = when (network.name) {
-                    SEPOLIA, POLTESTNET -> fetchEVMTransactions(explorer, address)
-                    BSCTESTNET -> fetchBscScanTransactions(explorer, address)
+                    ETHEREUM, SEPOLIA, BASE, BASESEPOLIA, POLTESTNET -> fetchEVMTransactions(explorer, address)
+                    BSC, BSCTESTNET -> fetchBscScanTransactions(explorer, address)
                     else -> null
                 }
                 if (result is ResultResponse.Success) return result
@@ -154,25 +159,65 @@ class EvmDataSource(
 
     private suspend fun fetchBscScanTransactions(baseUrl: String, address: String): ResultResponse<List<TransactionRecord>> {
         val api = retrofitBuilder.baseUrl(baseUrl).build().create(BSCscanApiService::class.java)
-        val response = api.getTransactions(address = address)
-        if (response.isSuccessful && response.body()?.status == "1") {
-            val records = response.body()!!.result.map { dto ->
-                EvmTransaction(
-                    hash = dto.hash,
-                    fromAddress = dto.from,
-                    toAddress = dto.to,
-                    amount = dto.value,
-                    fee = (dto.gasUsed.toBigIntegerOrNull() ?: BigInteger.ZERO) * (dto.gasPrice.toBigIntegerOrNull() ?: BigInteger.ZERO),
-                    timestamp = dto.timeStamp.toLongOrNull() ?: 0L,
-                    isOutgoing = dto.from.equals(address, ignoreCase = true),
-                    status = if (dto.isError == "0") TransactionStatus.CONFIRMED else TransactionStatus.FAILED,
-                    networkName = network.name
-                )
+        return coroutineScope {
+            val nativeTxsDeferred = async(Dispatchers.IO) { api.getAssetTransferByAddress(address, "transaction") }
+            val tokenTxsDeferred = async(Dispatchers.IO) { api.getAssetTransferByAddress(address, "20") }
+
+            val nativeTxsResponse = nativeTxsDeferred.await()
+            val tokenTxsResponse = tokenTxsDeferred.await()
+            val allRecords = mutableListOf<TransactionRecord>()
+
+            if (nativeTxsResponse.isSuccessful) {
+                nativeTxsResponse.body()?.data?.list?.forEach { dto ->
+                    allRecords.add(mapNodeRealToDomain(dto, address))
+                }
             }
-            return ResultResponse.Success(records)
+            if (tokenTxsResponse.isSuccessful) {
+                tokenTxsResponse.body()?.data?.list?.forEach { dto ->
+                    allRecords.add(mapNodeRealToDomain(dto, address))
+                }
+            }
+
+            if (!nativeTxsResponse.isSuccessful && !tokenTxsResponse.isSuccessful) {
+                return@coroutineScope ResultResponse.Error(Exception("NodeReal API failed"))
+            }
+            ResultResponse.Success(allRecords.sortedByDescending { it.timestamp })
         }
-        return ResultResponse.Error(Exception("BSCScan API failed"))
     }
+
+    private fun mapNodeRealToDomain(dto: NodeRealTransactionDto, address: String): TransactionRecord {
+        val amount = try {
+            if (dto.value.startsWith("0x")) BigInteger(dto.value.substring(2), 16)
+            else BigInteger(dto.value)
+        } catch (e: Exception) {
+            BigInteger.ZERO
+        }
+
+        return EvmTransaction(
+            hash = dto.hash,
+            timestamp = dto.blockTimeStamp,
+            fee = (dto.gasUsed ?: BigInteger.ZERO) * (dto.gasPrice ?: BigInteger.ZERO),
+            status = if (dto.receiptsStatus == 1) TransactionStatus.CONFIRMED else TransactionStatus.FAILED,
+            fromAddress = dto.from,
+            toAddress = dto.to,
+            amount = amount,
+            isOutgoing = dto.from.equals(address, ignoreCase = true),
+            networkName = network.name,
+            contractAddress = if (dto.category == "20") dto.contractAddress else null,
+            tokenTransferDetails = if (dto.category == "20") {
+                TokenTransferDetails(
+                    from = dto.from,
+                    to = dto.to,
+                    amount = amount,
+                    tokenSymbol = dto.asset,
+                    tokenDecimals = dto.decimal?.toIntOrNull() ?: 18,
+                    contractAddress = dto.contractAddress
+                )
+            } else null
+        )
+    }
+
+
 
     private suspend fun getNonce(address: String): BigInteger {
         return executeWithFailover { web3j ->
@@ -529,7 +574,7 @@ class EvmDataSource(
         )
     }
 
-    private fun EVMTokenTransferDto.toDomainModel(userAddress: String, networkName: com.mtd.domain.model.core.NetworkName): EvmTransaction {
+    private fun EVMTokenTransferDto.toDomainModel(userAddress: String, networkName: NetworkName): EvmTransaction {
         val timestampValue = try { Instant.parse(this.timestamp).epochSecond } catch (e: Exception) { 0L }
         return EvmTransaction(
             hash = this.txHash,
@@ -538,14 +583,14 @@ class EvmDataSource(
             status = TransactionStatus.CONFIRMED,
             fromAddress = this.fromAddress.hash,
             toAddress = this.toAddress.hash,
-            amount = this.total.value.toBigIntegerOrNull() ?: BigInteger.ZERO,
+            amount = this.total.value?.toBigIntegerOrNull() ?: BigInteger.ZERO,
             isOutgoing = this.fromAddress.hash.equals(userAddress, true),
             contractAddress = this.token.address,
             networkName = networkName,
-            tokenTransferDetails = com.mtd.domain.model.TokenTransferDetails(
+            tokenTransferDetails = TokenTransferDetails(
                 from = this.fromAddress.hash,
                 to = this.toAddress.hash,
-                amount = this.total.value.toBigIntegerOrNull() ?: BigInteger.ZERO,
+                amount = this.total.value?.toBigIntegerOrNull() ?: BigInteger.ZERO,
                 tokenSymbol = this.token.symbol ?: "",
                 tokenDecimals = this.token.decimals?.toIntOrNull() ?: 18,
                 contractAddress = this.token.address ?: ""

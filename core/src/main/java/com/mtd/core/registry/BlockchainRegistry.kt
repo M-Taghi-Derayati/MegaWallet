@@ -8,6 +8,8 @@ import com.mtd.core.network.evm.GenericEvmNetwork
 import com.mtd.core.network.tron.TronNetwork
 import com.mtd.core.utils.AddressRegexUtils
 import com.mtd.core.utils.loadNetworkConfigs
+import com.mtd.domain.interfaceRepository.INetworkCatalog
+import com.mtd.domain.interfaceRepository.NetworkInfo
 import com.mtd.domain.model.core.NetworkConfig
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.NetworkType
@@ -72,7 +74,7 @@ class TronNetworkFactory : NetworkFactory {
 }
 
 
-class BlockchainRegistry @Inject constructor() {
+class BlockchainRegistry @Inject constructor() : INetworkCatalog {
 
 
     private val networks = mutableMapOf<NetworkType, MutableMap<Long, BlockchainNetwork>>()
@@ -114,7 +116,7 @@ class BlockchainRegistry @Inject constructor() {
 
 
     fun getNetworkByName(name: NetworkName): BlockchainNetwork? {
-        return networks.values.flatMap { it.values }.find { it.name==name }
+        return networksById.values.find { it.name == name }
     }
 
     fun getNetworkById(id: String): BlockchainNetwork? {
@@ -129,6 +131,18 @@ class BlockchainRegistry @Inject constructor() {
 
     fun getAllNetworks(): List<BlockchainNetwork> {
         return networksById.values.toList()
+    }
+
+    override fun getAllNetworkInfos(): List<NetworkInfo> {
+        return getAllNetworks().map { it.toNetworkInfo() }
+    }
+
+    override fun getNetworkInfoByName(name: NetworkName): NetworkInfo? {
+        return getNetworkByName(name)?.toNetworkInfo()
+    }
+
+    override fun getNetworkInfoById(id: String): NetworkInfo? {
+        return getNetworkById(id)?.toNetworkInfo()
     }
 
     fun getNetworkByType(type: NetworkType): BlockchainNetwork? {
@@ -150,7 +164,7 @@ class BlockchainRegistry @Inject constructor() {
     }
 
 
-    fun getNetworkTypeForAddress(address: String): NetworkType? {
+    override fun getNetworkTypeForAddress(address: String): NetworkType? {
         val normalized = address.trim()
         if (normalized.isBlank()) return null
 
@@ -198,6 +212,10 @@ class BlockchainRegistry @Inject constructor() {
         return null
     }
 
+    override fun getNetworkTypeForNetworkId(networkId: String): NetworkType? {
+        return getNetworkType(networkId = networkId)
+    }
+
     fun getNetworkType(address: String? = null, networkId: String? = null): NetworkType? {
         address?.let { getNetworkTypeForAddress(it) }?.let { return it }
 
@@ -208,7 +226,7 @@ class BlockchainRegistry @Inject constructor() {
             ?: inferNetworkTypeFromNetworkId(normalizedNetworkId)
     }
 
-    fun isValidAddressForNetworkId(address: String, networkId: String): Boolean {
+    override fun isValidAddressForNetworkId(address: String, networkId: String): Boolean {
         val normalizedAddress = address.trim()
         val normalizedNetworkId = networkId.trim().lowercase()
         if (normalizedAddress.isBlank() || normalizedNetworkId.isBlank()) return false
@@ -266,13 +284,13 @@ class BlockchainRegistry @Inject constructor() {
         configs
             .filter { config -> config.isTestnet == true }
             .forEach { config ->
-                val networkType =
-                    runCatching { NetworkType.valueOf(config.networkType.uppercase()) }.getOrNull()
-                        ?: return@forEach
+            val networkType =
+                runCatching { NetworkType.valueOf(config.networkType.uppercase()) }.getOrNull()
+                    ?: return@forEach
             val factory = networkFactories.firstOrNull { it.supports(networkType, config) }
             val network = factory?.create(networkType, config)
             network?.let { registerNetwork(it) }
-            }
+        }
     }
 
     private fun indexAddressRegex(configs: List<NetworkConfig>) {
@@ -290,6 +308,20 @@ class BlockchainRegistry @Inject constructor() {
             addressRegexByNetworkId[normalizedId] = compiledRegex
             addressRegexByNetworkType.getOrPut(networkType) { mutableListOf() }.add(compiledRegex)
         }
+    }
+
+    private fun BlockchainNetwork.toNetworkInfo(): NetworkInfo {
+        return NetworkInfo(
+            id = id,
+            networkType = networkType,
+            name = name,
+            currencySymbol = currencySymbol,
+            iconUrl = iconUrl,
+            faName = faName,
+            decimals = decimals,
+            explorers = explorers,
+            color = color
+        )
     }
 }
 

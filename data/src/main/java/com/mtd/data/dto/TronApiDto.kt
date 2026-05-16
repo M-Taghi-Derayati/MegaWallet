@@ -33,6 +33,76 @@ data class TokenTransferData(
     val symbol: String
 )
 
+// Trongrid API Models (v1)
+data class TrongridResponse(
+    val data: List<TrongridData>,
+    val meta: TrongridMeta?
+)
+
+data class TrongridData(
+    @SerializedName("txID") val txID: String,
+    @SerializedName("block_timestamp") val blockTimestamp: Long,
+    @SerializedName("raw_data") val rawData: TrongridRawData,
+    @SerializedName("net_usage") val bandwidth: Long,
+    @SerializedName("energy_usage_total") val energy: Long,
+    @SerializedName("ret") val ret: List<TrongridRet>?
+)
+
+data class TrongridRawData(
+    @SerializedName("contract") val contract: List<TrongridContract>,
+    @SerializedName("timestamp") val timestamp: Long
+)
+
+data class TrongridContract(
+    @SerializedName("type") val type: String,
+    @SerializedName("parameter") val parameter: TrongridParameter
+)
+
+data class TrongridParameter(
+    @SerializedName("value") val value: TrongridValue
+)
+
+data class TrongridValue(
+    @SerializedName("amount") val amount: BigInteger?,
+    @SerializedName("owner_address") val ownerAddress: String?,
+    @SerializedName("to_address") val toAddress: String?,
+    @SerializedName("contract_address") val contractAddress: String?,
+    @SerializedName("data") val data: String?
+)
+
+data class TrongridRet(
+    @SerializedName("contractRet") val contractRet: String?,
+    @SerializedName("fee") val fee: BigInteger?
+)
+
+data class TrongridTokenResponse(
+    val data: List<TrongridTokenData>,
+    val success: Boolean,
+    val meta: TrongridMeta?
+)
+
+data class TrongridTokenData(
+    @SerializedName("transaction_id") val transactionId: String,
+    @SerializedName("block_timestamp") val blockTimestamp: Long,
+    @SerializedName("from") val from: String,
+    @SerializedName("to") val to: String,
+    @SerializedName("value") val value: BigInteger,
+    @SerializedName("token_info") val tokenInfo: TrongridTokenInfo?
+)
+
+data class TrongridTokenInfo(
+    @SerializedName("symbol") val symbol: String?,
+    @SerializedName("address") val address: String?,
+    @SerializedName("decimals") val decimals: Int?,
+    @SerializedName("name") val name: String?
+)
+
+data class TrongridMeta(
+    @SerializedName("at") val at: Long?,
+    @SerializedName("page_size") val pageSize: Int?
+)
+
+
 
 
 

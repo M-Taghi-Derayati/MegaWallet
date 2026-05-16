@@ -967,7 +967,7 @@ private fun BreakdownListItem(subAsset: AssetItem, percentage: Float) {
 
 
 @Composable
-private fun AutoResizeBalanceRows(
+internal fun AutoResizeBalanceRows(
     totalBalance: String,
     displayCurrency: HomeUiState.DisplayCurrency,
     animationDuration: Int,

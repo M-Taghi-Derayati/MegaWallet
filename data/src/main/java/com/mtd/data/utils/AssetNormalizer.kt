@@ -55,7 +55,7 @@ object AssetNormalizer {
     private fun isEvm(network: NetworkName): Boolean {
         val evmNetworks = setOf(
             NetworkName.BSCTESTNET,
-            NetworkName.BINANCESMARTCHAIN,
+            NetworkName.BSC,
             NetworkName.POLTESTNET,
             NetworkName.SEPOLIA,
             NetworkName.ETHEREUM,

@@ -1,6 +1,7 @@
 package com.mtd.core.wallet
 
 import com.mtd.core.keymanager.KeyManager
+import com.mtd.domain.interfaceRepository.IActiveWalletProvider
 import com.mtd.domain.model.core.Wallet
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,13 +11,13 @@ import javax.inject.Singleton
 @Singleton
 class ActiveWalletManager @Inject constructor(
     private val keyManager: KeyManager
-) {
+) : IActiveWalletProvider {
 
     private val _activeWallet = MutableStateFlow<Wallet?>(null)
-    val activeWallet = _activeWallet.asStateFlow()
+    override val activeWallet = _activeWallet.asStateFlow()
 
     private val _activeWalletId = MutableStateFlow<String?>(null)
-    val activeWalletId = _activeWalletId.asStateFlow()
+    override val activeWalletId = _activeWalletId.asStateFlow()
 
     fun unlockWallet(wallet: Wallet, secret: String) {
         // ۱. کلیدها را در کش KeyManager بارگذاری کن

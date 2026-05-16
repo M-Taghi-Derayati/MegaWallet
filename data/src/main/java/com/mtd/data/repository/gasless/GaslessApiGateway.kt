@@ -32,11 +32,13 @@ import com.mtd.domain.model.GaslessQuoteData
 import com.mtd.domain.model.GaslessQuoteRequest
 import com.mtd.domain.model.GaslessRelayPayload
 import com.mtd.domain.model.GaslessServiceType
+import com.mtd.domain.model.GaslessSmartFee
 import com.mtd.domain.model.GaslessSupportedToken
 import com.mtd.domain.model.GaslessTxStatus
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TronApproveQuoteRequest
 import com.mtd.domain.model.TronApproveQuoteResult
+import com.mtd.domain.model.TronApproveTxTemplate
 import com.mtd.domain.model.TronSponsorApproveRequest
 import com.mtd.domain.model.TronSponsorApproveResult
 import com.mtd.domain.model.TronSponsorMode
@@ -214,7 +216,8 @@ class GaslessApiGateway @Inject constructor(
                     )
                 ),
                 serverFeeAmount = body.serverQuote?.feeAmount?.toBigIntegerOrNull(),
-                displayPolicy = body.displayPolicy?.toDomain()
+                displayPolicy = body.displayPolicy?.toDomain(),
+                smartFee = body.smartFee?.toDomain()
             )
         }
     }
@@ -282,11 +285,17 @@ class GaslessApiGateway @Inject constructor(
             }
 
             GaslessTxStatus(
-                id = normalizeTxId(body.id) ?: txId,
-                status = body.status ?: "UNKNOWN",
+                id = normalizeTxId(body.objectId)
+                    ?: normalizeTxId(body.id)
+                    ?: txId,
+                chain = body.chain,
+                status = body.publicStatus ?: body.status ?: "UNKNOWN",
                 txHash = body.txHash,
                 lastError = body.lastError,
-                rawStatus = body.status
+                rawStatus = body.status,
+                requestId = body.requestId,
+                createdAt = normalizeFlexibleString(body.createdAt),
+                updatedAt = normalizeFlexibleString(body.updatedAt)
             )
         }
     }
@@ -315,6 +324,8 @@ class GaslessApiGateway @Inject constructor(
 
             TronSponsorApproveResult(
                 funded = body.funded ?: false,
+                approveRequired = body.approveRequired,
+                skipReason = body.skipReason,
                 mode = TronSponsorMode.fromApiValue(body.mode),
                 amount = body.amount?.toBigIntegerOrNull(),
                 reason = body.reason,
@@ -346,13 +357,28 @@ class GaslessApiGateway @Inject constructor(
                 )
             }
 
+            val approveRequired = body.approveRequired ?: true
             TronApproveQuoteResult(
+                approveRequired = approveRequired,
+                approvalAmount = body.approvalAmount?.toBigIntegerOrNull(),
+                approvalAmountMode = body.approvalAmountMode,
+                approveTxTemplate = body.approveTxTemplate?.let {
+                    TronApproveTxTemplate(
+                        approvalAmount = it.approvalAmount?.toBigIntegerOrNull(),
+                        approvalAmountMode = it.approvalAmountMode
+                    )
+                },
+                requiredAllowance = body.requiredAllowance?.toBigIntegerOrNull(),
                 estimatedEnergy = body.estimatedEnergy?.toBigIntegerOrNull(),
                 estimatedBandwidthBytes = body.estimatedBandwidthBytes?.toBigIntegerOrNull(),
                 energyFeeSun = body.energyFeeSun?.toBigIntegerOrNull(),
                 bandwidthFeeSun = body.bandwidthFeeSun?.toBigIntegerOrNull(),
                 requiredSun = body.requiredSun?.toBigIntegerOrNull()
-                    ?: throw IllegalStateException("Missing requiredSun in TRON approve quote response"),
+                    ?: if (approveRequired) {
+                        throw IllegalStateException("Missing requiredSun in TRON approve quote response")
+                    } else {
+                        BigInteger.ZERO
+                    },
                 requiredTrx = body.requiredTrx,
                 requiredUsdApprox = body.requiredUsdApprox,
                 source = body.source,
@@ -415,6 +441,17 @@ class GaslessApiGateway @Inject constructor(
         )
     }
 
+    private fun com.mtd.data.dto.GaslessSmartFeeDto.toDomain(): GaslessSmartFee {
+        return GaslessSmartFee(
+            decision = decision,
+            reasonFa = reasonFa,
+            feeAmount = feeAmount?.toBigIntegerOrNull(),
+            feeUsd = feeUsd,
+            directUserCostUsd = directUserCostUsd,
+            moreExpensiveThanDirect = moreExpensiveThanDirect
+        )
+    }
+
     private fun String?.toBigIntOrThrow(fieldName: String): BigInteger {
         return this?.toBigIntegerOrNull()
             ?: throw IllegalStateException("Missing or invalid $fieldName in quote response")
@@ -429,17 +466,67 @@ class GaslessApiGateway @Inject constructor(
     private fun normalizeTxId(raw: Any?): String? {
         return when (raw) {
             null -> null
-            is String -> raw.ifBlank { null }
+            is String -> raw.takeUnless { it.isBlank() || it == "[object Object]" }
             is Number -> raw.toString()
             is LinkedTreeMap<*, *> -> {
                 val oid = raw["\$oid"]?.toString()
-                if (!oid.isNullOrBlank()) oid else raw.toString()
+                val bufferHex = raw["buffer"]?.let(::bufferObjectToHex)
+                when {
+                    !oid.isNullOrBlank() -> oid
+                    !bufferHex.isNullOrBlank() -> bufferHex
+                    raw.isEmpty() -> null
+                    else -> raw.toString()
+                }
             }
             is Map<*, *> -> {
                 val oid = raw["\$oid"]?.toString()
-                if (!oid.isNullOrBlank()) oid else raw.toString()
+                val bufferHex = raw["buffer"]?.let(::bufferObjectToHex)
+                when {
+                    !oid.isNullOrBlank() -> oid
+                    !bufferHex.isNullOrBlank() -> bufferHex
+                    raw.isEmpty() -> null
+                    else -> raw.toString()
+                }
             }
             else -> raw.toString()
         }
+    }
+
+    private fun normalizeFlexibleString(raw: Any?): String? {
+        return when (raw) {
+            null -> null
+            is String -> raw.takeUnless { it.isBlank() || it == "[object Object]" }
+            is Number -> raw.toString()
+            is LinkedTreeMap<*, *> -> {
+                raw["\$date"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: raw["date"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: raw["iso"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: raw.takeIf { it.isNotEmpty() }?.toString()
+            }
+            is Map<*, *> -> {
+                raw["\$date"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: raw["date"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: raw["iso"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: raw.takeIf { it.isNotEmpty() }?.toString()
+            }
+            else -> raw.toString()
+        }
+    }
+
+    private fun bufferObjectToHex(raw: Any?): String? {
+        val buffer = raw as? Map<*, *> ?: return null
+        if (buffer.isEmpty()) return null
+        return buffer.entries
+            .mapNotNull { entry ->
+                val index = entry.key?.toString()?.toIntOrNull() ?: return@mapNotNull null
+                val value = when (val item = entry.value) {
+                    is Number -> item.toInt()
+                    else -> item?.toString()?.toDoubleOrNull()?.toInt()
+                } ?: return@mapNotNull null
+                index to value.coerceIn(0, 255)
+            }
+            .sortedBy { it.first }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(separator = "") { (_, value) -> "%02x".format(value) }
     }
 }

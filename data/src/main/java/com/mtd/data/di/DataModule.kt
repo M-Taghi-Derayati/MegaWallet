@@ -7,6 +7,8 @@ import com.mtd.data.GoogleAuthManager
 import com.mtd.data.datasource.GoogleDriveDataSource
 import com.mtd.data.datasource.ICloudDataSource
 import com.mtd.data.repository.BackupRepositoryImpl
+import com.mtd.data.repository.CachedWalletBalanceReaderImpl
+import com.mtd.data.repository.CloudWalletBalanceCalculatorImpl
 import com.mtd.data.repository.gasless.EvmGaslessRepositoryImpl
 import com.mtd.domain.interfaceRepository.IBackupRepository
 import com.mtd.domain.interfaceRepository.IGaslessEvmRepository
@@ -15,10 +17,17 @@ import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.data.repository.MarketDataRepositoryImpl
 import com.mtd.data.repository.gasless.TronGaslessRepositoryImpl
 import com.mtd.data.repository.UserPreferencesRepositoryImpl
+import com.mtd.data.repository.SendAssetDataSourceImpl
+import com.mtd.data.repository.WalletBalanceSynchronizerImpl
 import com.mtd.data.repository.WalletRepositoryImpl
 import com.mtd.domain.model.IUserPreferencesRepository
 import com.mtd.domain.interfaceRepository.IAuthManager
+import com.mtd.domain.interfaceRepository.ICachedWalletBalanceReader
+import com.mtd.domain.interfaceRepository.ICloudBackupDataSource
+import com.mtd.domain.interfaceRepository.ICloudWalletBalanceCalculator
 import com.mtd.domain.interfaceRepository.IMarketDataRepository
+import com.mtd.domain.interfaceRepository.ISendAssetDataSource
+import com.mtd.domain.interfaceRepository.IWalletBalanceSynchronizer
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -72,8 +81,33 @@ abstract class DataModule {
     ): ICloudDataSource
 
     @Binds
+    abstract fun bindCloudBackupDataSource(
+        googleDriveDataSource: GoogleDriveDataSource
+    ): ICloudBackupDataSource
+
+    @Binds
     @Singleton
     abstract fun bindMarketDataRepository(impl: MarketDataRepositoryImpl): IMarketDataRepository
+
+    @Binds
+    abstract fun bindCloudWalletBalanceCalculator(
+        impl: CloudWalletBalanceCalculatorImpl
+    ): ICloudWalletBalanceCalculator
+
+    @Binds
+    abstract fun bindCachedWalletBalanceReader(
+        impl: CachedWalletBalanceReaderImpl
+    ): ICachedWalletBalanceReader
+
+    @Binds
+    abstract fun bindWalletBalanceSynchronizer(
+        impl: WalletBalanceSynchronizerImpl
+    ): IWalletBalanceSynchronizer
+
+    @Binds
+    abstract fun bindSendAssetDataSource(
+        impl: SendAssetDataSourceImpl
+    ): ISendAssetDataSource
 
 
     companion object {

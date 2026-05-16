@@ -62,6 +62,15 @@ data class GaslessDisplayPolicyBundle(
     val sponsorApprove: GaslessDisplayPolicy?
 )
 
+data class GaslessSmartFee(
+    val decision: String?,
+    val reasonFa: String?,
+    val feeAmount: BigInteger? = null,
+    val feeUsd: String? = null,
+    val directUserCostUsd: String? = null,
+    val moreExpensiveThanDirect: Boolean? = null
+)
+
 data class GaslessPrepareData(
     val userAddress: String,
     val nonce: BigInteger,
@@ -97,7 +106,8 @@ data class GaslessQuoteData(
     val quoteToken: String,
     val canonicalParams: GaslessCanonicalParams,
     val serverFeeAmount: BigInteger? = null,
-    val displayPolicy: GaslessDisplayPolicyBundle? = null
+    val displayPolicy: GaslessDisplayPolicyBundle? = null,
+    val smartFee: GaslessSmartFee? = null
 )
 
 data class GaslessRelayParams(
@@ -126,10 +136,14 @@ data class GaslessQueuedTx(
 
 data class GaslessTxStatus(
     val id: String,
+    val chain: String? = null,
     val status: String,
     val txHash: String?,
     val lastError: String?,
-    val rawStatus: String? = null
+    val rawStatus: String? = null,
+    val requestId: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 ) {
     val isFinal: Boolean
         get() = status.equals("SUCCESS", ignoreCase = true) ||
@@ -159,7 +173,17 @@ data class TronApproveQuoteRequest(
     val tokenAddress: String
 )
 
+data class TronApproveTxTemplate(
+    val approvalAmount: BigInteger?,
+    val approvalAmountMode: String?
+)
+
 data class TronApproveQuoteResult(
+    val approveRequired: Boolean = true,
+    val approvalAmount: BigInteger? = null,
+    val approvalAmountMode: String? = null,
+    val approveTxTemplate: TronApproveTxTemplate? = null,
+    val requiredAllowance: BigInteger? = null,
     val estimatedEnergy: BigInteger?,
     val estimatedBandwidthBytes: BigInteger?,
     val energyFeeSun: BigInteger?,
@@ -173,6 +197,8 @@ data class TronApproveQuoteResult(
 
 data class TronSponsorApproveResult(
     val funded: Boolean,
+    val approveRequired: Boolean? = null,
+    val skipReason: String? = null,
     val mode: TronSponsorMode?,
     val amount: BigInteger?,
     val reason: String?,

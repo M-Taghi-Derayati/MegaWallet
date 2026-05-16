@@ -41,6 +41,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -83,6 +84,7 @@ import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWalletScreen
 import com.mtd.megawallet.ui.compose.screens.createwallet.CreateWalletScreen
 import com.mtd.megawallet.ui.compose.screens.history.TransactionHistoryScreen
+import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetailsBottomSheet
 import com.mtd.megawallet.ui.compose.screens.send.SendScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.AssetDetailScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.MultiWalletScreen
@@ -91,6 +93,7 @@ import com.mtd.megawallet.ui.compose.screens.wallet.WalletScreens
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
 import com.mtd.megawallet.viewmodel.news.HomeViewModel
 import com.mtd.megawallet.viewmodel.news.MainScreenViewModel
+import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -162,6 +165,7 @@ private fun MainDashboardContent(
     selectedAssetId: String?,
 ) {
     val createWalletViewModel: CreateWalletViewModel = hiltViewModel()
+    val historyViewModel: TransactionHistoryViewModel = hiltViewModel()
     val density = LocalDensity.current
     var fullScreenRect by remember { mutableStateOf(Rect.Zero) }
     var fullHeightPx by remember { mutableStateOf(0) } // ذخیره ارتفاع کل صفحه
@@ -211,6 +215,8 @@ private fun MainDashboardContent(
     
     // فلگ برای تشخیص اینکه آیا از MultiWallet وارد فلوی ساخت/ایمپورت شده‌ایم
     var isFromMultiWallet by remember { mutableStateOf(false) }
+    val selectedTab by mainViewModel.selectedTab.collectAsState()
+    val selectedHistoryTransaction by historyViewModel.selectedTransaction.collectAsState()
 
     // مدیریت دکمه Back برای بستن لایه‌های مختلف
     BackHandler(enabled = showSendScreen || showMultiWalletScreen || showReceiveScreen || showCreateWalletScreen || showImportWalletScreen || selectedAssetId != null) {
@@ -348,8 +354,10 @@ private fun MainDashboardContent(
                     )
                 },
                 bottomBar = {
+                    val hasPendingHistoryActivity by mainViewModel.hasPendingHistoryActivity.collectAsState()
                     MainBottomNavigation(
-                        selectedTab = mainViewModel.selectedTab.collectAsState().value,
+                        selectedTab = selectedTab,
+                        showHistoryPendingIndicator = hasPendingHistoryActivity && selectedTab != MainTab.HISTORY,
                         onWalletClick = { mainViewModel.selectTab(MainTab.WALLET) },
                         onHistoryClick = { mainViewModel.selectTab(MainTab.HISTORY) },
                         onExploreClick = { mainViewModel.selectTab(MainTab.EXPLORE) }
@@ -394,7 +402,10 @@ private fun MainDashboardContent(
                                 )
                             }
                             MainTab.HISTORY -> {
-                                TransactionHistoryScreen()
+                                TransactionHistoryScreen(
+                                    viewModel = historyViewModel,
+                                    showDetailsBottomSheet = false
+                                )
                             }
                             MainTab.EXPLORE -> {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -484,6 +495,13 @@ private fun MainDashboardContent(
                 onScanClick = onScanClick
             )
         }
+
+        TransactionDetailsBottomSheet(
+            visible = selectedTab == MainTab.HISTORY && selectedHistoryTransaction != null,
+            transaction = selectedHistoryTransaction,
+            viewModel = historyViewModel,
+            onDismiss = { historyViewModel.selectTransaction(null) }
+        )
 
         // --- لایه ۴: Receive Screen Overlay ---
         androidx.compose.animation.AnimatedVisibility(
@@ -741,6 +759,7 @@ private fun MainHeader(
 @Composable
 fun MainBottomNavigation(
     selectedTab: MainTab,
+    showHistoryPendingIndicator: Boolean = false,
     onWalletClick: () -> Unit,
     onHistoryClick: () -> Unit,
     onExploreClick: () -> Unit
@@ -793,6 +812,7 @@ fun MainBottomNavigation(
                     filledIconRes = R.drawable.ic_history_fill,
                     outlinedIconRes = R.drawable.ic_history,
                     isSelected = selectedTab == MainTab.HISTORY,
+                    showPendingIndicator = showHistoryPendingIndicator,
                     onClick = onHistoryClick
                 )
             }
@@ -805,6 +825,7 @@ fun BottomNavItem(
     filledIconRes: Int,
     outlinedIconRes: Int,
     isSelected: Boolean,
+    showPendingIndicator: Boolean = false,
     onClick: () -> Unit
 ) {
     val isDark = isSystemInDarkTheme()
@@ -818,17 +839,30 @@ fun BottomNavItem(
             ) { onClick() },
         contentAlignment = Alignment.Center
     ) {
+        if (showPendingIndicator) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(MainScreenConstants.BOTTOM_NAV_ICON_SIZE-3.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.secondary,
+                trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-7).dp, y = 7.dp)
+                    .size(9.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondary)
+            )
+        }
+
         Icon(
             painter = painterResource(
                 id = if (isSelected) filledIconRes else outlinedIconRes
             ),
             contentDescription = null,
             modifier = Modifier.size(MainScreenConstants.BOTTOM_NAV_ICON_SIZE),
-            tint = if (isSelected) {
-                MaterialTheme.colorScheme.tertiary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            }
+            tint = Color.Unspecified
         )
     }
 }

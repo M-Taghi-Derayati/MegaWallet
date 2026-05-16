@@ -1,8 +1,8 @@
 package com.mtd.megawallet.viewmodel.news
 
 import androidx.lifecycle.ViewModel
-import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.ImportData
+import com.mtd.domain.usecase.wallet.HasWalletUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import javax.inject.Inject
@@ -13,7 +13,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class WelcomeViewModel @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val hasWalletUseCase: HasWalletUseCase
 ) : ViewModel() {
     
     private val _isModalActive = MutableStateFlow(false)
@@ -34,7 +34,7 @@ class WelcomeViewModel @Inject constructor(
     }
 
     suspend fun hasWallet(): Boolean {
-        return walletRepository.hasWallet()
+        return hasWalletUseCase()
     }
 
     fun clearImportData() {

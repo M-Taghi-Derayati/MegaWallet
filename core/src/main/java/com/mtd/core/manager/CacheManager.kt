@@ -2,6 +2,7 @@ package com.mtd.core.manager
 
 import android.content.Context
 import com.google.gson.Gson
+import com.mtd.domain.interfaceRepository.IAppCacheStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,7 +20,7 @@ import javax.inject.Singleton
 class CacheManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val gson: Gson
-) {
+) : IAppCacheStore {
     // Memory Cache با TTL
     private val memoryCache = ConcurrentHashMap<String, CacheEntry<Any>>()
     
@@ -28,14 +29,11 @@ class CacheManager @Inject constructor(
         if (!exists()) mkdirs()
     }
 
-    /**
-     * دریافت داده از cache
-     */
-    suspend fun <T> get(
+    override suspend fun <T> get(
         key: String,
-        type: Class<T>
+        type: java.lang.reflect.Type
     ): T? = withContext(Dispatchers.IO) {
-        Timber.d("🔍 CacheManager.get: key=$key, type=${type.simpleName}")
+        Timber.d("🔍 CacheManager.get: key=$key, type=$type")
         
         // 1. Check memory cache first
         memoryCache[key]?.let { entry ->
@@ -45,7 +43,6 @@ class CacheManager @Inject constructor(
                 return@withContext entry.data as? T
             } else {
                 Timber.d("⏰ Memory cache expired: $key")
-                // Remove expired entry
                 memoryCache.remove(key)
             }
         }
@@ -54,39 +51,35 @@ class CacheManager @Inject constructor(
         val diskFile = File(cacheDir, key)
         if (diskFile.exists()) {
             try {
-                Timber.d("📂 Found in disk cache: $key, file size: ${diskFile.length()} bytes")
                 val json = diskFile.readText()
-                Timber.d("📄 JSON length: ${json.length} chars")
-                val cached = gson.fromJson(json, type)
+                val cached = gson.fromJson<T>(json, type)
                 
                 if (cached != null) {
-                    Timber.d("✅ Successfully deserialized from disk cache: $key")
-                    // Put back in memory cache
                     @Suppress("UNCHECKED_CAST")
                     memoryCache[key] = CacheEntry(cached as Any, System.currentTimeMillis() + DEFAULT_TTL)
                     return@withContext cached
-                } else {
-                    Timber.w("⚠️ Deserialized object is null: $key")
                 }
             } catch (e: Exception) {
                 Timber.e(e, "❌ Error reading from disk cache: $key")
                 diskFile.delete()
             }
-        } else {
-            Timber.d("❌ File not found in disk cache: $key, cacheDir: $cacheDir")
         }
 
-        Timber.d("❌ No cache found for key: $key")
         return@withContext null
     }
+
+    override suspend fun <T> get(
+        key: String,
+        type: Class<T>
+    ): T? = get(key, type as java.lang.reflect.Type)
 
     /**
      * ذخیره داده در cache
      */
-    suspend fun <T> put(
+    override suspend fun <T> put(
         key: String,
         value: T,
-        ttl: Long = DEFAULT_TTL
+        ttl: Long
     ) = withContext(Dispatchers.IO) {
         try {
             Timber.d("💾 CacheManager.put: key=$key, ttl=${ttl}ms")

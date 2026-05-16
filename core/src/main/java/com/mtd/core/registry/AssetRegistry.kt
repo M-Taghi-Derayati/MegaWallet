@@ -2,6 +2,7 @@ package com.mtd.core.registry
 
 import android.content.Context
 import com.mtd.core.utils.loadAssets
+import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.model.assets.AssetConfig
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -9,7 +10,7 @@ import javax.inject.Singleton
 @Singleton
 class AssetRegistry @Inject constructor(
     private val blockchainRegistry: BlockchainRegistry
-) {
+) : IAssetCatalog {
 
     private val assetsById = mutableMapOf<String, AssetConfig>()
     private val assetsByNetwork = mutableMapOf<String, MutableList<AssetConfig>>()
@@ -38,11 +39,19 @@ class AssetRegistry @Inject constructor(
         return assetsByNetwork[networkId] ?: emptyList()
     }
 
+    override fun getAssetConfigsForNetwork(networkId: String): List<AssetConfig> {
+        return getAssetsForNetwork(networkId)
+    }
+
     /**
      * تمام دارایی‌های پشتیبانی شده را برمی‌گرداند.
      */
     fun getAllAssets(): List<AssetConfig> {
         return assetsById.values.toList()
+    }
+
+    override fun getAllAssetConfigs(): List<AssetConfig> {
+        return getAllAssets()
     }
     
     /**
@@ -50,6 +59,10 @@ class AssetRegistry @Inject constructor(
      */
     fun getAssetById(id: String): AssetConfig? {
         return assetsById[id]
+    }
+
+    override fun getAssetConfigById(id: String): AssetConfig? {
+        return getAssetById(id)
     }
 
     /**

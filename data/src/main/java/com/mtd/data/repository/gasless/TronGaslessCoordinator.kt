@@ -210,7 +210,23 @@ class TronGaslessCoordinator @Inject constructor(
             }
 
             when (val quote = quoteApproveRequirement(session)) {
-                is ResultResponse.Success -> Unit
+                is ResultResponse.Success -> {
+                    if (!quote.data.approveRequired) {
+                        _state.value = GaslessCoordinatorState.SIGNING_GASLESS
+                        return ResultResponse.Success(
+                            TronSponsorApproveResult(
+                                funded = false,
+                                approveRequired = false,
+                                skipReason = "ALLOWANCE_SUFFICIENT",
+                                mode = mode,
+                                amount = null,
+                                reason = "ALLOWANCE_SUFFICIENT",
+                                txHash = null,
+                                sponsorDisplayPolicy = quote.data.sponsorDisplayPolicy
+                            )
+                        )
+                    }
+                }
                 is ResultResponse.Error -> return quote
             }
 

@@ -9,30 +9,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.toColorInt
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import com.mtd.core.keymanager.MnemonicHelper
 import com.mtd.core.manager.ErrorManager
-import com.mtd.core.registry.AssetRegistry
-import com.mtd.core.registry.BlockchainRegistry
-import com.mtd.core.utils.BalanceFormatter
-import com.mtd.data.datasource.ChainDataSourceFactory
-import com.mtd.data.datasource.ICloudDataSource
-import com.mtd.domain.interfaceRepository.IAuthManager
-import com.mtd.domain.interfaceRepository.IBackupRepository
-import com.mtd.domain.interfaceRepository.IMarketDataRepository
-import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.CloudWalletItem
-import com.mtd.domain.model.CloudWalletMetadata
 import com.mtd.domain.model.CreateWalletStep
 import com.mtd.domain.model.GoogleSignInEvent
 import com.mtd.domain.model.ImportData
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.model.assets.AssetConfig
-import com.mtd.domain.model.assets.AssetPriceDto
-import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.core.WalletKey
+import com.mtd.domain.usecase.wallet.ApplyWalletKeySymbolsUseCase
+import com.mtd.domain.usecase.wallet.BackupCloudWalletMetadataUseCase
+import com.mtd.domain.usecase.wallet.BuildCloudWalletMetadataUseCase
+import com.mtd.domain.usecase.wallet.CreateOrImportWalletUseCase
+import com.mtd.domain.usecase.wallet.DeleteCloudBackupUseCase
+import com.mtd.domain.usecase.wallet.GetWalletMnemonicUseCase
+import com.mtd.domain.usecase.wallet.HasCloudBackupUseCase
+import com.mtd.domain.usecase.wallet.UpdateWalletBackupStatusUseCase
+import com.mtd.domain.usecase.wallet.importwallet.CalculateCloudWalletBalancesUseCase
+import com.mtd.domain.usecase.wallet.importwallet.ConnectCloudBackupUseCase
+import com.mtd.domain.usecase.wallet.importwallet.GetCloudSignInIntentUseCase
+import com.mtd.domain.usecase.wallet.importwallet.IsCloudBackupConnectedUseCase
 import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
 import com.mtd.megawallet.ui.compose.screens.createwallet.BackupAnimationState
@@ -42,22 +38,23 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import java.math.BigDecimal
-import java.util.UUID
 import javax.inject.Inject
 
 
 @HiltViewModel
 class CreateWalletViewModel @Inject constructor(
-    private val walletRepository: IWalletRepository,
-    private val dataSourceFactory: ChainDataSourceFactory,
-    private val blockchainRegistry: BlockchainRegistry,
-    private val assetRegistry: AssetRegistry,
-    private val marketDataRepository: IMarketDataRepository,
-    private val backupRepository: IBackupRepository,
-    private val gson: Gson,
-    private val authManager: IAuthManager,
-    private val cloudDataSource: ICloudDataSource,
+    private val applyWalletKeySymbolsUseCase: ApplyWalletKeySymbolsUseCase,
+    private val createOrImportWalletUseCase: CreateOrImportWalletUseCase,
+    private val getWalletMnemonicUseCase: GetWalletMnemonicUseCase,
+    private val updateWalletBackupStatusUseCase: UpdateWalletBackupStatusUseCase,
+    private val hasCloudBackupUseCase: HasCloudBackupUseCase,
+    private val backupCloudWalletMetadataUseCase: BackupCloudWalletMetadataUseCase,
+    private val buildCloudWalletMetadataUseCase: BuildCloudWalletMetadataUseCase,
+    private val deleteCloudBackupUseCase: DeleteCloudBackupUseCase,
+    private val getCloudSignInIntentUseCase: GetCloudSignInIntentUseCase,
+    private val isCloudBackupConnectedUseCase: IsCloudBackupConnectedUseCase,
+    private val calculateCloudWalletBalancesUseCase: CalculateCloudWalletBalancesUseCase,
+    private val connectCloudBackupUseCase: ConnectCloudBackupUseCase,
     errorManager: ErrorManager
 ) : BaseViewModel(errorManager) {
     var currentStep by mutableStateOf(CreateWalletStep.NAME_INPUT)
@@ -247,65 +244,31 @@ class CreateWalletViewModel @Inject constructor(
         viewModelScope.launch {
             val currentImportData = importData
             val isCloudRestoreFlow = isRestoreMode && restoreId != null
-            val result = if (currentImportData != null) {
-                // حالت ایمپورت
-                when (currentImportData) {
-                    is ImportData.Mnemonic -> {
-                        walletRepository.importWalletFromMnemonic(
-                            mnemonic = currentImportData.words.joinToString(" "),
-                            name = walletName,
-                            color = selectedColor.toArgb(),
-                            id = restoreId,
-                            isManualBackedUp = if (isCloudRestoreFlow) false else true,
-                            isCloudBackedUp = isCloudRestoreFlow
-                        )
-                    }
-
-                    is ImportData.PrivateKey -> {
-                        walletRepository.importWalletFromPrivateKey(
-                            privateKey = currentImportData.key,
-                            name = walletName,
-                            color = selectedColor.toArgb(),
-                            id = restoreId,
-                            isManualBackedUp = if (isCloudRestoreFlow) false else true,
-                            isCloudBackedUp = isCloudRestoreFlow
-                        )
-                    }
-                }
-            } else {
-                // حالت ساخت جدید
-                walletRepository.createNewWallet(
-                    name = walletName,
-                    color = selectedColor.toArgb()
-                )
-            }
+            val result = createOrImportWalletUseCase(
+                name = walletName,
+                color = selectedColor.toArgb(),
+                importData = currentImportData,
+                restoreId = restoreId,
+                isCloudRestoreFlow = isCloudRestoreFlow
+            )
 
             when (result) {
                 is ResultResponse.Success -> {
                     val wallet = result.data
                     generatedWalletId = wallet.id
-                    // اگر ساخت جدید بود، کلمات را نمایش می‌دهیم
+
                     if (currentImportData == null) {
-                        val mnemonicResult = walletRepository.getMnemonic(wallet.id)
-                        val mnemonic = (mnemonicResult as? ResultResponse.Success)?.data
-                        
-                        mnemonic?.let { m ->
+                        getWalletMnemonicUseCase(wallet.id)?.let { mnemonic ->
                             seedWords.clear()
-                            seedWords.addAll(m.split(" "))
+                            seedWords.addAll(mnemonic.split(" "))
                         }
-                    } else {
-                        if (currentImportData is ImportData.Mnemonic) {
-                            seedWords.clear()
-                            seedWords.addAll(currentImportData.words)
-                        }
-                    }
-                    walletAddress.addAll(wallet.keys)
-                    walletAddress.map {
-                        val net = blockchainRegistry.getNetworkByName(it.networkName)
-                        it.symbol = (net?.currencySymbol ?: "ETH").lowercase()
+                    } else if (currentImportData is ImportData.Mnemonic) {
+                        seedWords.clear()
+                        seedWords.addAll(currentImportData.words)
                     }
 
-                    // در restore از کلود اگر موجودی قبلاً در لیست محاسبه شده بود، مجدد درخواست نمی‌زنیم
+                    walletAddress.addAll(applyWalletKeySymbolsUseCase(wallet.keys))
+
                     val cachedRestoreBalance = preloadedRestoreBalanceUsdt
                     if (isCloudRestoreFlow && !cachedRestoreBalance.isNullOrBlank()) {
                         totalBalanceUSDT = cachedRestoreBalance
@@ -314,7 +277,7 @@ class CreateWalletViewModel @Inject constructor(
                     }
 
                     if (isCloudRestoreFlow) {
-                        walletRepository.updateBackupStatus(
+                        updateWalletBackupStatusUseCase(
                             walletId = wallet.id,
                             manual = false,
                             cloud = true
@@ -325,7 +288,13 @@ class CreateWalletViewModel @Inject constructor(
                 }
 
                 is ResultResponse.Error -> {
-                    // TODO: Handle error state in UI
+                    launchLocal {
+                        showErrorSnackbar(
+                            shortMessage = "خطا در ساخت کیف پول",
+                            detailedMessage = result.exception.message ?: "خطای نامشخص",
+                            errorTitle = "خطا"
+                        )
+                    }
                 }
             }
         }
@@ -335,7 +304,7 @@ class CreateWalletViewModel @Inject constructor(
 
     private suspend fun navigateToCloudPasswordStep() {
         hasExistingCloudBackup = try {
-            backupRepository.hasCloudBackup()
+            hasCloudBackupUseCase()
         } catch (_: Exception) {
             false
         }
@@ -346,10 +315,11 @@ class CreateWalletViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // بررسی اینکه آیا اتصال به Google Drive برقرار است یا نه
-                if (!cloudDataSource.isInitialized()) {
+                if (!isCloudBackupConnectedUseCase()) {
                     // نیاز به اتصال داریم - راه‌اندازی Google Sign In
-                    val intent = authManager.getSignInIntent()
-                    _googleSignInEvent.send(GoogleSignInEvent.LaunchIntent(intent))
+                    _googleSignInEvent.send(
+                        GoogleSignInEvent.LaunchIntent(getCloudSignInIntentUseCase())
+                    )
                 } else {
                     // اتصال برقرار است - پس از بررسی وجود بکاپ قبلی به صفحه رمز عبور می‌رویم
                     navigateToCloudPasswordStep()
@@ -364,24 +334,11 @@ class CreateWalletViewModel @Inject constructor(
 
     fun handleGoogleSignInResult(data: Intent?) {
         viewModelScope.launch {
-            when (val result = authManager.processSignInResult(data)) {
-                is ResultResponse.Success -> {
-                    val authCode = result.data
-                    try {
-                        // راه‌اندازی اتصال به Google Drive با auth code
-                        cloudDataSource.initializeWithAuthCode(authCode)
-                        // بعد از اتصال موفق، با بررسی وضعیت بکاپ به صفحه رمز عبور می‌رویم
-                        navigateToCloudPasswordStep()
-                    } catch (e: Exception) {
-                        launchLocal {
-                            showErrorSnackbar("خطا در اتصال به گوگل درایو: ${e.message}")
-                        }
-                    }
-                }
-
+            when (connectCloudBackupUseCase(data)) {
+                is ResultResponse.Success -> navigateToCloudPasswordStep()
                 is ResultResponse.Error -> {
                     launchLocal {
-                        showSnackbarMessage("ورود به گوگل ناموفق بود. لطفاً دوباره تلاش کنید.")
+                        showSnackbarMessage("ورود به گوگل ناموفق بود. لطفا دوباره تلاش کنید.")
                     }
                 }
             }
@@ -394,7 +351,7 @@ class CreateWalletViewModel @Inject constructor(
             backupAnimationState = BackupAnimationState.PROCESSING
             delay(900)
             generatedWalletId?.let { walletId ->
-                walletRepository.updateBackupStatus(walletId = walletId, manual = true)
+                updateWalletBackupStatusUseCase(walletId = walletId, manual = true)
             }
             backupAnimationState = BackupAnimationState.SUCCESS
         }
@@ -403,118 +360,37 @@ class CreateWalletViewModel @Inject constructor(
     fun onCloudPasswordSubmit(password: String) {
         viewModelScope.launch {
             try {
-                // ۱. بازگشت به صفحه انیمیشن
                 currentStep = CreateWalletStep.SEED_PHRASE_GENERATION
-
-                // ۲. شروع انیمیشن لودینگ (برگشت کارت و نمایش در حال آپلود)
                 backupMethod = BackupMethodType.CLOUD
                 backupAnimationState = BackupAnimationState.PROCESSING
 
-                // ۳. آماده‌سازی اطلاعات کیف پول برای backup
-                val walletData: CloudWalletMetadata = when {
-                    // حالت ساخت جدید - استفاده از seedWords
-                    seedWords.isNotEmpty() && importData == null -> {
-                        val mnemonic = seedWords.joinToString(" ")
-                        if (!MnemonicHelper.isValidMnemonic(mnemonic)) {
-                            showSnackbarMessage("عبارت بازیابی نامعتبر است")
-                            backupAnimationState = BackupAnimationState.IDLE
-                            return@launch
-                        }
-                        CloudWalletMetadata(
-                            id = generatedWalletId ?: UUID.randomUUID().toString(),
-                            name = walletName.ifEmpty { "Wallet ${System.currentTimeMillis()}" },
-                            key = mnemonic,
-                            colorHex = String.format(
-                                "#%06X",
-                                (0xFFFFFF and selectedColor.toArgb())
-                            ),
-                            isMnemonic = true
-                        )
-                    }
-                    // حالت import - استفاده از importData
-                    importData != null -> {
-                        when (val pendingImport = importData) {
-                            is ImportData.Mnemonic -> {
-                                val mnemonic =
-                                    pendingImport.words.joinToString(" ")
-                                if (!MnemonicHelper.isValidMnemonic(mnemonic)) {
-                                    showSnackbarMessage("عبارت بازیابی نامعتبر است")
-                                    backupAnimationState = BackupAnimationState.IDLE
-                                    return@launch
-                                }
-                                CloudWalletMetadata(
-                                    id = generatedWalletId ?: UUID.randomUUID().toString(),
-                                    name = walletName.ifEmpty { "Wallet ${System.currentTimeMillis()}" },
-                                    key = mnemonic,
-                                    colorHex = String.format(
-                                        "#%06X",
-                                        (0xFFFFFF and selectedColor.toArgb())
-                                    ),
-                                    isMnemonic = true
-                                )
-                            }
-
-                            is ImportData.PrivateKey -> {
-                                if (!MnemonicHelper.isPrivateKeyValid(pendingImport.key)) {
-                                    showSnackbarMessage("کلید خصوصی نامعتبر است")
-                                    backupAnimationState = BackupAnimationState.IDLE
-                                    return@launch
-                                }
-                                CloudWalletMetadata(
-                                    id = generatedWalletId ?: UUID.randomUUID().toString(),
-                                    name = walletName.ifEmpty { "Wallet ${System.currentTimeMillis()}" },
-                                    key = pendingImport.key,
-                                    colorHex = String.format(
-                                        "#%06X",
-                                        (0xFFFFFF and selectedColor.toArgb())
-                                    ),
-                                    isMnemonic = false
-                                )
-                            }
-
-                            null -> {
-                                showSnackbarMessage("اطلاعات کیف پول یافت نشد")
-                                backupAnimationState = BackupAnimationState.IDLE
-                                return@launch
-                            }
-                        }
-                    }
-
-                    else -> {
-                        showSnackbarMessage("اطلاعات کیف پول یافت نشد")
+                val walletData = when (val result = buildCloudWalletMetadataUseCase(
+                    seedWords = seedWords,
+                    importData = importData,
+                    walletId = generatedWalletId,
+                    walletName = walletName,
+                    color = selectedColor.toArgb()
+                )) {
+                    is ResultResponse.Success -> result.data
+                    is ResultResponse.Error -> {
+                        showSnackbarMessage(result.exception.message ?: "اطلاعات کیف پول یافت نشد")
                         backupAnimationState = BackupAnimationState.IDLE
                         return@launch
                     }
                 }
 
-                // ۴. بررسی وجود backup قبلی و اعتبارسنجی رمز در صورت وجود آن
-                val hasExistingBackup = try {
-                    backupRepository.hasCloudBackup()
-                } catch (e: Exception) {
-                    launchSafe {
-                        showErrorSnackbar(
-                            shortMessage = "خطا در بررسی وضعیت بکاپ ابری",
-                            detailedMessage = e.message ?: "خطای نامشخص",
-                            errorTitle = "خطا"
-                        )
-                    }
-                    backupAnimationState = BackupAnimationState.IDLE
-                    return@launch
-                }
-
-                val existingBackup: List<CloudWalletMetadata> = if (hasExistingBackup) {
-                    when (val restoreResult = backupRepository.restoreData(password)) {
-                        is ResultResponse.Success -> {
-                            try {
-                                val type = object : TypeToken<List<CloudWalletMetadata>>() {}.type
-                                gson.fromJson<List<CloudWalletMetadata>>(restoreResult.data, type)
-                                    ?: emptyList()
-                            } catch (_: Exception) {
-                                emptyList()
-                            }
+                when (val result = backupCloudWalletMetadataUseCase(walletData, password)) {
+                    is ResultResponse.Success -> {
+                        generatedWalletId?.let { walletId ->
+                            updateWalletBackupStatusUseCase(walletId = walletId, cloud = true)
                         }
+                        backupAnimationState = BackupAnimationState.SUCCESS
+                    }
 
-                        is ResultResponse.Error -> {
+                    is ResultResponse.Error -> {
+                        val isPasswordError = result.exception is IllegalArgumentException &&
+                                result.exception.message == "Incorrect cloud backup password"
+                        if (isPasswordError) {
                             launchSafe {
                                 showErrorSnackbar(
                                     shortMessage = "رمز عبور اشتباه است",
@@ -522,41 +398,14 @@ class CreateWalletViewModel @Inject constructor(
                                     errorTitle = "خطای رمز عبور"
                                 )
                             }
-                            backupAnimationState = BackupAnimationState.IDLE
-                            return@launch
-                        }
-                    }
-                } else {
-                    emptyList()
-                }
-
-                // ۵. اضافه کردن کیف پول جدید به لیست موجود (یا ایجاد لیست جدید) با حذف تکراری‌ها
-                val allWallets = existingBackup
-                    .filterNot { it.id == walletData.id }
-                    .plus(walletData)
-
-                // ۶. تبدیل به JSON
-                val jsonData = gson.toJson(allWallets)
-
-                // ۷. آپلود به کلود با رمز عبور
-                when (val result = backupRepository.backupData(jsonData, password)) {
-                    is ResultResponse.Success -> {
-                        generatedWalletId?.let { walletId ->
-                            walletRepository.updateBackupStatus(walletId = walletId, cloud = true)
-                        }
-                        // ۸. نمایش وضعیت موفقیت
-                        backupAnimationState = BackupAnimationState.SUCCESS
-                    }
-
-                    is ResultResponse.Error -> {
-                        launchSafe {
-                            showErrorSnackbar(
-                                shortMessage = "خطا در آپلود پشتیبان",
-                                detailedMessage = "متأسفانه در هنگام آپلود فایل پشتیبان به Google Drive خطایی رخ داد.\n\n" +
-                                        "جزئیات خطا: ${result.exception.message ?: "خطای نامشخص"}\n\n" +
-                                        "لطفاً اتصال اینترنت خود را بررسی کنید و دوباره تلاش کنید.",
-                                errorTitle = "خطا در آپلود پشتیبان"
-                            )
+                        } else {
+                            launchSafe {
+                                showErrorSnackbar(
+                                    shortMessage = "خطا در آپلود پشتیبان",
+                                    detailedMessage = "جزئیات خطا: ${result.exception.message ?: "خطای نامشخص"}",
+                                    errorTitle = "خطا در آپلود پشتیبان"
+                                )
+                            }
                         }
                         backupAnimationState = BackupAnimationState.IDLE
                     }
@@ -594,85 +443,47 @@ class CreateWalletViewModel @Inject constructor(
     private fun calculateTotalBalance(wallet: Wallet) {
         totalBalanceUSDT = "..."
         launchSafe {
-            // دریافت لیست تمام دارایی‌ها و قیمت‌های لحظه‌ای
-            val allAssets = assetRegistry.getAllAssets()
-            val allAssetIds = allAssets.map { it.symbol }.distinct()
+            val secret = getWalletSecretForBalance() ?: run {
+                totalBalanceUSDT = "0.00"
+                return@launchSafe
+            }
 
-            val pricesMap = if (allAssetIds.isNotEmpty()) {
-                val pricesResult = marketDataRepository.getLatestPrices(allAssetIds)
-                if (pricesResult is ResultResponse.Success) {
-                    pricesResult.data.associateBy { it.assetId }
-                } else emptyMap()
-            } else emptyMap()
+            val walletWithBalance = calculateCloudWalletBalancesUseCase(
+                listOf(
+                    CloudWalletItem(
+                        id = wallet.id,
+                        name = wallet.name,
+                        key = secret,
+                        colorHex = String.format("#%06X", 0xFFFFFF and wallet.color),
+                        isMnemonic = wallet.hasMnemonic
+                    )
+                )
+            ).firstOrNull()
 
-            // محاسبه موجودی کیف پول
-            val totalUsd = calculateSingleWalletBalance(wallet.keys, allAssets, pricesMap)
-
-            totalBalanceUSDT = BalanceFormatter.formatUsdValue(totalUsd).replace("$", "")
+            totalBalanceUSDT = walletWithBalance?.balanceUsdt?.replace("$", "") ?: "0.00"
         }
     }
 
-    /**
-     * محاسبه ارزش یک کیف پول خاص بر اساس کلیدهای آن
-     * ساختار مشابه calculateSingleWalletBalance در WalletImportViewModel
-     */
-    private suspend fun calculateSingleWalletBalance(
-        keys: List<WalletKey>,
-        allAssets: List<AssetConfig>,
-        pricesMap: Map<String, AssetPriceDto>
-    ): BigDecimal {
-        var total = BigDecimal.ZERO
-
-        keys.forEach { key ->
-            val chainId = key.chainId ?: return@forEach
-            val dataSource = dataSourceFactory.create(chainId)
-
-            if (key.networkType == NetworkType.EVM || key.networkType == NetworkType.TVM) {
-                val result = dataSource.getBalanceAssets(key.address)
-                if (result is ResultResponse.Success) {
-                    result.data.forEach { assetBalance ->
-                        val assetConfig = allAssets.find { asset ->
-                            asset.networkId == blockchainRegistry.getNetworkByName(key.networkName)?.id &&
-                                    (asset.contractAddress.equals(
-                                        assetBalance.contractAddress,
-                                        true
-                                    ) ||
-                                            (asset.contractAddress == null && assetBalance.contractAddress == null))
-                        }
-
-                        if (assetConfig != null) {
-                            val price =
-                                pricesMap[assetConfig.symbol]?.priceUsd ?: BigDecimal.ZERO
-                            total += assetBalance.balance * price
-                        }
-                    }
-                }
-            } else {
-                val result = dataSource.getBalance(key.address)
-                if (result is ResultResponse.Success) {
-                    val assetConfig =
-                        allAssets.find { it.networkId == blockchainRegistry.getNetworkByName(key.networkName)?.id }
-                    if (assetConfig != null) {
-                        val price = pricesMap[assetConfig.symbol]?.priceUsd ?: BigDecimal.ZERO
-                        total += result.data * price
-                    }
-                }
-            }
+    private fun getWalletSecretForBalance(): String? {
+        return when (val currentImportData = importData) {
+            is ImportData.Mnemonic -> currentImportData.words.joinToString(" ")
+            is ImportData.PrivateKey -> currentImportData.key
+            null -> seedWords.takeIf { it.isNotEmpty() }?.joinToString(" ")
         }
-        return total
     }
 
     fun deleteCloudBackup() {
         viewModelScope.launch {
             try {
-                if (!cloudDataSource.isInitialized()) {
-                    val intent = authManager.getSignInIntent()
-                    _googleSignInEvent.send(GoogleSignInEvent.LaunchIntent(intent))
+                if (!isCloudBackupConnectedUseCase()) {
+                    _googleSignInEvent.send(
+                        GoogleSignInEvent.LaunchIntent(getCloudSignInIntentUseCase())
+                    )
                     showSnackbarMessage("ابتدا به Google Drive متصل شوید")
                     return@launch
                 }
 
-                when (val result = backupRepository.deleteBackup()) {
+                when (val result = deleteCloudBackupUseCase()) {
                     is ResultResponse.Success -> {
                         showErrorSnackbar("فایل پشتیبان با موفقیت حذف شد")
                     }

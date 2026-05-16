@@ -2,6 +2,7 @@ package com.mtd.domain.model.gassless
 
 import com.mtd.domain.model.FeeOption
 import com.mtd.domain.model.GaslessDisplayPolicy
+import com.mtd.domain.model.GaslessSmartFee
 
 sealed class FeeState {
         object Idle : FeeState()
@@ -25,7 +26,8 @@ enum class FeeTrend { NONE, UP, DOWN }
         data class Ready(
             val gaslessPolicy: GaslessDisplayPolicy?,
             val sponsorPolicy: GaslessDisplayPolicy?,
-            val needsApprove: Boolean
+            val needsApprove: Boolean,
+            val smartFee: GaslessSmartFee? = null
         ) : GaslessPreviewState()
         data class Error(val message: String) : GaslessPreviewState()
     }

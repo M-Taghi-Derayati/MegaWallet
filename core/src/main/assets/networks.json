@@ -45,7 +45,7 @@
     "derivationPath": "m/44'/195'/0'/0/0",
     "rpcUrls": ["https://tron-rpc.publicnode.com"],
     "rpcUrlsEvm": ["https://tron-evm.publicnode.com","https://tron.api.pocket.network"],
-    "explorers": ["https://apilist.tronscan.org"],
+    "explorers": ["https://api.trongrid.io/"],
     "webSocketUrl": "wss://tron.drpc.org",
     "currencySymbol": "TRX",
     "decimals": 6,
@@ -65,7 +65,7 @@
     "derivationPath": "m/44'/195'/0'/0/0",
     "rpcUrls": ["https://api.shasta.trongrid.io"],
     "rpcUrlsEvm": ["https://api.shasta.trongrid.io/jsonrpc"],
-    "explorers": ["https://shasta.tronscan.org"],
+    "explorers": ["https://api.shasta.trongrid.io/"],
     "webSocketUrl": "",
     "currencySymbol": "TRX",
     "decimals": 6,
@@ -317,7 +317,7 @@
       "https://bsc-testnet.drpc.org"
     ],
     "webSocketUrl": "wss://bsc-testnet.drpc.org",
-    "explorers": ["https://api.etherscan.io/"],
+    "explorers": ["https://bsc-testnet-explorer-api.nodereal.io/"],
     "decimals": 18,
     "currencySymbol": "tBNB",
     "isTestnet": true,
@@ -330,7 +330,7 @@
   },
   {
     "id": "bsc_mainnet",
-    "name": "BINANCESMARTCHAIN",
+    "name": "BSC",
     "networkType": "EVM",
     "chainId": 56,
     "derivationPath": "m/44'/60'/0'/0/0",
@@ -340,7 +340,7 @@
       "https://public-bsc.nownodes.io/"
     ],
     "webSocketUrl": "wss://bsc-ws-node.binance.org",
-    "explorers": ["https://api.etherscan.io/"],
+    "explorers": ["https://bsc-explorer-api.nodereal.io/"],
     "decimals": 18,
     "currencySymbol": "BNB",
     "addressPrefix": "0x",
@@ -363,7 +363,7 @@
       "https://base-sepolia-rpc.publicnode.com"
     ],
     "webSocketUrl": "wss://base-sepolia-rpc.publicnode.com",
-    "explorers": ["https://sepolia.basescan.org/"],
+    "explorers": ["https://base-sepolia.blockscout.com/"],
     "decimals": 18,
     "currencySymbol": "ETH",
     "isTestnet": true,
@@ -385,7 +385,7 @@
       "https://base.drpc.org"
     ],
     "webSocketUrl": "wss://base.publicnode.com",
-    "explorers": ["https://basescan.org/"],
+    "explorers": ["https://base.blockscout.com/"],
     "decimals": 18,
     "currencySymbol": "ETH",
     "addressPrefix": "0x",

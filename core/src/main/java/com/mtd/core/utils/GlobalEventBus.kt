@@ -1,27 +1,23 @@
 package com.mtd.core.utils
 
+import com.mtd.domain.interfaceRepository.IAppEventBus
+import com.mtd.domain.model.AppEvent
+import com.mtd.domain.model.PendingTransactionHint as DomainPendingTransactionHint
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// این کلاس به صورت Singleton در کل اپ در دسترس خواهد بود
+typealias GlobalEvent = AppEvent
+typealias PendingTransactionHint = DomainPendingTransactionHint
+
 @Singleton
-class GlobalEventBus @Inject constructor() {
+class GlobalEventBus @Inject constructor() : IAppEventBus {
 
-    private val _events = MutableSharedFlow<GlobalEvent>(replay = 1)
-    val events = _events.asSharedFlow()
+    private val _events = MutableSharedFlow<AppEvent>(replay = 1)
+    override val events = _events.asSharedFlow()
 
-    suspend fun postEvent(event: GlobalEvent) {
+    override suspend fun postEvent(event: AppEvent) {
         _events.emit(event)
     }
-}
-
-// یک sealed class برای تعریف انواع رویدادهای ممکن
-sealed class GlobalEvent {
-    // رویداد برای زمانی که کیف پول نیاز به رفرش دارد
-    data object WalletNeedsRefresh : GlobalEvent()
-    
-    // در آینده می‌تونی رویدادهای دیگری هم اینجا اضافه کنی
-    // data class SomeOtherEvent(val data: String) : GlobalEvent()
 }

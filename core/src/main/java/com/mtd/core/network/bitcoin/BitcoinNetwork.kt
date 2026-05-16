@@ -1,7 +1,6 @@
 package com.mtd.core.network.bitcoin
 
 
-
 import com.mtd.domain.model.core.NetworkConfig
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.NetworkType

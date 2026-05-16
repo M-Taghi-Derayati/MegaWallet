@@ -8,16 +8,13 @@ import retrofit2.http.Query
 
 // اینترفیس Retrofit
 interface BSCscanApiService {
-    @GET("v2/api")
-    suspend fun getTransactions(
-        @Query("chainid") chainid: String = "97",
-        @Query("module") module: String = "account",
-        @Query("action") action: String = "txlist",
+    @GET("api/tx/getAssetTransferByAddress")
+    suspend fun getAssetTransferByAddress(
         @Query("address") address: String,
-        @Query("sort") sort: String = "desc",
-        @Query("apikey") apiKey: String="AP9B14J1M6MGACP5GAHMS6377VAD8U2NT5",
+        @Query("type") type: String, // "transaction", "20", "721", "1155"
+        @Query("pageSize") pageSize: Int = 20,
         @Query("page") page: Int = 1,
-        @Query("offset") offset: Int = 30
+        @Query("order") order: String = "desc"
     ): Response<BSCscanResponse>
 }
 

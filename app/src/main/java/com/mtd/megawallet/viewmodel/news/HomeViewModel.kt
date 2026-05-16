@@ -1,29 +1,34 @@
 package com.mtd.megawallet.viewmodel.news
 
 import com.mtd.domain.model.assets.AssetConfig
-import com.mtd.core.manager.CacheManager
-import com.mtd.core.manager.CacheManager.Companion.ASSETS_TTL
 import com.mtd.core.manager.ErrorManager
 import com.mtd.domain.model.core.NetworkType
-import com.mtd.core.registry.AssetRegistry
-import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.BalanceFormatter
-import com.mtd.core.utils.GlobalEvent
-import com.mtd.core.utils.GlobalEventBus
 import com.mtd.core.utils.formatWithSeparator
-import com.mtd.data.datasource.ChainDataSourceFactory
-import com.mtd.domain.interfaceRepository.IMarketDataRepository
-import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.interfaceRepository.IAppCacheStore
+import com.mtd.domain.interfaceRepository.IAppCacheStore.Companion.ASSETS_TTL
+import com.mtd.domain.interfaceRepository.IAppEventBus
+import com.mtd.domain.interfaceRepository.IAssetCatalog
+import com.mtd.domain.interfaceRepository.INetworkCatalog
+import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.assets.AssetPriceDto
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.Wallet
-import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.CachedAssetBalance
 import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.HomeUiState.DisplayCurrency
 import com.mtd.domain.model.NetworkShare
+import com.mtd.domain.usecase.asset.GetLatestAssetPricesUseCase
+import com.mtd.domain.usecase.asset.GetUsdToIrrRateUseCase
+import com.mtd.domain.usecase.network.GetNetworkTypeByIdUseCase
+import com.mtd.domain.usecase.network.GetNetworkTypeForAddressUseCase
+import com.mtd.domain.usecase.wallet.GetActiveWalletUseCase
+import com.mtd.domain.usecase.wallet.GetBalancesForMultipleWalletsUseCase
+import com.mtd.domain.usecase.wallet.HasWalletUseCase
+import com.mtd.domain.usecase.wallet.LoadExistingWalletUseCase
+import com.mtd.domain.usecase.wallet.ObserveActiveWalletUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,14 +42,19 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val walletRepository: IWalletRepository,
-    private val marketDataRepository: IMarketDataRepository,
-    private val dataSourceFactory: ChainDataSourceFactory,
-    private val assetRegistry: AssetRegistry,
-    private val blockchainRegistry: BlockchainRegistry,
-    private val globalEventBus: GlobalEventBus,
-    private val activeWalletManager: ActiveWalletManager,
-    private val cacheManager: CacheManager,
+    private val assetCatalog: IAssetCatalog,
+    private val networkCatalog: INetworkCatalog,
+    private val appEventBus: IAppEventBus,
+    private val cacheStore: IAppCacheStore,
+    private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
+    private val getUsdToIrrRateUseCase: GetUsdToIrrRateUseCase,
+    private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
+    private val getActiveWalletUseCase: GetActiveWalletUseCase,
+    private val loadExistingWalletUseCase: LoadExistingWalletUseCase,
+    private val getBalancesForMultipleWalletsUseCase: GetBalancesForMultipleWalletsUseCase,
+    private val hasWalletUseCase: HasWalletUseCase,
+    private val getNetworkTypeForAddressUseCase: GetNetworkTypeForAddressUseCase,
+    private val getNetworkTypeByIdUseCase: GetNetworkTypeByIdUseCase,
     errorManager: ErrorManager
 ) : BaseViewModel(errorManager) {
 
@@ -73,7 +83,7 @@ class HomeViewModel @Inject constructor(
     private val LAST_BALANCE_SYNC_TIME_KEY = "last_balance_sync_time"
 
 
-    val activeWallet = activeWalletManager.activeWallet
+    val activeWallet = observeActiveWalletUseCase()
 
     // لیست کامل و خام تمام دارایی‌ها برای مدیریت آپدیت‌ها
     private var fullRawAssets = mutableListOf<AssetItem>()
@@ -114,17 +124,17 @@ class HomeViewModel @Inject constructor(
     }
 
     fun getNetworkTypeForAddress(address: String): NetworkType? {
-        return blockchainRegistry.getNetworkType(address = address)
+        return getNetworkTypeForAddressUseCase(address)
     }
 
     fun getNetworkTypeForNetworkId(networkId: String): NetworkType? {
-        return blockchainRegistry.getNetworkType(networkId = networkId)
+        return getNetworkTypeByIdUseCase(networkId)
     }
 
     private fun loadWalletIfNeeded() {
         launchSafe {
-            if (activeWalletManager.activeWallet.value != null) return@launchSafe
-            when (val result = walletRepository.loadExistingWallet()) {
+            if (getActiveWalletUseCase() != null) return@launchSafe
+            when (val result = loadExistingWalletUseCase()) {
                 is ResultResponse.Success -> {
                     result.data?.let { Timber.i("Wallet loaded: ${it.name}") }
                 }
@@ -139,7 +149,7 @@ class HomeViewModel @Inject constructor(
 
     private fun observeActiveWallet() {
         launchSafe {
-            activeWalletManager.activeWallet.collect { wallet ->
+            observeActiveWalletUseCase().collect { wallet ->
                 // کنسل کردن کارهای قبلی برای جلوگیری از نشت دیتا بین والت‌ها
                 dataFetchJob?.cancel()
 
@@ -150,7 +160,7 @@ class HomeViewModel @Inject constructor(
                         loadHomePageData(wallet, forceUpdate = false)
                     }
                 } else {
-                    if (!walletRepository.hasWallet()) {
+                    if (!hasWalletUseCase()) {
                         _uiState.value = HomeUiState.Error("کیف پولی یافت نشد.")
                         errorManager.showSnackbar("کیف پولی یافت نشد.")
                     }
@@ -160,12 +170,12 @@ class HomeViewModel @Inject constructor(
     }
 
     private suspend fun loadHomePageData(activeWallet: Wallet, forceUpdate: Boolean = false) {
-        val allSupportedAssets = assetRegistry.getAllAssets()
+        val allSupportedAssets = assetCatalog.getAllAssetConfigs()
 
         // ۱. لود از کش
         val cachedAssetsMap = mutableMapOf<String, CachedAssetBalance>()
         allSupportedAssets.forEach { config ->
-            cacheManager.get(getAssetCacheKey(activeWallet.id, config.id), CachedAssetBalance::class.java)?.let {
+            cacheStore.get(getAssetCacheKey(activeWallet.id, config.id), CachedAssetBalance::class.java)?.let {
                 cachedAssetsMap[config.id] = it
             }
         }
@@ -175,7 +185,7 @@ class HomeViewModel @Inject constructor(
         // ۲. ساخت لیست بر اساس کش یا مقادیر اولیه
         val localAssets = allSupportedAssets.map { config ->
             val cached = cachedAssetsMap[config.id]
-            val network = blockchainRegistry.getNetworkById(config.networkId)
+            val network = networkCatalog.getNetworkInfoById(config.networkId)
             if (cached != null) {
                 AssetItem(
                     id = config.id,
@@ -223,7 +233,7 @@ class HomeViewModel @Inject constructor(
         }
 
         //  عدم بلاک کردن UI برای دریافت نرخ ارز
-        val savedRate = cacheManager.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull()
+        val savedRate = cacheStore.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull()
         val irrRate = cachedIrrRate ?: savedRate ?: BigDecimal("0")
         val usdtRate = BigDecimal.ONE
 
@@ -237,8 +247,8 @@ class HomeViewModel @Inject constructor(
         // ۳. تصمیم‌گیری برای آپدیت خودکار بر اساس زمان آخرین همگام‌سازی
         val currentTime = System.currentTimeMillis()
 
-        val lastPriceSync = cacheManager.get(LAST_PRICE_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
-        val lastBalanceSync = cacheManager.get(LAST_BALANCE_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
+        val lastPriceSync = cacheStore.get(LAST_PRICE_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
+        val lastBalanceSync = cacheStore.get(LAST_BALANCE_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
 
         val isPriceStale = currentTime - lastPriceSync > RR_PRICE_REFRESH_INTERVAL
         val isBalanceStale = currentTime - lastBalanceSync > RR_BALANCE_REFRESH_INTERVAL
@@ -273,13 +283,13 @@ class HomeViewModel @Inject constructor(
             val (usdtRate, irrRate) = fetchExchangeRates().apply {
                 cachedIrrRate = this.second
                 lastIrrRateUpdateTime = System.currentTimeMillis()
-                cacheManager.put("LAST_IRR_RATE", this.second.toPlainString())
+                cacheStore.put("LAST_IRR_RATE", this.second.toPlainString())
             }
 
-            val allAssets = assetRegistry.getAllAssets()
+            val allAssets = assetCatalog.getAllAssetConfigs()
             val allCoinIds = allAssets.map { it.symbol }.distinct()
 
-            val result = marketDataRepository.getLatestPrices(allCoinIds)
+            val result = getLatestAssetPricesUseCase(allCoinIds)
             if (result is ResultResponse.Success) {
                 val pricesMap = result.data.associateBy { it.assetId }
 
@@ -306,7 +316,7 @@ class HomeViewModel @Inject constructor(
 
                             // همگام‌سازی با کش دیسک برای استفاده در صفحات دیگر
                             launchSafe {
-                                cacheManager.put(getAssetCacheKey(currentWalletId ?: "", updatedItem.id), CachedAssetBalance(
+                                cacheStore.put(getAssetCacheKey(currentWalletId ?: "", updatedItem.id), CachedAssetBalance(
                                     assetId = updatedItem.id, walletId = currentWalletId ?: "",
                                     balanceRaw = updatedItem.balanceRaw,
                                     priceUsdRaw = updatedItem.priceUsdRaw,
@@ -317,7 +327,7 @@ class HomeViewModel @Inject constructor(
                         }
                     }
                 }
-                cacheManager.put(LAST_PRICE_SYNC_TIME_KEY, System.currentTimeMillis())
+                cacheStore.put(LAST_PRICE_SYNC_TIME_KEY, System.currentTimeMillis())
                 uiUpdateChannel.trySend(Unit)
             }
         }
@@ -331,15 +341,15 @@ class HomeViewModel @Inject constructor(
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
 
             // ابتدا از همان نرخ IRR کش شده استفاده می‌کنیم
-            val irrRate = cachedIrrRate ?: cacheManager.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            val irrRate = cachedIrrRate ?: cacheStore.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull() ?: BigDecimal.ZERO
             val usdtRate = BigDecimal.ONE
 
-            val jobs = blockchainRegistry.getAllNetworks().map { network ->
+            val jobs = networkCatalog.getAllNetworkInfos().map { network ->
                 launchSafe {
-                    val result = walletRepository.getBalancesForMultipleWallets(network.name, listOf(wallet.id))
+                    val result = getBalancesForMultipleWalletsUseCase(network.name, listOf(wallet.id))
                     if (result is ResultResponse.Success) {
                         val walletAssets = result.data[wallet.id] ?: return@launchSafe
-                        val assetsInNetwork = assetRegistry.getAssetsForNetwork(network.id)
+                        val assetsInNetwork = assetCatalog.getAssetConfigsForNetwork(network.id)
 
                         walletAssets.forEach { asset ->
                             val config = assetsInNetwork.find {
@@ -356,8 +366,62 @@ class HomeViewModel @Inject constructor(
             }
 
             jobs.filter { it.isActive }.joinAll()
-            cacheManager.put(LAST_BALANCE_SYNC_TIME_KEY, System.currentTimeMillis())
+            cacheStore.put(LAST_BALANCE_SYNC_TIME_KEY, System.currentTimeMillis())
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = false) else it }
+        }
+    }
+
+    private fun refreshSingleAssetBalance(event: AppEvent.WalletAssetNeedsRefresh) {
+        val wallet = getActiveWalletUseCase() ?: return
+        val network = networkCatalog.getNetworkInfoById(event.networkId) ?: return
+        val targetConfigs = assetCatalog.getAssetConfigsForNetwork(event.networkId).filter { config ->
+            config.id == event.assetId ||
+                if (event.contractAddress.isNullOrBlank()) {
+                    config.contractAddress == null
+                } else {
+                    config.contractAddress.equals(event.contractAddress, ignoreCase = true)
+                }
+        }
+
+        if (targetConfigs.isEmpty()) return
+
+        launchSafe {
+            _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
+
+            try {
+                val irrRate = cachedIrrRate
+                    ?: cacheStore.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull()
+                    ?: BigDecimal.ZERO
+                val usdtRate = BigDecimal.ONE
+
+                when (val result = getBalancesForMultipleWalletsUseCase(network.name, listOf(wallet.id))) {
+                    is ResultResponse.Success -> {
+                        val walletAssets = result.data[wallet.id].orEmpty()
+                        targetConfigs.forEach { config ->
+                            val refreshed = walletAssets.firstOrNull { asset ->
+                                asset.symbol.equals(config.symbol, ignoreCase = true) &&
+                                    (config.contractAddress?.equals(asset.contractAddress, true)
+                                        ?: asset.contractAddress.isNullOrBlank())
+                            }
+                            updateAssetItemAndTotal(
+                                walletId = wallet.id,
+                                assetConfig = config,
+                                balance = refreshed?.balance ?: BigDecimal.ZERO,
+                                pricesMap = emptyMap(),
+                                usdtRate = usdtRate,
+                                irrRate = irrRate
+                            )
+                        }
+                    }
+
+                    is ResultResponse.Error -> Timber.w(
+                        result.exception,
+                        "Targeted balance refresh failed for ${event.networkId}/${event.assetId}"
+                    )
+                }
+            } finally {
+                _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = false) else it }
+            }
         }
     }
 
@@ -414,7 +478,7 @@ class HomeViewModel @Inject constructor(
 
                 // به‌روزرسانی در کش
                 launchSafe {
-                    cacheManager.put(getAssetCacheKey(walletId, assetConfig.id), CachedAssetBalance(
+                    cacheStore.put(getAssetCacheKey(walletId, assetConfig.id), CachedAssetBalance(
                         assetId = assetConfig.id, walletId = walletId, balanceRaw = balance,
                         priceUsdRaw = currentPrice,
                         balance = updatedAsset.balance, balanceUsdt = updatedAsset.balanceUsdt,
@@ -422,7 +486,7 @@ class HomeViewModel @Inject constructor(
                     ), ttl = ASSETS_TTL)
                 }
             } else {
-                val network = blockchainRegistry.getNetworkById(assetConfig.networkId)
+                val network = networkCatalog.getNetworkInfoById(assetConfig.networkId)
                 val newAsset = AssetItem(
                     id = assetConfig.id,
                     name = assetConfig.name,
@@ -529,7 +593,7 @@ class HomeViewModel @Inject constructor(
                         val pct = (it.balanceRaw.toFloat() / totalBal.toFloat()) * 100f
                         NetworkShare(
                             it.networkId, it.networkName.removePrefix("on ").trim(),
-                            blockchainRegistry.getNetworkById(it.networkId)?.color ?: "#888888", pct
+                            networkCatalog.getNetworkInfoById(it.networkId)?.color ?: "#888888", pct
                         )
                     }
 
@@ -585,7 +649,7 @@ class HomeViewModel @Inject constructor(
         }
 
         // از API بگیر و cache را به‌روز کن
-        val rate = (marketDataRepository.getUsdToIrrRate() as? ResultResponse.Success)?.data?.rate ?: BigDecimal.ZERO
+        val rate = (getUsdToIrrRateUseCase() as? ResultResponse.Success)?.data?.rate ?: BigDecimal.ZERO
         cachedIrrRate = rate
         lastIrrRateUpdateTime = currentTime
         return rate
@@ -593,12 +657,18 @@ class HomeViewModel @Inject constructor(
 
     private fun listenToGlobalEvents() {
         launchSafe(checkNetwork = false) {
-            globalEventBus.events.collect { if (it is GlobalEvent.WalletNeedsRefresh) refreshData() }
+            appEventBus.events.collect { event ->
+                when (event) {
+                    is AppEvent.WalletNeedsRefresh -> refreshData()
+                    is AppEvent.WalletAssetNeedsRefresh -> refreshSingleAssetBalance(event)
+                    else -> Unit
+                }
+            }
         }
     }
 
     fun refreshData() {
-        activeWalletManager.activeWallet.value?.let {
+        getActiveWalletUseCase()?.let {
             dataFetchJob?.cancel()
             dataFetchJob = launchSafe {
                 // در رفرش دستی، هر دو را اجباری آپدیت می‌کنیم

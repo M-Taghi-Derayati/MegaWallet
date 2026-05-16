@@ -1,9 +1,9 @@
 package com.mtd.megawallet.viewmodel.news
 
 import com.mtd.core.manager.ErrorManager
-import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.domain.model.MainNavigationEvent
+import com.mtd.domain.usecase.wallet.GetInitialNavigationUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,7 +11,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val walletRepository: IWalletRepository,
+    private val getInitialNavigationUseCase: GetInitialNavigationUseCase,
     errorManager: ErrorManager
 ) : BaseViewModel(errorManager) {
 
@@ -27,11 +27,7 @@ class MainViewModel @Inject constructor(
 
     private fun checkWalletStatus() {
         launchSafe {
-            if (walletRepository.hasWallet()) {
-                _navigationState.value = MainNavigationEvent.NavigateToHome
-            } else {
-                _navigationState.value = MainNavigationEvent.NavigateToOnboarding
-            }
+            _navigationState.value = getInitialNavigationUseCase()
         }
     }
 

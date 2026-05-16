@@ -2,13 +2,11 @@ package com.mtd.megawallet.viewmodel.news
 
 import androidx.lifecycle.viewModelScope
 import com.mtd.core.manager.ErrorManager
-import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.BalanceFormatter
-import com.mtd.core.wallet.ActiveWalletManager
-import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.repository.transfer.UnifiedTransferCoordinator
-import com.mtd.domain.interfaceRepository.IMarketDataRepository
-import com.mtd.domain.model.Asset
+import com.mtd.domain.interfaceRepository.IAppEventBus
+import com.mtd.domain.interfaceRepository.INetworkCatalog
+import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.EvmSponsorMode
 import com.mtd.domain.model.FeeOption
@@ -16,15 +14,25 @@ import com.mtd.domain.model.GaslessDisplayPolicy
 import com.mtd.domain.model.GaslessServiceType
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransferMode
+import com.mtd.domain.model.TronApproveQuoteResult
 import com.mtd.domain.model.TronSponsorMode
 import com.mtd.domain.model.UnifiedGaslessSession
 import com.mtd.domain.model.UnifiedTransferRequest
+import com.mtd.domain.model.PendingTransactionHint
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.gassless.FeeState
 import com.mtd.domain.model.gassless.FeeTrend
 import com.mtd.domain.model.gassless.GaslessAvailability
 import com.mtd.domain.model.gassless.GaslessPreviewState
 import com.mtd.domain.model.gassless.SubmitState
+import com.mtd.domain.usecase.asset.GetLatestAssetPricesUseCase
+import com.mtd.domain.usecase.asset.GetUsdToIrrRateUseCase
+import com.mtd.domain.usecase.network.GetNetworkTypeForAddressUseCase
+import com.mtd.domain.usecase.network.ValidateAddressForNetworkUseCase
+import com.mtd.domain.usecase.send.EstimateSendFeesUseCase
+import com.mtd.domain.usecase.send.RefreshSelectedAssetBalanceUseCase
+import com.mtd.domain.usecase.wallet.GetActiveWalletUseCase
+import com.mtd.domain.usecase.wallet.ObserveActiveWalletUseCase
 import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -45,11 +53,17 @@ import kotlin.math.max
 
 @HiltViewModel
 class SendViewModel @Inject constructor(
-    private val dataSourceFactory: ChainDataSourceFactory,
-    private val activeWalletManager: ActiveWalletManager,
-    private val marketDataRepository: IMarketDataRepository,
-    private val blockchainRegistry: BlockchainRegistry,
+    private val networkCatalog: INetworkCatalog,
     private val unifiedTransferCoordinator: UnifiedTransferCoordinator,
+    private val appEventBus: IAppEventBus,
+    private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
+    private val getUsdToIrrRateUseCase: GetUsdToIrrRateUseCase,
+    private val refreshSelectedAssetBalanceUseCase: RefreshSelectedAssetBalanceUseCase,
+    private val estimateSendFeesUseCase: EstimateSendFeesUseCase,
+    private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
+    private val getActiveWalletUseCase: GetActiveWalletUseCase,
+    private val getNetworkTypeForAddressUseCase: GetNetworkTypeForAddressUseCase,
+    private val validateAddressForNetworkUseCase: ValidateAddressForNetworkUseCase,
     errorManager: ErrorManager
 ) : BaseViewModel(errorManager) {
 
@@ -106,7 +120,7 @@ class SendViewModel @Inject constructor(
     private val _submitState = MutableStateFlow<SubmitState>(SubmitState.Idle)
     val submitState = _submitState.asStateFlow()
 
-    val activeWalletName = activeWalletManager.activeWallet
+    val activeWalletName = observeActiveWalletUseCase()
         .map { it?.name ?: "کیف پول من" }
         .stateIn(viewModelScope, SharingStarted.Lazily, "کیف پول من")
 
@@ -118,7 +132,7 @@ class SendViewModel @Inject constructor(
 
     private fun fetchIrrRate() {
         launchSafe {
-            when (val result = marketDataRepository.getUsdToIrrRate()) {
+            when (val result = getUsdToIrrRateUseCase()) {
                 is ResultResponse.Success -> {
                     currentIrrRate = result.data.rate
                 }
@@ -134,7 +148,7 @@ class SendViewModel @Inject constructor(
     fun setRecipient(address: String) {
         val normalized = address.trim()
         _recipientAddress.value = normalized
-        _recipientNetworkType.value = blockchainRegistry.getNetworkTypeForAddress(normalized)
+        _recipientNetworkType.value = getNetworkTypeForAddressUseCase(normalized)
     }
 
     fun setAmount(amount: String) {
@@ -158,7 +172,7 @@ class SendViewModel @Inject constructor(
     }
 
     private fun refreshGaslessAvailability(asset: AssetItem) {
-        val network = blockchainRegistry.getNetworkById(asset.networkId)
+        val network = networkCatalog.getNetworkInfoById(asset.networkId)
         val tokenAddress = asset.contractAddress
 
         if (network == null) {
@@ -172,7 +186,7 @@ class SendViewModel @Inject constructor(
         }
 
         if (asset.isNativeToken || tokenAddress.isNullOrBlank()) {
-            _gaslessAvailability.value = GaslessAvailability.Unavailable("گس‌لس فقط برای توکن‌های قراردادی فعال است")
+            _gaslessAvailability.value = GaslessAvailability.Unavailable("گس‌ لس فقط برای توکن ‌های قراردادی فعال است")
             return
         }
 
@@ -187,14 +201,14 @@ class SendViewModel @Inject constructor(
                         matched == null -> GaslessAvailability.Unavailable("این توکن فعلاً برای سرویس گس‌لس فعال نیست")
                         matched.gaslessEnabled -> GaslessAvailability.Available(note = matched.note)
                         else -> GaslessAvailability.Unavailable(
-                            matched.note ?: "این توکن فعلاً برای سرویس گس‌لس فعال نیست"
+                            matched.note ?: "این توکن فعلاً برای سرویس گس ‌لس فعال نیست"
                         )
                     }
                 }
 
                 is ResultResponse.Error -> {
                     _gaslessAvailability.value = GaslessAvailability.Unavailable(
-                        result.exception.message ?: "امکان بررسی وضعیت گس‌لس وجود ندارد"
+                        result.exception.message ?: "امکان بررسی وضعیت گس لس وجود ندارد"
                     )
                 }
             }
@@ -202,36 +216,12 @@ class SendViewModel @Inject constructor(
     }
 
     private fun updateBalanceForAsset(asset: AssetItem) {
-        val wallet = activeWalletManager.activeWallet.value ?: return
-        val network = blockchainRegistry.getNetworkById(asset.networkId) ?: return
-        val senderAddress = wallet.keys.find { it.networkName == network.name }?.address ?: return
+        val wallet = getActiveWalletUseCase() ?: return
 
         viewModelScope.launch {
-            try {
-                val dataSource = dataSourceFactory.create(network)
-                when (val res = dataSource.getBalanceAssets(senderAddress)) {
-                    is ResultResponse.Success -> {
-                        val target = res.data.find {
-                            if (asset.isNativeToken) it.contractAddress.isNullOrEmpty()
-                            else it.contractAddress?.equals(asset.contractAddress, ignoreCase = true) == true
-                        }
-                        if (target != null && target.balance != asset.balanceRaw) {
-                            val newBalance = target.balance
-                            val usd = newBalance.multiply(asset.priceUsdRaw)
-                            val irr = usd.multiply(currentIrrRate)
-                            val updated = asset.copy(
-                                balanceRaw = newBalance,
-                                balance = BalanceFormatter.formatBalance(newBalance, asset.decimals),
-                                balanceUsdt = "$${BalanceFormatter.formatUsdValue(usd)}",
-                                balanceIrr = "${BalanceFormatter.formatNumberWithSeparator(irr)} ØªÙˆÙ…Ø§Ù†"
-                            )
-                            _selectedAsset.value = updated
-                        }
-                    }
-                    else -> {}
-                }
-            } catch (e: Exception) {
-                // Ignore silent update errors
+            when (val result = refreshSelectedAssetBalanceUseCase(wallet, asset, currentIrrRate)) {
+                is ResultResponse.Success -> result.data?.let { _selectedAsset.value = it }
+                is ResultResponse.Error -> Unit
             }
         }
     }
@@ -260,7 +250,7 @@ class SendViewModel @Inject constructor(
         feePollingJob = viewModelScope.launch {
             while (isActive) {
                 val asset = _selectedAsset.value
-                val network = asset?.networkId?.let { blockchainRegistry.getNetworkById(it) }
+                val network = asset?.networkId?.let { networkCatalog.getNetworkInfoById(it) }
                 val pollingInterval = when (network?.networkType) {
                     NetworkType.SOLANA -> 20_000L
                     NetworkType.XRP -> 20_000L
@@ -336,9 +326,9 @@ class SendViewModel @Inject constructor(
             return
         }
 
-        val network = blockchainRegistry.getNetworkById(asset.networkId)
+        val network = networkCatalog.getNetworkInfoById(asset.networkId)
         if (network == null) {
-            _submitState.value = SubmitState.Error("شبکه ${asset.networkId} یافت نشد")
+            _submitState.value = SubmitState.Error(" شبکه ${asset.networkId} یافت نشد ")
             return
         }
 
@@ -369,9 +359,9 @@ class SendViewModel @Inject constructor(
 
                 if (useGasless) {
                     if (!isGaslessEnabled()) {
-                        throw IllegalStateException("ارسال گسلس برای این دارایی فعال نیست")
+                        throw IllegalStateException("ارسال گس لس برای این دارایی فعال نیست")
                     }
-                    if (!blockchainRegistry.isValidAddressForNetworkId(recipient, asset.networkId)) {
+                    if (!validateAddressForNetworkUseCase(recipient, asset.networkId)) {
                         throw IllegalStateException("آدرس مقصد برای این شبکه معتبر نیست")
                     }
 
@@ -380,6 +370,12 @@ class SendViewModel @Inject constructor(
                         recipient = recipient,
                         amountSmallest = amountSmallest,
                         selectedFee = selectedFee
+                    )
+                    notifyTransferRegistered(
+                        asset = asset,
+                        transactionId = txHash,
+                        recipient = recipient,
+                        amountSmallest = amountSmallest
                     )
                     _submitState.value = SubmitState.Success(txHash)
                     return@launch
@@ -430,6 +426,12 @@ class SendViewModel @Inject constructor(
 
                 when (val result = unifiedTransferCoordinator.sendNormal(request)) {
                     is ResultResponse.Success -> {
+                        notifyTransferRegistered(
+                            asset = asset,
+                            transactionId = result.data,
+                            recipient = recipient,
+                            amountSmallest = amountSmallest
+                        )
                         _submitState.value = SubmitState.Success(result.data)
                     }
 
@@ -458,7 +460,7 @@ class SendViewModel @Inject constructor(
         )
 
         var session = unifiedTransferCoordinator.prepareGasless(request)
-            .requireSuccess("آماده‌سازی مسیر گسلس ناموفق بود")
+            .requireSuccess("آماده سازی مسیر گس لس ناموفق بود")
 
         if (session.needsApprove()) {
             attemptSponsorApprove(session)
@@ -494,7 +496,7 @@ class SendViewModel @Inject constructor(
             )
         }.getOrElse { error ->
             _gaslessPreviewState.value = GaslessPreviewState.Error(
-                error.message ?: "امکان محاسبه هزینه گس‌لس وجود ندارد"
+                error.message ?: "امکان محاسبه هزینه گس لس وجود ندارد"
             )
             return
         }
@@ -529,10 +531,20 @@ class SendViewModel @Inject constructor(
 
             when (val preview = unifiedTransferCoordinator.previewGaslessDisplayPolicy(request)) {
                 is ResultResponse.Success -> {
+                    val quote = preview.data
+                    val gaslessPolicy = quote.displayPolicy?.gasless
+                    if (gaslessPolicy == null) {
+                        _gaslessPreviewState.value = GaslessPreviewState.Error(
+                            quote.smartFee?.reasonFa
+                                ?: "جزئیات هزینه گس‌لس از سرور دریافت نشد"
+                        )
+                        return@launch
+                    }
                     _gaslessPreviewState.value = GaslessPreviewState.Ready(
-                        gaslessPolicy = preview.data.displayPolicy?.gasless,
-                        sponsorPolicy = preview.data.displayPolicy?.sponsorApprove,
-                        needsApprove = preview.data.needsApprove
+                        gaslessPolicy = gaslessPolicy,
+                        sponsorPolicy = quote.displayPolicy?.sponsorApprove,
+                        needsApprove = quote.needsApprove,
+                        smartFee = quote.smartFee
                     )
                 }
 
@@ -550,10 +562,10 @@ class SendViewModel @Inject constructor(
         recipient: String,
         amountSmallest: BigInteger
     ): UnifiedTransferRequest {
-        val network = blockchainRegistry.getNetworkById(asset.networkId)
+        val network = networkCatalog.getNetworkInfoById(asset.networkId)
             ?: throw IllegalStateException("شبکه ${asset.networkId} یافت نشد")
         val tokenAddress = asset.contractAddress
-            ?: throw IllegalStateException("برای گسلس، آدرس قرارداد توکن الزامی است")
+            ?: throw IllegalStateException("برای گس‌لس، آدرس قرارداد توکن الزامی است")
 
         val deadline = (System.currentTimeMillis() / 1000L) + DEFAULT_GASLESS_DEADLINE_SECONDS
 
@@ -577,7 +589,7 @@ class SendViewModel @Inject constructor(
                 deadlineEpochSeconds = deadline
             )
 
-            else -> throw IllegalStateException("گسلس برای این شبکه پشتیبانی نشده است")
+            else -> throw IllegalStateException("گس‌لس برای این شبکه پشتیبانی نشده است")
         }
     }
 
@@ -680,10 +692,22 @@ class SendViewModel @Inject constructor(
             }
 
             is UnifiedGaslessSession.Tron -> {
-                val feeLimit = resolveTronApproveFeeLimit(session, selectedFee)
+                val approveQuote = unifiedTransferCoordinator.quoteTronApproveRequirement(session)
+                    .requireSuccess("دریافت quote approve ترون ناموفق بود")
+                if (!approveQuote.approveRequired) {
+                    return
+                }
+
+                val approvalAmount = approveQuote.approveTxTemplate?.approvalAmount
+                    ?: approveQuote.approvalAmount
+                    ?: approveQuote.requiredAllowance
+                    ?: throw IllegalStateException("مقدار approve از سرور دریافت نشد")
+
+                val feeLimit = resolveTronApproveFeeLimit(selectedFee, approveQuote)
                 unifiedTransferCoordinator.buildApproveTransaction(
                     session = session,
-                    tronFeeLimit = feeLimit
+                    tronFeeLimit = feeLimit,
+                    approveAmount = approvalAmount
                 ).requireSuccess("ساخت تراکنش approve ترون ناموفق بود")
             }
         }
@@ -727,37 +751,15 @@ class SendViewModel @Inject constructor(
         repeat(2) { attempt ->
             try {
                 val queued = unifiedTransferCoordinator.submitGasless(currentSession)
-                    .requireSuccess("ثبت درخواست گسلس ناموفق بود")
-
-                val finalResult = unifiedTransferCoordinator.pollGaslessUntilFinal(
-                    session = currentSession,
-                    queueId = queued.queueId,
-                    timeoutMs = GASLESS_FINAL_TIMEOUT_MS
-                ).requireSuccess("پیگیری وضعیت گسلس ناموفق بود")
-
-                val finalStatus = finalResult.status
-                if (finalStatus.status.equals("SUCCESS", ignoreCase = true)) {
-                    return finalStatus.txHash ?: finalResult.queueId
-                }
-
-                val finalError = finalStatus.lastError ?: finalStatus.status
-                if (attempt == 0 && shouldRetryGasless(finalError)) {
-                    currentSession = unifiedTransferCoordinator.prepareGasless(request)
-                        .requireSuccess("تازه‌سازی نشست گسلس ناموفق بود")
-
-                    if (currentSession.needsApprove()) {
-                        throw IllegalStateException("پس از تازه‌سازی نشست، approve توکن هنوز کافی نیست")
-                    }
-                } else {
-                    throw IllegalStateException(finalError.ifBlank { "درخواست گسلس ناموفق بود" })
-                }
+                    .requireSuccess("ثبت درخواست گس لس ناموفق بود")
+                return queued.queueId
             } catch (e: Exception) {
                 if (attempt == 0 && shouldRetryGasless(e.message)) {
                     currentSession = unifiedTransferCoordinator.prepareGasless(request)
-                        .requireSuccess("تازه‌سازی نشست گسلس ناموفق بود")
+                        .requireSuccess("تازه سازی نشست گس لس ناموفق بود")
 
                     if (currentSession.needsApprove()) {
-                        throw IllegalStateException("پس از تازه‌سازی نشست، approve توکن هنوز کافی نیست")
+                        throw IllegalStateException("پس از تازه سازی نشست، approve توکن هنوز کافی نیست")
                     }
                 } else {
                     throw e
@@ -765,7 +767,54 @@ class SendViewModel @Inject constructor(
             }
         }
 
-        throw IllegalStateException("مسیر گسلس با وجود تلاش مجدد کامل نشد")
+        throw IllegalStateException("مسیر گس لس با وجود تلاش مجدد کامل نشد")
+    }
+
+    private suspend fun notifyTransferRegistered(
+        asset: AssetItem,
+        transactionId: String,
+        recipient: String,
+        amountSmallest: BigInteger
+    ) {
+        val network = networkCatalog.getNetworkInfoById(asset.networkId)
+        val senderAddress = network?.let { resolvedNetwork ->
+            getActiveWalletUseCase()
+                ?.keys
+                ?.firstOrNull { it.networkName == resolvedNetwork.name }
+                ?.address
+        }
+
+        runCatching {
+            appEventBus.postEvent(
+                AppEvent.WalletAssetNeedsRefresh(
+                    assetId = asset.id,
+                    networkId = asset.networkId,
+                    contractAddress = asset.contractAddress
+                )
+            )
+        }
+        runCatching {
+            appEventBus.postEvent(
+                AppEvent.TransactionHistoryNeedsRefresh(
+                    networkName = network?.name?.name,
+                    userAddress = senderAddress,
+                    pendingTransaction = network?.let {
+                        PendingTransactionHint(
+                            hash = transactionId,
+                            networkName = it.name.name,
+                            networkType = it.networkType.name,
+                            fromAddress = senderAddress,
+                            toAddress = recipient,
+                            amount = amountSmallest.toString(),
+                            tokenSymbol = asset.symbol,
+                            tokenDecimals = asset.decimals,
+                            contractAddress = asset.contractAddress,
+                            isOutgoing = true
+                        )
+                    }
+                )
+            )
+        }
     }
 
     private fun resolveApproveFeeOption(selectedFee: FeeOption?): FeeOption? {
@@ -774,20 +823,17 @@ class SendViewModel @Inject constructor(
         return options.getOrNull(1) ?: options.firstOrNull()
     }
 
-    private suspend fun resolveTronApproveFeeLimit(
-        session: UnifiedGaslessSession.Tron,
-        selectedFee: FeeOption?
+    private fun resolveTronApproveFeeLimit(
+        selectedFee: FeeOption?,
+        approveQuote: TronApproveQuoteResult
     ): Long {
         val fallback = deriveFeeLimit(selectedFee, isToken = true)
-        val quoted = when (val result = unifiedTransferCoordinator.quoteTronApproveRequirement(session)) {
-            is ResultResponse.Success -> result.data.requiredSun
-            is ResultResponse.Error -> null
-        }
+        val quoted = approveQuote.requiredSun
 
         val quotedWithBuffer = quoted
-            ?.multiply(BigInteger.valueOf(APPROVE_FEE_BUFFER_NUMERATOR))
-            ?.divide(BigInteger.valueOf(APPROVE_FEE_BUFFER_DENOMINATOR))
-            ?.takeIf { it > BigInteger.ZERO }
+            .multiply(BigInteger.valueOf(APPROVE_FEE_BUFFER_NUMERATOR))
+            .divide(BigInteger.valueOf(APPROVE_FEE_BUFFER_DENOMINATOR))
+            .takeIf { it > BigInteger.ZERO }
             ?.takeIf { it <= BigInteger.valueOf(Long.MAX_VALUE) }
             ?.toLong()
 
@@ -858,10 +904,10 @@ class SendViewModel @Inject constructor(
             .toBigInteger()
     }
     fun estimateFees(asset: AssetItem, recipientAddress: String, silent: Boolean = false) {
-        val wallet = activeWalletManager.activeWallet.value ?: return
+        val wallet = getActiveWalletUseCase() ?: return
         
         // Find the network object for this asset
-        val network = blockchainRegistry.getNetworkById(asset.networkId)
+        val network = networkCatalog.getNetworkInfoById(asset.networkId)
         
         if (network == null) {
             _feeState.value = FeeState.Error("شبکه ${asset.networkId} در سیستم ثبت نشده است")
@@ -880,24 +926,10 @@ class SendViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val dataSource = dataSourceFactory.create(network)
-                val domainAsset = Asset(
-                    name = asset.name,
-                    symbol = asset.symbol,
-                    decimals = asset.decimals,
-                    contractAddress = asset.contractAddress,
-                    balance = asset.balanceRaw
-                )
-
-                val result = dataSource.getFeeOptions(
-                    fromAddress = senderAddress,
-                    toAddress = recipientAddress,
-                    asset = domainAsset
-                )
-
-                when (result) {
+                when (val result = estimateSendFeesUseCase(wallet, asset, recipientAddress)) {
                     is ResultResponse.Success -> {
-                        val firstCoinAmount = result.data.firstOrNull()?.feeInCoin ?: BigDecimal.ZERO
+                        val quote = result.data
+                        val firstCoinAmount = quote.options.firstOrNull()?.feeInCoin ?: BigDecimal.ZERO
                         
                         if (previousFeeCost != null && previousFeeCost!!.signum() != 0 && firstCoinAmount.compareTo(previousFeeCost) != 0) {
                             _feeTrend.value = if (firstCoinAmount > previousFeeCost) FeeTrend.UP else FeeTrend.DOWN
@@ -908,15 +940,15 @@ class SendViewModel @Inject constructor(
                         }
                         previousFeeCost = firstCoinAmount
 
-                        val feeCoinUsdPrice = resolveFeeCoinUsdPrice(asset = asset, networkSymbol = network.currencySymbol)
-                        val options = result.data.map { data ->
+                        val feeCoinUsdPrice = resolveFeeCoinUsdPrice(asset = asset, networkSymbol = quote.networkSymbol)
+                        val options = quote.options.map { data ->
                             val coinAmount = data.feeInCoin ?: BigDecimal.ZERO
                             val usdAmount = data.feeInUsd ?: coinAmount.multiply(feeCoinUsdPrice)
                             val irrAmount = usdAmount.multiply(currentIrrRate)
 
                             FeeOption(
                                 level = data.level,
-                                feeAmountDisplay = "${coinAmount.toPlainString()} ${network.currencySymbol}",
+                                feeAmountDisplay = "${coinAmount.toPlainString()} ${quote.networkSymbol}",
                                 feeAmountUsdDisplay = "$${BalanceFormatter.formatUsdValue(usdAmount)}",
                                 feeAmountIrrDisplay = "${BalanceFormatter.formatNumberWithSeparator(irrAmount)} تومان",
                                 estimatedTime = data.estimatedTime,
@@ -952,7 +984,7 @@ class SendViewModel @Inject constructor(
             if (cached > BigDecimal.ZERO) return cached
         }
 
-        return when (val result = marketDataRepository.getLatestPrices(listOf(symbol))) {
+        return when (val result = getLatestAssetPricesUseCase(listOf(symbol))) {
             is ResultResponse.Success -> {
                 val resolved = result.data
                     .firstOrNull { it.assetId.equals(symbol, ignoreCase = true) }
@@ -1031,5 +1063,6 @@ class SendViewModel @Inject constructor(
 
 
 }
+
 
 

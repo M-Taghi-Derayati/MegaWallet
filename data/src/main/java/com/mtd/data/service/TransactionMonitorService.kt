@@ -9,7 +9,7 @@ import com.mtd.core.notification.NotificationService
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.socket.IWebSocketClient
-import com.mtd.core.utils.GlobalEvent
+import com.mtd.domain.model.AppEvent
 import com.mtd.core.utils.GlobalEventBus
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.ResultResponse
@@ -199,7 +199,7 @@ class TransactionMonitorService @Inject constructor(
                             "دریافت وجه جدید",
                             "شما مقداری $symbol در شبکه ${network.name.name} دریافت کردید."
                         )
-                        notifyUiToRefresh()
+                        notifyUiToRefresh(assetConfig?.id, contractAddress)
                     }
 
                 } catch (e: Exception) {
@@ -247,7 +247,7 @@ class TransactionMonitorService @Inject constructor(
 
 
 
-                        notifyUiToRefresh()
+                        notifyUiToRefresh(nativeAssetId())
                     }
                 } catch (e: Exception) {
                     Timber.tag(TAG).e(e, "Error checking native transactions on ${network.name.name}")
@@ -336,7 +336,7 @@ class TransactionMonitorService @Inject constructor(
                                         "دریافت وجه جدید",
                                         "شما مقداری ${network.currencySymbol} در شبکه ${network.name.name} دریافت کردید."
                                     )
-                                    notifyUiToRefresh()
+                                    notifyUiToRefresh(nativeAssetId())
                                 }
                             }
 
@@ -401,8 +401,32 @@ class TransactionMonitorService @Inject constructor(
             }
         }
 
-        private fun notifyUiToRefresh() {
-            externalScope.launch { globalEventBus.postEvent(GlobalEvent.WalletNeedsRefresh) }
+        private fun notifyUiToRefresh(assetId: String? = null, contractAddress: String? = null) {
+            externalScope.launch {
+                if (assetId != null) {
+                    globalEventBus.postEvent(
+                        AppEvent.WalletAssetNeedsRefresh(
+                            assetId = assetId,
+                            networkId = network.id,
+                            contractAddress = contractAddress
+                        )
+                    )
+                } else {
+                    globalEventBus.postEvent(AppEvent.WalletNeedsRefresh)
+                }
+                globalEventBus.postEvent(
+                    AppEvent.TransactionHistoryNeedsRefresh(
+                        networkName = network.name.name,
+                        userAddress = userAddress
+                    )
+                )
+            }
+        }
+
+        private fun nativeAssetId(): String? {
+            return assetRegistry.getAssetsForNetwork(network.id)
+                .firstOrNull { it.contractAddress == null }
+                ?.id
         }
 
         private fun subscribeToBitcoinAddress() {

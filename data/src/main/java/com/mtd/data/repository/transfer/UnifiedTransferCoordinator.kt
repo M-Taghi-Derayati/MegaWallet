@@ -15,6 +15,7 @@ import com.mtd.domain.model.GaslessEligibilityResult
 import com.mtd.domain.model.GaslessDisplayPolicyBundle
 import com.mtd.domain.model.GaslessFinalResult
 import com.mtd.domain.model.GaslessServiceType
+import com.mtd.domain.model.GaslessSmartFee
 import com.mtd.domain.model.GaslessSubmission
 import com.mtd.domain.model.GaslessSupportedToken
 import com.mtd.domain.model.PendingGaslessTx
@@ -252,7 +253,9 @@ class UnifiedTransferCoordinator @Inject constructor(
                             is ResultResponse.Success -> ResultResponse.Success(
                                 GaslessDisplayPreview(
                                     displayPolicy = quote.data.displayPolicy,
-                                    needsApprove = session.value.needsApprove
+                                    gaslessFeeAmount = quote.data.canonicalParams.feeAmount,
+                                    needsApprove = session.value.needsApprove,
+                                    smartFee = quote.data.smartFee
                                 )
                             )
                             is ResultResponse.Error -> quote
@@ -264,7 +267,9 @@ class UnifiedTransferCoordinator @Inject constructor(
                             is ResultResponse.Success -> ResultResponse.Success(
                                 GaslessDisplayPreview(
                                     displayPolicy = quote.data.displayPolicy,
-                                    needsApprove = session.value.needsApprove
+                                    gaslessFeeAmount = quote.data.canonicalParams.feeAmount,
+                                    needsApprove = session.value.needsApprove,
+                                    smartFee = quote.data.smartFee
                                 )
                             )
                             is ResultResponse.Error -> quote
@@ -478,6 +483,8 @@ class UnifiedTransferCoordinator @Inject constructor(
 
     data class GaslessDisplayPreview(
         val displayPolicy: GaslessDisplayPolicyBundle?,
-        val needsApprove: Boolean
+        val gaslessFeeAmount: BigInteger,
+        val needsApprove: Boolean,
+        val smartFee: GaslessSmartFee? = null
     )
 }

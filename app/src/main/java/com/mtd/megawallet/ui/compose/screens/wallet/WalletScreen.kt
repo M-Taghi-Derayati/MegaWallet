@@ -726,9 +726,10 @@ fun getLocalIconResId(symbol: String): Int {
     return when (symbol.uppercase()) {
         "BTC" -> R.drawable.ic_btc
         "ETH" -> R.drawable.ic_eth
+        "BASE" -> R.drawable.ic_base
         "POL" -> R.drawable.ic_pol
         "USDT" -> R.drawable.ic_usdt
-        "BNB" -> R.drawable.ic_bnb
+        "BNB","tBNB" -> R.drawable.ic_bnb
         "USDC" -> R.drawable.ic_usdc
         "XRP" -> R.drawable.ic_xrp
         "DOGE" -> R.drawable.ic_doge

@@ -30,7 +30,7 @@ annotation class ForWebSocket
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    val serverIp="192.168.92.1"
+    val serverIp="192.168.29.17"
 //    val serverIp="10.0.2.2"
 //    val serverIp="localhost"
     //val serverIp="127.0.0.1"
@@ -42,9 +42,11 @@ object NetworkModule {
         return NetworkConnectionInterceptor(context)
     }
 
-        @Provides
-        @Singleton
-        fun provideGson(): Gson = Gson()
+    @Provides
+    @Singleton
+    fun provideGson(): Gson = com.google.gson.GsonBuilder()
+        .registerTypeAdapter(com.mtd.domain.model.TransactionRecord::class.java, com.mtd.core.utils.TransactionRecordAdapter())
+        .create()
 
         @Provides
         fun httpLoggingInterceptorProvider(): HttpLoggingInterceptor {

@@ -3,8 +3,10 @@ package com.mtd.core.di
 import android.content.Context
 import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
+import com.mtd.core.keymanager.WalletSecretValidator
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.domain.interfaceRepository.IWalletSecretValidator
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -43,5 +45,11 @@ object CryptoModule {
         return AssetRegistry(registry).apply {
             loadAssetsFromAssets(context)
         }
+    }
+
+    @Provides
+    @Singleton
+    fun provideWalletSecretValidator(): IWalletSecretValidator {
+        return WalletSecretValidator()
     }
 }

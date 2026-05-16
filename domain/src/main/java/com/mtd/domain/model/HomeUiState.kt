@@ -107,5 +107,6 @@ data class FeeOption(
     val feeInCoin: BigDecimal? = null,
     val gasPrice: BigInteger? = null,
     val gasLimit: BigInteger? = null,
-    val feeRateInSatsPerByte: Long? = null
+    val feeRateInSatsPerByte: Long? = null,
+    val feeInUsd: BigDecimal? = null
 )

@@ -609,7 +609,7 @@ class WalletRepositoryImpl @Inject constructor(
 
         // Extension function helper
         private fun NetworkName.isEvm(): Boolean {
-            return this == NetworkName.BINANCESMARTCHAIN || this == NetworkName.ETHEREUM || this == NetworkName.SEPOLIA || this == NetworkName.BSCTESTNET
+            return this == NetworkName.BSC || this == NetworkName.ETHEREUM || this == NetworkName.SEPOLIA || this == NetworkName.BSCTESTNET
         }
 
         private fun NetworkName.isTron(): Boolean {

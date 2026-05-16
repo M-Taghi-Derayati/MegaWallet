@@ -4,12 +4,12 @@
         این پیکربندی فقط در بیلد‌های debug اعمال می‌شود
         و به ما اجازه می‌دهد به localhost و IP های محلی متصل شویم.
     -->
-    <debug-overrides>
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
         </trust-anchors>
-    </debug-overrides>
+    </base-config>
 
     <!--
         این پیکربندی به ما اجازه می‌دهد تا به صورت صریح

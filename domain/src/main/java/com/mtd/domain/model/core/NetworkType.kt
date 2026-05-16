@@ -15,7 +15,7 @@ enum class NetworkName {
     ETHEREUM,
     SEPOLIA,
     BSCTESTNET,
-    BINANCESMARTCHAIN,
+    BSC,
     BITCOINTESTNET,
     BITCOIN,
     POLTESTNET,

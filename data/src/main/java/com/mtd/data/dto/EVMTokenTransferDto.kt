@@ -21,6 +21,6 @@ data class EVMTokenTransferDto(
         @SerializedName("symbol") val symbol: String,
         @SerializedName("decimals") val decimals: String? // <<-- ممکن است null باشد
     )
-    data class TotalDto(@SerializedName("value") val value: String)
+    data class TotalDto(@SerializedName("value") val value: String?)
 }
 

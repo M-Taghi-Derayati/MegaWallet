@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
     val ASSET_ICON_MAIN_SIZE = 44.dp
     val ASSET_ICON_MAIN_SIZE_LARGE = 60.dp
    val ASSET_ICON_NETWORK_SIZE_LARGE = 26.dp
+   val ASSET_ICON_NETWORK_SIZE_SMALE = 22.dp
     val ASSET_ICON_NETWORK_PADDING = 1.1.dp
     val ASSET_ICON_SPACING = 16.dp
     val ASSET_ANIMATION_DURATION = 600

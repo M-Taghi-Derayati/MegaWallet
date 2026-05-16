@@ -95,11 +95,21 @@ data class GaslessServerQuoteDto(
     @SerializedName("feeAmount") val feeAmount: String?
 )
 
+data class GaslessSmartFeeDto(
+    @SerializedName("decision") val decision: String?,
+    @SerializedName("reasonFa") val reasonFa: String?,
+    @SerializedName("feeAmount") val feeAmount: String?,
+    @SerializedName("feeUsd") val feeUsd: String?,
+    @SerializedName("directUserCostUsd") val directUserCostUsd: String?,
+    @SerializedName("moreExpensiveThanDirect") val moreExpensiveThanDirect: Boolean?
+)
+
 data class GaslessQuoteResponseDto(
     @SerializedName("quoteToken") val quoteToken: String?,
     @SerializedName("canonicalParams") val canonicalParams: GaslessCanonicalParamsDto?,
     @SerializedName("serverQuote") val serverQuote: GaslessServerQuoteDto?,
-    @SerializedName("displayPolicy") val displayPolicy: GaslessDisplayPolicyDto?
+    @SerializedName("displayPolicy") val displayPolicy: GaslessDisplayPolicyDto?,
+    @SerializedName("smartFee") val smartFee: GaslessSmartFeeDto?
 )
 
 data class GaslessRelayParamsDto(
@@ -128,10 +138,16 @@ data class GaslessRelayResponseDto(
 )
 
 data class GaslessTxStatusDto(
-    @SerializedName(value = "_id", alternate = ["id"]) val id: Any?,
+    @SerializedName("_id") val objectId: Any?,
+    @SerializedName("id") val id: Any?,
+    @SerializedName("chain") val chain: String?,
     @SerializedName("status") val status: String?,
+    @SerializedName("publicStatus") val publicStatus: String?,
     @SerializedName("txHash") val txHash: String?,
-    @SerializedName("lastError") val lastError: String?
+    @SerializedName("lastError") val lastError: String?,
+    @SerializedName("requestId") val requestId: String?,
+    @SerializedName("createdAt") val createdAt: Any?,
+    @SerializedName("updatedAt") val updatedAt: Any?
 )
 
 data class TronSponsorApproveParamsDto(
@@ -144,8 +160,18 @@ data class TronApproveQuoteRequestDto(
     @SerializedName("params") val params: TronSponsorApproveParamsDto
 )
 
+data class TronApproveTxTemplateDto(
+    @SerializedName("approvalAmount") val approvalAmount: String?,
+    @SerializedName("approvalAmountMode") val approvalAmountMode: String?
+)
+
 data class TronApproveQuoteResponseDto(
     @SerializedName("chain") val chain: String?,
+    @SerializedName("approveRequired") val approveRequired: Boolean?,
+    @SerializedName("approvalAmount") val approvalAmount: String?,
+    @SerializedName("approvalAmountMode") val approvalAmountMode: String?,
+    @SerializedName("approveTxTemplate") val approveTxTemplate: TronApproveTxTemplateDto?,
+    @SerializedName("requiredAllowance") val requiredAllowance: String?,
     @SerializedName("estimatedEnergy") val estimatedEnergy: String?,
     @SerializedName("estimatedBandwidthBytes") val estimatedBandwidthBytes: String?,
     @SerializedName("energyFeeSun") val energyFeeSun: String?,
@@ -165,6 +191,8 @@ data class TronSponsorApproveRequestDto(
 
 data class TronSponsorApproveResponseDto(
     @SerializedName("funded") val funded: Boolean?,
+    @SerializedName("approveRequired") val approveRequired: Boolean?,
+    @SerializedName("skipReason") val skipReason: String?,
     @SerializedName("mode") val mode: String?,
     @SerializedName(value = "amount", alternate = ["sponsorAmountSun", "sponsorAmountWei"]) val amount: String?,
     @SerializedName("reason") val reason: String?,

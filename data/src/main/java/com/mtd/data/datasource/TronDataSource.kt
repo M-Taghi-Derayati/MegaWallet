@@ -160,19 +160,28 @@ class TronDataSource(
             // ۱. دریافت تراکنش‌های بومی (TRX)
             val normalTxs = api.getTrxHistory(address, limit = 20, start = 0)
             normalTxs.data.forEach { tx ->
+                val contract = tx.rawData.contract.firstOrNull()
+                val value = contract?.parameter?.value
+                
+                val fromHex = value?.ownerAddress
+                val toHex = value?.toAddress
+                
+                val fromAddress = if (fromHex != null) TronAddressConverter.evmToTron(fromHex) else ""
+                val toAddress = if (toHex != null) TronAddressConverter.evmToTron(toHex) else ""
+                
                 records.add(
                     TronTransaction(
-                        hash = tx.hash,
-                        timestamp = tx.timestamp,
-                        fee = tx.cost.net_fee + tx.cost.energy_fee,
-                        status = if (tx.confirmed && tx.result == "SUCCESS") TransactionStatus.CONFIRMED else TransactionStatus.FAILED,
-                        fromAddress = tx.ownerAddress,
-                        toAddress = tx.toAddress,
-                        amount = tx.amount,
-                        isOutgoing = tx.ownerAddress.equals(address, ignoreCase = true),
+                        hash = tx.txID,
+                        timestamp = tx.blockTimestamp / 1000, // Convert ms to s
+                        fee = tx.ret?.sumOf { it.fee ?: BigInteger.ZERO } ?: BigInteger.ZERO,
+                        status = if (tx.ret?.all { it.contractRet == "SUCCESS" } == true) TransactionStatus.CONFIRMED else TransactionStatus.FAILED,
+                        fromAddress = fromAddress,
+                        toAddress = toAddress,
+                        amount = value?.amount ?: BigInteger.ZERO,
+                        isOutgoing = fromAddress.equals(address, ignoreCase = true),
                         contractAddress = null, // Empty for TRX
-                        bandwidthUsed = tx.cost.net_fee.toLong(),
-                        energyUsed = tx.cost.energy_fee.toLong(),
+                        bandwidthUsed = tx.bandwidth,
+                        energyUsed = tx.energy,
                         tokenTransferDetails = null,
                         networkName = network.name
                     )
@@ -181,18 +190,18 @@ class TronDataSource(
 
             // ۲. دریافت تراکنش‌های توکن (TRC20 - مثل USDT)
             val tokenTxs = api.getTokenHistory(address, limit = 20, start = 0)
-            tokenTxs.trc20_transfer.forEach { tx ->
+            tokenTxs.data.forEach { tx ->
                 records.add(
                     TronTransaction(
-                        hash = tx.transaction_id,
-                        timestamp = tx.block_ts,
-                        fee = BigInteger.ZERO,
+                        hash = tx.transactionId,
+                        timestamp = tx.blockTimestamp / 1000,
+                        fee = BigInteger.ZERO, // Trongrid TRC20 endpoint doesn't always show the fee
                         status = TransactionStatus.CONFIRMED,
                         fromAddress = tx.from,
                         toAddress = tx.to,
                         amount = tx.value,
                         isOutgoing = tx.from.equals(address, ignoreCase = true),
-                        contractAddress = tx.token_id,
+                        contractAddress = tx.tokenInfo?.address,
                         bandwidthUsed = null,
                         energyUsed = null,
                         networkName = network.name,
@@ -200,9 +209,9 @@ class TronDataSource(
                             from = tx.from,
                             to = tx.to,
                             amount = tx.value,
-                            tokenSymbol = tx.symbol,
-                            tokenDecimals = if (tx.symbol.equals("USDT", ignoreCase = true)) 6 else 18,
-                            contractAddress = tx.token_id
+                            tokenSymbol = tx.tokenInfo?.symbol ?: "TOKEN",
+                            tokenDecimals = tx.tokenInfo?.decimals ?: 18,
+                            contractAddress = tx.tokenInfo?.address.orEmpty()
                         )
                     )
                 )

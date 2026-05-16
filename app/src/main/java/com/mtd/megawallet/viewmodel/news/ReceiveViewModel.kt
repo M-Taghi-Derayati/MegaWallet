@@ -1,12 +1,10 @@
 package com.mtd.megawallet.viewmodel.news
 
-import com.mtd.domain.model.core.NetworkName
-import com.mtd.domain.model.core.NetworkType
-import com.mtd.domain.model.core.Wallet
-import com.mtd.core.registry.BlockchainRegistry
-import com.mtd.core.wallet.ActiveWalletManager
-import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.domain.model.ReceiveUiState
+import com.mtd.domain.usecase.receive.BuildReceiveAddressGroupsUseCase
+import com.mtd.domain.usecase.wallet.GetActiveWalletUseCase
+import com.mtd.domain.usecase.wallet.ObserveActiveWalletUseCase
+import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,8 +12,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ReceiveViewModel @Inject constructor(
-    private val blockchainRegistry: BlockchainRegistry,
-    private val activeWalletManager: ActiveWalletManager,
+    private val buildReceiveAddressGroupsUseCase: BuildReceiveAddressGroupsUseCase,
+    private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
+    private val getActiveWalletUseCase: GetActiveWalletUseCase,
     errorManager: com.mtd.core.manager.ErrorManager
 ) : BaseViewModel(errorManager) {
 
@@ -31,9 +30,9 @@ class ReceiveViewModel @Inject constructor(
 
     private fun observeActiveWallet() {
         launchSafe {
-            activeWalletManager.activeWallet.collect { wallet ->
+            observeActiveWalletUseCase().collect { wallet ->
                 if (wallet != null) {
-                    loadReceiveAddresses(wallet)
+                    loadReceiveAddresses()
                 } else {
                     _uiState.value = ReceiveUiState.Error("کیف پول پیدا نشد.")
                 }
@@ -41,68 +40,20 @@ class ReceiveViewModel @Inject constructor(
         }
     }
 
-    private fun loadReceiveAddresses(activeWallet: Wallet) {
+    private fun loadReceiveAddresses() {
         launchSafe {
+            val activeWallet = getActiveWalletUseCase()
+            if (activeWallet == null) {
+                _uiState.value = ReceiveUiState.Error("کیف پول پیدا نشد.")
+                return@launchSafe
+            }
+
             _uiState.value = ReceiveUiState.Loading
-            
-            // ذخیره ID انتخاب شده فعلی برای حفظ انتخاب در صورت امکان
             val lastId = _selectedAddress.value?.id
-            val addressGroups = mutableListOf<ReceiveUiState.AddressGroup>()
-
-            // گروه EVM
-            val evmKey = activeWallet.keys.find { it.networkType == NetworkType.EVM }
-            if (evmKey != null) {
-                val evmNetworks = blockchainRegistry.getAllNetworks()
-                    .filter { it.networkType == NetworkType.EVM }
-                
-                val supportedIcons = evmNetworks.mapNotNull { it.iconUrl }
-                val supportedIds = evmNetworks.map { it.id }
-
-                val item = ReceiveUiState.AddressItem(
-                    id = "EVM",
-                    symbol = "ETH",
-                    networkName = "EVM Networks",
-                    networkFaName = "شبکه‌های اتریومی",
-                    address = evmKey.address,
-                    iconUrl = blockchainRegistry.getNetworkByName(NetworkName.SEPOLIA)?.iconUrl,
-                    supportedNetworkIcons = supportedIcons,
-                    supportedNetworkIds = supportedIds
-                )
-                
-                addressGroups.add(ReceiveUiState.AddressGroup(
-                    title = "آدرس اتریوم",
-                    subtitle = "Supported Networks",
-                    items = listOf(item)
-                ))
-            }
-
-            // سایر شبکه‌ها
-            val otherKeys = activeWallet.keys.filter { it.networkType != NetworkType.EVM }
-            if (otherKeys.isNotEmpty()) {
-                val items = otherKeys.map { key ->
-                    val networkInfo = blockchainRegistry.getNetworkByName(key.networkName)
-                    ReceiveUiState.AddressItem(
-                        id = networkInfo?.id ?: key.networkName.name,
-                        symbol = networkInfo?.currencySymbol ?: key.networkName.name,
-                        networkName = networkInfo?.name?.name?.replaceFirstChar { it.titlecase() } ?: "Unknown",
-                        networkFaName = networkInfo?.faName,
-                        address = key.address,
-                        iconUrl = networkInfo?.iconUrl
-                    )
-                }
-                addressGroups.add(ReceiveUiState.AddressGroup(
-                    title = "سایر شبکه‌ها",
-                    subtitle = "",
-                    items = items
-                ))
-            }
-
-            // آپدیت آدرس انتخاب شده:
-            // اگر قبلاً چیزی انتخاب شده بود و در لیست جدید هم هست، همان را آپدیت کن
-            // در غیر این صورت، اولین مورد را انتخاب کن
+            val addressGroups = buildReceiveAddressGroupsUseCase(activeWallet)
             val allItems = addressGroups.flatMap { it.items }
-            _selectedAddress.value = allItems.find { it.id == lastId } ?: allItems.firstOrNull()
 
+            _selectedAddress.value = allItems.find { it.id == lastId } ?: allItems.firstOrNull()
             _uiState.value = ReceiveUiState.Success(addressGroups)
         }
     }
