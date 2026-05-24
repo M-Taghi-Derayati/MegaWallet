@@ -82,11 +82,12 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.imageLoader
+import com.blankj.utilcode.util.ClipboardUtils
 import com.mtd.common_ui.R
-import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.HomeUiState
+import com.mtd.domain.model.core.NetworkType
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
@@ -234,7 +235,7 @@ fun SendScreen(
                     isValidAddress = hasValidRecipientAddress,
                     onRecipientChanged = { sendViewModel.setRecipient(it) },
                     onPaste = {
-                        val pastedText = clipboardManager.nativeClipboard.text.toString()
+                        val pastedText = ClipboardUtils.getText().toString()
                         if (pastedText.isNotBlank()) sendViewModel.setRecipient(pastedText)
                     },
                     onClear = { sendViewModel.setRecipient("") },

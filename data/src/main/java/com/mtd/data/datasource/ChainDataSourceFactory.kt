@@ -5,6 +5,8 @@ import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.network.bitcoin.UtxoNetworkParametersResolver
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
+import com.mtd.domain.model.BlockchainConnectionMode
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import javax.inject.Inject
@@ -15,6 +17,7 @@ import javax.inject.Singleton
  * این abstraction کمک می‌کند from whenهای بزرگ وابسته به [NetworkType] فاصله بگیریم.
  */
 interface ChainDataSourceProvider {
+    val mode: BlockchainConnectionMode
     fun supports(network: BlockchainNetwork): Boolean
     fun create(network: BlockchainNetwork): IChainDataSource
 }
@@ -22,6 +25,7 @@ interface ChainDataSourceProvider {
 @Singleton
 class ChainDataSourceFactory @Inject constructor(
     private val blockchainRegistry: BlockchainRegistry,
+    private val modeProvider: IBlockchainConnectionModeProvider,
     private val retrofitBuilder: Retrofit.Builder,
     private val assetRegistry: AssetRegistry,
     private val okHttpClient: OkHttpClient
@@ -35,6 +39,8 @@ class ChainDataSourceFactory @Inject constructor(
     private val providers: List<ChainDataSourceProvider> by lazy {
         listOf(
             object : ChainDataSourceProvider {
+                override val mode: BlockchainConnectionMode = BlockchainConnectionMode.DIRECT
+
                 override fun supports(network: BlockchainNetwork): Boolean {
                     return network.networkType == NetworkType.EVM
                 }
@@ -45,6 +51,8 @@ class ChainDataSourceFactory @Inject constructor(
                 }
             },
             object : ChainDataSourceProvider {
+                override val mode: BlockchainConnectionMode = BlockchainConnectionMode.DIRECT
+
                 override fun supports(network: BlockchainNetwork): Boolean {
                     return network.networkType == NetworkType.BITCOIN ||
                         network.networkType == NetworkType.UTXO
@@ -56,12 +64,28 @@ class ChainDataSourceFactory @Inject constructor(
                 }
             },
             object : ChainDataSourceProvider {
+                override val mode: BlockchainConnectionMode = BlockchainConnectionMode.DIRECT
+
                 override fun supports(network: BlockchainNetwork): Boolean {
                     return network.networkType == NetworkType.TVM
                 }
 
                 override fun create(network: BlockchainNetwork): IChainDataSource {
                     return TronDataSource(network,retrofitBuilder,assetRegistry, okHttpClient)
+                }
+            },
+            object : ChainDataSourceProvider {
+                override val mode: BlockchainConnectionMode = BlockchainConnectionMode.PROXY
+
+                override fun supports(network: BlockchainNetwork): Boolean {
+                    return network.networkType == NetworkType.EVM ||
+                        network.networkType == NetworkType.TVM ||
+                        network.networkType == NetworkType.BITCOIN ||
+                        network.networkType == NetworkType.UTXO
+                }
+
+                override fun create(network: BlockchainNetwork): IChainDataSource {
+                    return ProxyChainDataSource(network)
                 }
             }
         )
@@ -74,13 +98,33 @@ class ChainDataSourceFactory @Inject constructor(
     }
 
     fun create(network: BlockchainNetwork): IChainDataSource {
-        dataSourceCache[network.id]?.let { return it }
+        val mode = modeProvider.currentMode()
+        val cacheKey = cacheKey(mode, network)
+        dataSourceCache[cacheKey]?.let { return it }
 
-        val provider = providers.firstOrNull { it.supports(network) }
-            ?: throw IllegalArgumentException("Unsupported network type: ${network.networkType}")
+        val provider = providers.firstOrNull { it.mode == mode && it.supports(network) }
+            ?: throw unsupportedModeException(mode, network)
 
         val newDataSource = provider.create(network)
-        dataSourceCache[network.id] = newDataSource
+        dataSourceCache[cacheKey] = newDataSource
         return newDataSource
+    }
+
+    private fun cacheKey(mode: BlockchainConnectionMode, network: BlockchainNetwork): String {
+        return "${mode.name}:${network.id}"
+    }
+
+    private fun unsupportedModeException(
+        mode: BlockchainConnectionMode,
+        network: BlockchainNetwork
+    ): IllegalArgumentException {
+        return when (mode) {
+            BlockchainConnectionMode.PROXY -> IllegalArgumentException(
+                "Proxy chain data source is not configured yet for network: ${network.id}"
+            )
+            BlockchainConnectionMode.DIRECT -> IllegalArgumentException(
+                "Unsupported network type: ${network.networkType}"
+            )
+        }
     }
 }

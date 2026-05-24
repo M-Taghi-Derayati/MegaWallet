@@ -1,7 +1,7 @@
 package com.mtd.data.repository
 
-import com.mtd.core.manager.CacheManager
 import com.mtd.core.utils.BalanceFormatter
+import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.ICachedWalletBalanceReader
 import com.mtd.domain.interfaceRepository.IMarketDataRepository
@@ -29,7 +29,7 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
     private val cachedWalletBalanceReader: ICachedWalletBalanceReader,
     private val assetCatalog: IAssetCatalog,
     private val networkCatalog: INetworkCatalog,
-    private val cacheManager: CacheManager
+    private val cacheStore: IAppCacheStore
 ) : IWalletBalanceSynchronizer {
 
     override suspend fun syncWalletBalances(
@@ -40,12 +40,12 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
         if (wallets.isEmpty()) return
 
         val currentTime = System.currentTimeMillis()
-        val lastPriceSync = cacheManager.get(LAST_PRICE_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
+        val lastPriceSync = cacheStore.get(LAST_PRICE_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
         if (forceResync || currentTime - lastPriceSync > PRICE_UPDATE_INTERVAL) {
             refreshAllPrices(wallets)
         }
 
-        val lastBalanceSync = cacheManager.get(LAST_WALLETS_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
+        val lastBalanceSync = cacheStore.get(LAST_WALLETS_SYNC_TIME_KEY, Long::class.javaObjectType) ?: 0L
         if (forceResync || currentTime - lastBalanceSync > MIN_UPDATE_INTERVAL) {
             refreshAllBalances(wallets, activeWalletId, forceResync)
         }
@@ -68,7 +68,7 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
                     }
                 }
             }
-            cacheManager.put(LAST_PRICE_SYNC_TIME_KEY, System.currentTimeMillis())
+            cacheStore.put(LAST_PRICE_SYNC_TIME_KEY, System.currentTimeMillis())
         }
     }
 
@@ -113,7 +113,7 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
                 .awaitAll()
         }
 
-        cacheManager.put(LAST_WALLETS_SYNC_TIME_KEY, System.currentTimeMillis())
+        cacheStore.put(LAST_WALLETS_SYNC_TIME_KEY, System.currentTimeMillis())
     }
 
     private suspend fun updateAssetPriceCache(
@@ -122,9 +122,9 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
         priceInfo: AssetPriceDto
     ) {
         val cacheKey = "$CACHE_KEY_PREFIX${walletId}_$assetId"
-        val oldCache = cacheManager.get(cacheKey, CachedAssetBalance::class.java) ?: return
+        val oldCache = cacheStore.get(cacheKey, CachedAssetBalance::class.java) ?: return
 
-        cacheManager.put(
+        cacheStore.put(
             cacheKey,
             oldCache.copy(
                 priceUsdRaw = priceInfo.priceUsd,
@@ -148,11 +148,11 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
         } ?: return
 
         val cacheKey = "$CACHE_KEY_PREFIX${walletId}_${assetConfig.id}"
-        val oldCache = cacheManager.get(cacheKey, CachedAssetBalance::class.java)
+        val oldCache = cacheStore.get(cacheKey, CachedAssetBalance::class.java)
         val priceUsd = oldCache?.priceUsdRaw ?: BigDecimal.ZERO
         val priceChange = oldCache?.priceChange24h ?: 0.0
 
-        cacheManager.put(
+        cacheStore.put(
             cacheKey,
             CachedAssetBalance(
                 assetId = assetConfig.id,

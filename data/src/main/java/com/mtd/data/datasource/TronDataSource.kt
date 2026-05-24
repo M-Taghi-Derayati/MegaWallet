@@ -12,6 +12,7 @@ import com.mtd.data.dto.AccountRequest
 import com.mtd.data.dto.CreateTxRequest
 import com.mtd.data.dto.TriggerConstantRequest
 import com.mtd.data.dto.TriggerSmartContractRequest
+import com.mtd.data.dto.TrongridTokenData
 import com.mtd.data.service.TronExplorerService
 import com.mtd.data.service.TronNativeService
 import com.mtd.data.utils.AssetNormalizer.normalize
@@ -55,6 +56,7 @@ class TronDataSource(
     companion object {
         private const val RPC_FAILOVER_TIMEOUT_MS = 12_000L
         private const val NATIVE_API_FAILOVER_TIMEOUT_MS = 15_000L
+        private const val TRON_TRANSFER_CONTRACT = "TransferContract"
     }
 
     object Web3jFactory {
@@ -160,14 +162,18 @@ class TronDataSource(
             // ۱. دریافت تراکنش‌های بومی (TRX)
             val normalTxs = api.getTrxHistory(address, limit = 20, start = 0)
             normalTxs.data.forEach { tx ->
-                val contract = tx.rawData.contract.firstOrNull()
-                val value = contract?.parameter?.value
+                val contract = tx.rawData.contract.firstOrNull { it.type == TRON_TRANSFER_CONTRACT }
+                    ?: return@forEach
+                val value = contract.parameter.value
+                val amount = value.amount ?: return@forEach
+                if (amount <= BigInteger.ZERO) return@forEach
                 
-                val fromHex = value?.ownerAddress
-                val toHex = value?.toAddress
+                val fromHex = value.ownerAddress
+                val toHex = value.toAddress
                 
                 val fromAddress = if (fromHex != null) TronAddressConverter.evmToTron(fromHex) else ""
                 val toAddress = if (toHex != null) TronAddressConverter.evmToTron(toHex) else ""
+                if (!isAddressInvolved(address, fromAddress, toAddress)) return@forEach
                 
                 records.add(
                     TronTransaction(
@@ -177,7 +183,7 @@ class TronDataSource(
                         status = if (tx.ret?.all { it.contractRet == "SUCCESS" } == true) TransactionStatus.CONFIRMED else TransactionStatus.FAILED,
                         fromAddress = fromAddress,
                         toAddress = toAddress,
-                        amount = value?.amount ?: BigInteger.ZERO,
+                        amount = amount,
                         isOutgoing = fromAddress.equals(address, ignoreCase = true),
                         contractAddress = null, // Empty for TRX
                         bandwidthUsed = tx.bandwidth,
@@ -191,6 +197,10 @@ class TronDataSource(
             // ۲. دریافت تراکنش‌های توکن (TRC20 - مثل USDT)
             val tokenTxs = api.getTokenHistory(address, limit = 20, start = 0)
             tokenTxs.data.forEach { tx ->
+                if (!tx.isTransferEvent()) return@forEach
+                if (tx.value <= BigInteger.ZERO) return@forEach
+                if (!isAddressInvolved(address, tx.from, tx.to)) return@forEach
+
                 records.add(
                     TronTransaction(
                         hash = tx.transactionId,
@@ -225,6 +235,34 @@ class TronDataSource(
             ResultResponse.Error(e)
         }
     } //TODO اینجا هزینه پرداختی هر تراکنش نیست باید https://apilist.tronscan.org/api/transaction-info?hash={transaction_id} رو استفاده کنیم وقتی جزئیات رو خواست ببینه
+
+    override suspend fun getTransactionFeeDetails(txId: String): ResultResponse<IChainDataSource.TransactionFeeDetails> {
+        return try {
+            executeNativeApiWithFailover { api ->
+                val requestBody = com.mtd.data.dto.TransactionInfoRequest(value = txId)
+                val response = api.getTransactionInfoById(requestBody)
+
+                val fee = response.fee?.toBigInteger() ?: BigInteger.ZERO
+                val receipt = response.receipt
+                val energyFee = receipt?.energyFee?.toBigInteger()
+                val netFee = receipt?.netFee?.toBigInteger()
+                val energyUsed = receipt?.energyUsageTotal
+                val bandwidthUsed = receipt?.netUsage
+
+                ResultResponse.Success(
+                    IChainDataSource.TransactionFeeDetails(
+                        fee = fee,
+                        energyUsed = energyUsed,
+                        bandwidthUsed = bandwidthUsed,
+                        energyFee = energyFee,
+                        networkFee = netFee
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            ResultResponse.Error(e)
+        }
+    }
 
     override suspend fun sendTransaction(
         params: TransactionParams,
@@ -607,6 +645,30 @@ class TronDataSource(
             throw ArithmeticException("BigInteger out of Long range")
         }
         return toLong()
+    }
+
+    private fun isAddressInvolved(
+        targetAddress: String,
+        fromAddress: String,
+        toAddress: String
+    ): Boolean {
+        return fromAddress.equals(targetAddress, ignoreCase = true) ||
+            toAddress.equals(targetAddress, ignoreCase = true)
+    }
+
+    private fun TrongridTokenData.isTransferEvent(): Boolean {
+        val explicitEventNames = listOfNotNull(type, eventType, eventName)
+            .filter { it.isNotBlank() }
+
+        if (explicitEventNames.isEmpty()) {
+            return true
+        }
+
+        return explicitEventNames.all { eventName ->
+            eventName.equals("Transfer", ignoreCase = true) ||
+                eventName.equals("TRC20Transfer", ignoreCase = true) ||
+                eventName.equals("trc20_transfer", ignoreCase = true)
+        }
     }
 
     private fun toEvmAddressOrThrow(tronAddress: String): String {

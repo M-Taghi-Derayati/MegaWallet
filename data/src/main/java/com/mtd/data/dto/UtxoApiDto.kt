@@ -44,5 +44,5 @@ data class TransactionDto(
     @SerializedName("fees") val fees: Long? = null,
     @SerializedName("received") val received: String? = null,
     @SerializedName("confirmed") val confirmed: String? = null,
-    @SerializedName("confirmations") val confirmations: Int? = null
+    @SerializedName("confirmations") val confirmations: Int? = null,
 )

@@ -47,9 +47,6 @@ fun TransactionHistoryShimmer(
         contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        item(key = "history_shimmer_toolbar") {
-            HistoryShimmerToolbar(brush = brush)
-        }
 
         item(key = "history_shimmer_header_today") {
             HistoryShimmerHeader(brush = brush, width = 86.dp)

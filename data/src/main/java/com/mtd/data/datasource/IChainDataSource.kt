@@ -16,8 +16,15 @@ interface IChainDataSource {
     suspend fun getFeeOptions(  fromAddress: String?=null, toAddress: String?=null, asset: Asset?=null): ResultResponse<List<FeeData>>
     suspend fun getBalancesForMultipleAddresses(addresses: List<String>): ResultResponse<Map<String, List<Asset>>>
 
+    /**
+     * اطلاعات تکمیلی کارمزد تراکنش را براساس هش/آی‌دی برمی‌گرداند
+     */
+    suspend fun getTransactionFeeDetails(txId: String): ResultResponse<TransactionFeeDetails> {
+        return ResultResponse.Error(UnsupportedOperationException("Not implemented for this chain"))
+    }
 
     /**
+
      * نمونه Web3j مدیریت شده توسط این DataSource را برمی‌گرداند.
      * این متد فقط باید توسط DataSource های نوع EVM پیاده‌سازی شود.
      * @return یک نمونه از Web3j.
@@ -36,5 +43,13 @@ interface IChainDataSource {
         val feeInCoin: BigDecimal?=null,
         val feeInUsd: BigDecimal?=null,
         val feeRateInSatsPerByte: Long? = null,
+    )
+
+    data class TransactionFeeDetails(
+        val fee: BigInteger,
+        val energyUsed: Long? = null,
+        val bandwidthUsed: Long? = null,
+        val energyFee: BigInteger? = null,
+        val networkFee: BigInteger? = null // bandwidth fee
     )
 }

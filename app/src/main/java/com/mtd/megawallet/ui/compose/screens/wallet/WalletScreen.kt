@@ -122,9 +122,9 @@ fun WalletScreens(
                     ) {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            userScrollEnabled = userScrollEnabled // اعمال مجدد قفل اسکرول
+                            userScrollEnabled = userScrollEnabled
                         ) {
-                            // بخش موجودی کل (بدون تغییر)
+                            // بخش موجودی کل
                             item {
                                 TotalBalanceSection(
                                     totalBalance = when (state.displayCurrency) {
@@ -138,7 +138,7 @@ fun WalletScreens(
                                 )
                             }
 
-                            // تب‌ها و قیمت تتر (بدون تغییر)
+                            // تب‌ها و قیمت تتر
                             // تب‌ها و قیمت تتر
                             item {
                                 Row(
@@ -214,12 +214,9 @@ fun WalletScreens(
                                     items = state.assets,
                                     key = { it.id }
                                 ) { asset ->
-                                    // ✅ 2. منطق انیمیشن قدیمی حذف و با Modifier جدید جایگزین شد
-
                                     var itemBounds by remember { mutableStateOf(Rect.Zero) }
 
                                     AssetListItems(
-                                        // 3. Modifier جدید به آیتم لیست اعمال می‌شود
                                         modifier = listItemModifier(asset.id)
                                             .onGloballyPositioned {
                                                 itemBounds = it.boundsInWindow()
@@ -231,7 +228,6 @@ fun WalletScreens(
                                     )
                                 }
                             } else {
-                                // تب Collectibles (فعلاً خالی)
                                 item {
                                     Box(
                                         modifier = Modifier

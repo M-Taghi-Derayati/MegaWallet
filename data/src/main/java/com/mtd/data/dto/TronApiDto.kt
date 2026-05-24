@@ -87,7 +87,10 @@ data class TrongridTokenData(
     @SerializedName("from") val from: String,
     @SerializedName("to") val to: String,
     @SerializedName("value") val value: BigInteger,
-    @SerializedName("token_info") val tokenInfo: TrongridTokenInfo?
+    @SerializedName("token_info") val tokenInfo: TrongridTokenInfo?,
+    @SerializedName("type") val type: String? = null,
+    @SerializedName("event_type") val eventType: String? = null,
+    @SerializedName("event_name") val eventName: String? = null
 )
 
 data class TrongridTokenInfo(
@@ -267,3 +270,25 @@ data class AccountRequest(
     val address: String,
     val visible: Boolean = true
 )
+
+data class TransactionInfoRequest(
+    val value: String
+)
+
+data class TransactionInfoResponse(
+    val id: String?,
+    val fee: Long?,
+    val blockNumber: Long?,
+    val blockTimeStamp: Long?,
+    @SerializedName("contract_address") val contractAddress: String?,
+    val receipt: TransactionReceipt?
+)
+
+data class TransactionReceipt(
+    @SerializedName("energy_fee") val energyFee: Long?,
+    @SerializedName("energy_usage_total") val energyUsageTotal: Long?,
+    @SerializedName("net_fee") val netFee: Long?,
+    @SerializedName("net_usage") val netUsage: Long?,
+    val result: String?
+)
+

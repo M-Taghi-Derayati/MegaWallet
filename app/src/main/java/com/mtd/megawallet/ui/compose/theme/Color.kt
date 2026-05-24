@@ -14,7 +14,8 @@ val BrandGreen = Color(0xFF34C759) // سبز سیستمی (Light)
 val BrandRed = Color(0xFFFF3B30)   // قرمز سیستمی (Light)
 
 val BrandGreenDark = Color(0xFF30D158) // سبز سیستمی مخصوص حالت تیره
-val BrandRedDark = Color(0xFFFF453A)   // قرمز سیستمی مخصوص حالت تیره
+val
+        BrandRedDark = Color(0xFFFF453A)   // قرمز سیستمی مخصوص حالت تیره
 
 // --- Neutral Colors (رنگ‌های خنثی - حالت تیره فمیلی) ---
 val DarkBackground = Color(0xFF000000) // مشکی مطلق (Pure Black)

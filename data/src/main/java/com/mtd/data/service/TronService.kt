@@ -6,6 +6,8 @@ import com.mtd.data.dto.ChainParameterResponse
 import com.mtd.data.dto.CreateTransactionResponse
 import com.mtd.data.dto.CreateTxRequest
 import com.mtd.data.dto.EnergyResponse
+import com.mtd.data.dto.TransactionInfoRequest
+import com.mtd.data.dto.TransactionInfoResponse
 import com.mtd.data.dto.TriggerConstantRequest
 import com.mtd.data.dto.TriggerSmartContractRequest
 import com.mtd.data.dto.TronAccountResourceResponse
@@ -42,6 +44,9 @@ interface TronNativeService {
 
     @POST("wallet/broadcasttransaction")
     suspend fun broadcastTransaction(@Body body: JsonObject): JsonObject
+
+    @POST("wallet/gettransactioninfobyid")
+    suspend fun getTransactionInfoById(@Body body: TransactionInfoRequest): TransactionInfoResponse
 }
 
 interface TronExplorerService {

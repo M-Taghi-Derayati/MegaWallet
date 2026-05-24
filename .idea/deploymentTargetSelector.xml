@@ -19,6 +19,9 @@
       <SelectionState runConfigName="evm_full_e2e_without_ui()">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
+      <SelectionState runConfigName="TransactionDetailsContentCollapsedPreview - Transaction Details - Collapsed">
+        <option name="selectionMode" value="DROPDOWN" />
+      </SelectionState>
     </selectionStates>
   </component>
 </project>

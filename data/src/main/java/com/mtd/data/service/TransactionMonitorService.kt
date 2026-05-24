@@ -9,8 +9,8 @@ import com.mtd.core.notification.NotificationService
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.socket.IWebSocketClient
+import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.model.AppEvent
-import com.mtd.core.utils.GlobalEventBus
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.ResultResponse
 import kotlinx.coroutines.CoroutineScope
@@ -39,7 +39,7 @@ import kotlin.concurrent.timerTask
 class TransactionMonitorService @Inject constructor(
     private val walletRepository: IWalletRepository,
     private val blockchainRegistry: BlockchainRegistry,
-    private val globalEventBus: GlobalEventBus,
+    private val appEventBus: IAppEventBus,
     private val notificationService: NotificationService,
     private val assetRegistry: AssetRegistry,
     @ApplicationScope private val externalScope: CoroutineScope,
@@ -404,7 +404,7 @@ class TransactionMonitorService @Inject constructor(
         private fun notifyUiToRefresh(assetId: String? = null, contractAddress: String? = null) {
             externalScope.launch {
                 if (assetId != null) {
-                    globalEventBus.postEvent(
+                    appEventBus.postEvent(
                         AppEvent.WalletAssetNeedsRefresh(
                             assetId = assetId,
                             networkId = network.id,
@@ -412,9 +412,9 @@ class TransactionMonitorService @Inject constructor(
                         )
                     )
                 } else {
-                    globalEventBus.postEvent(AppEvent.WalletNeedsRefresh)
+                    appEventBus.postEvent(AppEvent.WalletNeedsRefresh)
                 }
-                globalEventBus.postEvent(
+                appEventBus.postEvent(
                     AppEvent.TransactionHistoryNeedsRefresh(
                         networkName = network.name.name,
                         userAddress = userAddress

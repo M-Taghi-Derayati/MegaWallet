@@ -69,7 +69,7 @@ fun TransactionHistoryEmptyState(
             Spacer(modifier = Modifier.height(22.dp))
 
             Text(
-                text = "No transactions yet",
+                text = "هیچ تراکنشی یافت نشد",
                 fontSize = 18.sp,
                 fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
                 color = MaterialTheme.colorScheme.onSurface,
@@ -79,7 +79,7 @@ fun TransactionHistoryEmptyState(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Your deposits, withdrawals, and pending transfers will appear here.",
+                text = "واریزها، برداشت ها و انتقال های در انتظار شما در اینجا نمایش داده خواهند شد",
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
                 fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),

@@ -559,7 +559,7 @@ class EvmDataSource(
 
 
     private fun EVMTransactionDto.toDomainModel(userAddress: String, networkName: com.mtd.domain.model.core.NetworkName): EvmTransaction {
-        val feeValue = (this.gasUsed?.toBigIntegerOrNull() ?: BigInteger.ZERO) * (this.gasPrice?.toBigIntegerOrNull() ?: BigInteger.ZERO)
+        val feeValue = (this.gasUsed ?: BigInteger.ZERO) * (this.gasPrice ?: BigInteger.ZERO)
         val timestampValue = try { Instant.parse(this.timestamp).epochSecond } catch (e: Exception) { 0L }
         return EvmTransaction(
             hash = this.hash, 
@@ -568,7 +568,10 @@ class EvmDataSource(
             status = if (this.status.equals("ok", true)) TransactionStatus.CONFIRMED else TransactionStatus.FAILED,
             fromAddress = this.from.hash, 
             toAddress = this.to?.hash ?: "Contract Creation", 
-            amount = this.value, 
+            amount = this.value,
+            nonce = this.nonce,
+            gasUsed = this.gasUsed,
+            gasPrice = this.gasPrice,
             isOutgoing = this.from.hash.equals(userAddress, true),
             networkName = networkName
         )

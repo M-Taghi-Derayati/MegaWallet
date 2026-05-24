@@ -6,16 +6,16 @@ import com.mtd.core.utils.EvmAbiEncoder
 import com.mtd.data.repository.gasless.EvmGaslessCoordinator
 import com.mtd.data.repository.gasless.PendingGaslessTxStore
 import com.mtd.data.repository.gasless.TronGaslessCoordinator
+import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.EvmGaslessTransferRequest
 import com.mtd.domain.model.EvmSponsorApproveResult
 import com.mtd.domain.model.EvmSponsorMode
 import com.mtd.domain.model.GaslessChain
+import com.mtd.domain.model.GaslessDisplayPreview
 import com.mtd.domain.model.GaslessEligibilityResult
-import com.mtd.domain.model.GaslessDisplayPolicyBundle
 import com.mtd.domain.model.GaslessFinalResult
 import com.mtd.domain.model.GaslessServiceType
-import com.mtd.domain.model.GaslessSmartFee
 import com.mtd.domain.model.GaslessSubmission
 import com.mtd.domain.model.GaslessSupportedToken
 import com.mtd.domain.model.PendingGaslessTx
@@ -38,9 +38,9 @@ class UnifiedTransferCoordinator @Inject constructor(
     private val evmGaslessCoordinator: EvmGaslessCoordinator,
     private val tronGaslessCoordinator: TronGaslessCoordinator,
     private val pendingGaslessTxStore: PendingGaslessTxStore
-) {
+) : IUnifiedTransferCoordinator {
 
-    suspend fun sendNormal(request: UnifiedTransferRequest): ResultResponse<String> {
+    override suspend fun sendNormal(request: UnifiedTransferRequest): ResultResponse<String> {
         return try {
             validateRequest(request)
             val network = blockchainRegistry.getNetworkById(request.networkId)
@@ -124,7 +124,7 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun sendPreparedTransaction(params: TransactionParams): ResultResponse<String> {
+    override suspend fun sendPreparedTransaction(params: TransactionParams): ResultResponse<String> {
         return try {
             walletRepository.sendTransaction(params)
         } catch (e: Exception) {
@@ -132,7 +132,7 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun getSupportedGaslessTokens(networkId: String): ResultResponse<List<GaslessSupportedToken>> {
+    override suspend fun getSupportedGaslessTokens(networkId: String): ResultResponse<List<GaslessSupportedToken>> {
         return try {
             val network = blockchainRegistry.getNetworkById(networkId)
                 ?: throw IllegalStateException("Network not found: $networkId")
@@ -149,7 +149,7 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun checkGaslessEligibility(
+    override suspend fun checkGaslessEligibility(
         networkId: String,
         tokenAddress: String,
         service: GaslessServiceType
@@ -180,7 +180,7 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun prepareGasless(request: UnifiedTransferRequest): ResultResponse<UnifiedGaslessSession> {
+    override suspend fun prepareGasless(request: UnifiedTransferRequest): ResultResponse<UnifiedGaslessSession> {
         return try {
             validateRequest(request)
             val network = blockchainRegistry.getNetworkById(request.networkId)
@@ -241,7 +241,7 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun previewGaslessDisplayPolicy(
+    override suspend fun previewGaslessDisplayPolicy(
         request: UnifiedTransferRequest
     ): ResultResponse<GaslessDisplayPreview> {
         return when (val prepared = prepareGasless(request)) {
@@ -282,12 +282,12 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    fun buildApproveTransaction(
+    override fun buildApproveTransaction(
         session: UnifiedGaslessSession,
-        gasPrice: BigInteger? = null,
-        gasLimit: BigInteger? = null,
-        tronFeeLimit: Long = 15_000_000L,
-        approveAmount: BigInteger? = null
+        gasPrice: BigInteger?,
+        gasLimit: BigInteger?,
+        tronFeeLimit: Long,
+        approveAmount: BigInteger?
     ): ResultResponse<TransactionParams> {
         return try {
             when (session) {
@@ -317,9 +317,9 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun requestTronSponsorForApprove(
+    override suspend fun requestTronSponsorForApprove(
         session: UnifiedGaslessSession,
-        mode: TronSponsorMode = TronSponsorMode.GIFT
+        mode: TronSponsorMode
     ): ResultResponse<TronSponsorApproveResult> {
         return when (session) {
             is UnifiedGaslessSession.Tron -> tronGaslessCoordinator.requestSponsorForApprove(session.value, mode)
@@ -329,7 +329,7 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun quoteTronApproveRequirement(
+    override suspend fun quoteTronApproveRequirement(
         session: UnifiedGaslessSession
     ): ResultResponse<TronApproveQuoteResult> {
         return when (session) {
@@ -340,9 +340,9 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun requestEvmSponsorForApprove(
+    override suspend fun requestEvmSponsorForApprove(
         session: UnifiedGaslessSession,
-        mode: EvmSponsorMode = EvmSponsorMode.GIFT
+        mode: EvmSponsorMode
     ): ResultResponse<EvmSponsorApproveResult> {
         return when (session) {
             is UnifiedGaslessSession.Evm -> evmGaslessCoordinator.requestSponsorForApprove(session.value, mode)
@@ -352,7 +352,7 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun submitGasless(session: UnifiedGaslessSession): ResultResponse<GaslessSubmission> {
+    override suspend fun submitGasless(session: UnifiedGaslessSession): ResultResponse<GaslessSubmission> {
         return when (session) {
             is UnifiedGaslessSession.Evm -> {
                 when (val queued = evmGaslessCoordinator.signAndSubmit(session.value)) {
@@ -400,11 +400,11 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    suspend fun pollGaslessUntilFinal(
+    override suspend fun pollGaslessUntilFinal(
         session: UnifiedGaslessSession,
         queueId: String,
-        pollIntervalMs: Long = 4_000L,
-        timeoutMs: Long = 5 * 60_000L
+        pollIntervalMs: Long,
+        timeoutMs: Long
     ): ResultResponse<GaslessFinalResult> {
         return when (session) {
             is UnifiedGaslessSession.Evm -> {
@@ -445,11 +445,11 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
-    fun getPendingGaslessTransactions(): List<PendingGaslessTx> {
+    override fun getPendingGaslessTransactions(): List<PendingGaslessTx> {
         return pendingGaslessTxStore.getAll()
     }
 
-    fun clearPendingGaslessTransactions() {
+    override fun clearPendingGaslessTransactions() {
         pendingGaslessTxStore.clear()
     }
 
@@ -480,11 +480,4 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
         return this.toLong()
     }
-
-    data class GaslessDisplayPreview(
-        val displayPolicy: GaslessDisplayPolicyBundle?,
-        val gaslessFeeAmount: BigInteger,
-        val needsApprove: Boolean,
-        val smartFee: GaslessSmartFee? = null
-    )
 }

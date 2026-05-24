@@ -9,20 +9,25 @@ import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.model.AppEvent
+import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.BitcoinTransaction
 import com.mtd.domain.model.EvmTransaction
-import com.mtd.domain.model.PendingTransactionHint
+import com.mtd.domain.model.HISTORY_ALL_NETWORKS_OPTION_ID
+import com.mtd.domain.model.HistoryNetworkOption
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.model.TokenTransferDetails
+import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.domain.model.TronTransaction
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.WalletKey
+import com.mtd.domain.usecase.history.BuildHistoryNetworkOptionsUseCase
+import com.mtd.domain.usecase.history.BuildPendingHistoryTransactionUseCase
+import com.mtd.domain.usecase.history.GetTransactionFeeDetailsUseCase
 import com.mtd.domain.usecase.history.GetTransactionHistoryUseCase
 import com.mtd.domain.usecase.history.GetWalletAddressBookUseCase
-import com.mtd.domain.usecase.asset.GetLatestAssetPricesUseCase
+import com.mtd.domain.usecase.history.NormalizeTransactionHistoryUseCase
 import com.mtd.domain.usecase.wallet.GetActiveWalletIdUseCase
 import com.mtd.domain.usecase.wallet.GetActiveWalletUseCase
 import com.mtd.domain.usecase.wallet.ObserveActiveWalletUseCase
@@ -32,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
@@ -48,6 +54,9 @@ private data class WalletAddressReference(
     val color: Int
 )
 
+private const val HISTORY_CACHE_SCHEMA_VERSION = 2
+private const val HISTORY_NETWORK_STALE_MS = 10 * 60 * 1000L
+
 @HiltViewModel
 class TransactionHistoryViewModel @Inject constructor(
     private val networkCatalog: INetworkCatalog,
@@ -55,8 +64,11 @@ class TransactionHistoryViewModel @Inject constructor(
     private val appEventBus: IAppEventBus,
     private val cacheStore: IAppCacheStore,
     private val getTransactionHistoryUseCase: GetTransactionHistoryUseCase,
+    private val getTransactionFeeDetailsUseCase: GetTransactionFeeDetailsUseCase,
+    private val buildHistoryNetworkOptionsUseCase: BuildHistoryNetworkOptionsUseCase,
+    private val buildPendingHistoryTransactionUseCase: BuildPendingHistoryTransactionUseCase,
     private val getWalletAddressBookUseCase: GetWalletAddressBookUseCase,
-    private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
+    private val normalizeTransactionHistoryUseCase: NormalizeTransactionHistoryUseCase,
     private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
     private val getActiveWalletUseCase: GetActiveWalletUseCase,
     private val getActiveWalletIdUseCase: GetActiveWalletIdUseCase,
@@ -66,6 +78,9 @@ class TransactionHistoryViewModel @Inject constructor(
     private val _transactions = MutableStateFlow<List<TransactionRecord>>(emptyList())
     val transactions = _transactions.asStateFlow()
 
+    private val _networkOptions = MutableStateFlow<List<HistoryNetworkOption>>(emptyList())
+    val networkOptions = _networkOptions.asStateFlow()
+
     val activeWallet = observeActiveWalletUseCase()
 
     private val _isLoading = MutableStateFlow(false)
@@ -73,6 +88,12 @@ class TransactionHistoryViewModel @Inject constructor(
 
     private val _selectedTransaction = MutableStateFlow<TransactionRecord?>(null)
     val selectedTransaction = _selectedTransaction.asStateFlow()
+
+    private val _transactionFeeDetails = MutableStateFlow<Map<String, TransactionFeeDetails>>(emptyMap())
+    val transactionFeeDetails = _transactionFeeDetails.asStateFlow()
+
+    private val _transactionFeeDetailsLoading = MutableStateFlow<Set<String>>(emptySet())
+    val transactionFeeDetailsLoading = _transactionFeeDetailsLoading.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage = _errorMessage.asStateFlow()
@@ -82,6 +103,10 @@ class TransactionHistoryViewModel @Inject constructor(
     private var currentUserAddress: String? = null
     private var walletAddressBook: Map<String, WalletAddressReference> = emptyMap()
     private var assetUsdPrices: Map<String, BigDecimal> = emptyMap()
+    private var currentWalletKeys: List<WalletKey> = emptyList()
+    private var selectedNetworkOptionId: String? = null
+    private var refreshingNetworkIds: Set<String> = emptySet()
+    private val lastNetworkRefreshTimes = mutableMapOf<String, Long>()
 
     init {
         listenToGlobalEvents()
@@ -93,11 +118,49 @@ class TransactionHistoryViewModel @Inject constructor(
         loadHistory(networkNameStr, userAddress, forceRefresh = true)
     }
 
+    fun refreshSelectedNetwork(fallbackNetworkNameStr: String?, fallbackUserAddress: String?) {
+        val selected = selectedNetworkSource()
+        if (selected == null || selected.isAllNetworks) {
+            refresh(null, null)
+            return
+        }
+
+        refresh(
+            networkNameStr = selected.networkName.takeIf { it.isNotBlank() } ?: fallbackNetworkNameStr,
+            userAddress = selected.address.takeIf { it.isNotBlank() } ?: fallbackUserAddress
+        )
+    }
+
+    fun selectNetwork(option: HistoryNetworkOption) {
+        if (selectedNetworkOptionId == option.id && lastLoadedKey != null) return
+        selectedNetworkOptionId = option.id
+        publishNetworkOptions()
+        if (option.isAllNetworks) {
+            loadHistory(null, null, forceRefresh = false)
+        } else {
+            loadHistory(option.networkName, option.address, forceRefresh = false)
+        }
+    }
+
+    fun syncAssetPricesFromHomeAssets(assets: List<AssetItem>) {
+        val prices = flattenAssetItems(assets)
+            .filter { it.priceUsdRaw > BigDecimal.ZERO }
+            .associate { it.symbol.uppercase(Locale.US) to it.priceUsdRaw }
+
+        if (prices != assetUsdPrices) {
+            assetUsdPrices = prices
+        }
+    }
+
     fun loadHistory(networkNameStr: String?, userAddress: String?, forceRefresh: Boolean = false) {
-        val normalizedNetwork = networkNameStr?.trim().orEmpty().ifBlank { null }
-        val normalizedAddress = userAddress?.trim().orEmpty().ifBlank { null }
+        val fallbackSource = selectedNetworkSource()
+        val explicitNetwork = networkNameStr?.trim().orEmpty().ifBlank { null }
+        val explicitAddress = userAddress?.trim().orEmpty().ifBlank { null }
+        val normalizedNetwork = explicitNetwork ?: fallbackSource?.takeUnless { it.isAllNetworks }?.networkName
+        val normalizedAddress = explicitAddress ?: fallbackSource?.takeUnless { it.isAllNetworks }?.address
         currentNetworkNameStr = normalizedNetwork
         currentUserAddress = normalizedAddress
+        selectNetworkFor(normalizedNetwork, normalizedAddress)
         val requestKey = "${normalizedNetwork ?: "all"}|${normalizedAddress ?: "all"}"
 
         if (!forceRefresh && lastLoadedKey == requestKey && (_transactions.value.isNotEmpty() || _errorMessage.value != null)) {
@@ -107,11 +170,14 @@ class TransactionHistoryViewModel @Inject constructor(
         lastLoadedKey = requestKey
 
         if (normalizedNetwork == null || normalizedAddress == null) {
+            selectAllNetworks()
             loadAllHistory(forceRefresh)
             return
         }
 
         launchSafe {
+            val refreshingId = optionIdFor(normalizedNetwork, normalizedAddress)
+            setNetworkRefreshing(refreshingId, true)
             _isLoading.value = true
             _transactions.value = emptyList()
             _errorMessage.value = null
@@ -127,9 +193,9 @@ class TransactionHistoryViewModel @Inject constructor(
                 if (!forceRefresh) {
                     val cached = cacheStore.get(cacheKey, Array<TransactionRecord>::class.java)
                     if (cached != null && cached.isNotEmpty()) {
-                        val history = normalizeHistory(cached.toList())
-                        refreshAssetPrices(history)
+                        val history = normalizeTransactionHistoryUseCase(cached.toList(), normalizedAddress)
                         _transactions.value = history
+                        markNetworkUpdated(refreshingId)
                         _isLoading.value = false
                         // Optional: Still fetch in background if cache is old? 
                         // For now, let's just return if cache found.
@@ -149,9 +215,9 @@ class TransactionHistoryViewModel @Inject constructor(
 
                 when (val result = getTransactionHistoryUseCase(networkName, normalizedAddress)) {
                     is ResultResponse.Success -> {
-                        val history = normalizeHistory(result.data)
-                        refreshAssetPrices(history)
+                        val history = normalizeTransactionHistoryUseCase(result.data, normalizedAddress)
                         _transactions.value = history
+                        markNetworkUpdated(refreshingId)
                         // Save to Cache
                         cacheStore.put(cacheKey, history.toTypedArray())
                     }
@@ -163,6 +229,7 @@ class TransactionHistoryViewModel @Inject constructor(
                 }
             } finally {
                 _isLoading.value = false
+                setNetworkRefreshing(refreshingId, false)
             }
         }
     }
@@ -171,6 +238,7 @@ class TransactionHistoryViewModel @Inject constructor(
         launchSafe(checkNetwork = false) {
             observeActiveWalletUseCase().collect { wallet ->
                 if (wallet != null) {
+                    rebuildNetworkOptions(wallet.keys)
                     // وقتی کیف پول عوض می‌شود، کلید لود قبلی را ریست می‌کنیم تا لود مجدد اجباری شود
                     lastLoadedKey = null
                     loadHistory(currentNetworkNameStr, currentUserAddress)
@@ -202,8 +270,8 @@ class TransactionHistoryViewModel @Inject constructor(
     }
 
     private fun applyHistoryRefreshEvent(event: AppEvent.TransactionHistoryNeedsRefresh) {
-        event.pendingTransaction?.toTransactionRecord()?.let { pending ->
-            _transactions.value = normalizeHistory(listOf(pending) + _transactions.value)
+        event.pendingTransaction?.let(buildPendingHistoryTransactionUseCase::invoke)?.let { pending ->
+            _transactions.value = normalizeTransactionHistoryUseCase(listOf(pending) + _transactions.value)
         }
 
         val networkName = event.networkName?.let { raw ->
@@ -235,13 +303,12 @@ class TransactionHistoryViewModel @Inject constructor(
                         publicKeyHex = ""
                     )
 
-                val fresh = normalizeHistory(fetchHistoryForWalletKey(key))
+                val fresh = normalizeTransactionHistoryUseCase(fetchHistoryForWalletKey(key))
                 val merged = mergeHistoryForKey(
                     current = _transactions.value,
                     key = key,
                     fresh = fresh
                 )
-                refreshAssetPrices(merged)
                 _transactions.value = merged
 
                 val walletId = getActiveWalletIdUseCase() ?: "unknown"
@@ -262,171 +329,179 @@ class TransactionHistoryViewModel @Inject constructor(
 
     private fun loadAllHistory(forceRefresh: Boolean = false) {
         launchSafe {
+            setNetworkRefreshing(HISTORY_ALL_NETWORKS_OPTION_ID, true)
             _isLoading.value = true
             _transactions.value = emptyList()
             _errorMessage.value = null
             _selectedTransaction.value = null
 
-            val wallet = getActiveWalletUseCase() ?: run {
-                _transactions.value = emptyList()
-                _errorMessage.value = "No active wallet selected"
-                _isLoading.value = false
-                return@launchSafe
-            }
-
-            val walletId = wallet.id
-            val cacheKey = getHistoryCacheKey(walletId, null, null)
-
-            if (!forceRefresh) {
-                val cached = cacheStore.get(cacheKey, Array<TransactionRecord>::class.java)
-                if (cached != null && cached.isNotEmpty()) {
-                    val history = normalizeHistory(cached.toList())
-                    refreshAssetPrices(history)
-                    _transactions.value = history
-                    _isLoading.value = false
+            try {
+                val wallet = getActiveWalletUseCase() ?: run {
+                    _transactions.value = emptyList()
+                    _errorMessage.value = "No active wallet selected"
                     return@launchSafe
                 }
-            }
 
-            refreshWalletAddressBook()
+                val keys = wallet.keys
+                    .distinctBy { key -> key.networkName.name to key.address.lowercase(Locale.US) }
+                val networkOptionIds = keys.map { key -> optionId(key.networkName.name, key.address) }
+                setNetworksRefreshing(networkOptionIds, true)
 
-            val keys = wallet.keys
-                .distinctBy { key -> key.networkName.name to key.address.lowercase(Locale.US) }
+                val walletId = wallet.id
+                val cacheKey = getHistoryCacheKey(walletId, null, null)
 
-            val aggregatedResults = mutableListOf<TransactionRecord>()
-            val resultMutex = Mutex()
-
-            supervisorScope {
-                keys.map { key ->
-                    async(Dispatchers.IO) {
-                        val networkResults = fetchHistoryForWalletKey(key)
-                        if (networkResults.isNotEmpty()) {
-                            resultMutex.withLock {
-                                aggregatedResults.addAll(networkResults)
-                                _transactions.value = normalizeHistory(aggregatedResults.toList())
-                            }
+                try {
+                    if (!forceRefresh) {
+                        val cached = cacheStore.get(cacheKey, Array<TransactionRecord>::class.java)
+                        if (cached != null && cached.isNotEmpty()) {
+                            val history = normalizeTransactionHistoryUseCase(cached.toList())
+                            _transactions.value = history
+                            markNetworksUpdated(networkOptionIds + HISTORY_ALL_NETWORKS_OPTION_ID)
+                            return@launchSafe
                         }
                     }
-                }.joinAll()
-            }
 
-            val finalHistory = normalizeHistory(aggregatedResults)
-            refreshAssetPrices(finalHistory)
-            _transactions.value = finalHistory
-            _isLoading.value = false
-            
-            // Save to Cache
-            cacheStore.put(cacheKey, finalHistory.toTypedArray())
+                    refreshWalletAddressBook()
+
+                    val aggregatedResults = mutableListOf<TransactionRecord>()
+                    val resultMutex = Mutex()
+
+                    supervisorScope {
+                        keys.map { key ->
+                            async(Dispatchers.IO) {
+                                val networkResults = fetchHistoryForWalletKey(key)
+                                val networkOptionId = optionId(key.networkName.name, key.address)
+                                resultMutex.withLock {
+                                    markNetworkUpdated(networkOptionId)
+                                    if (networkResults.isNotEmpty()) {
+                                        aggregatedResults.addAll(networkResults)
+                                        _transactions.value = normalizeTransactionHistoryUseCase(aggregatedResults.toList())
+                                    }
+                                }
+                            }
+                        }.joinAll()
+                    }
+
+                    val finalHistory = normalizeTransactionHistoryUseCase(aggregatedResults)
+                    _transactions.value = finalHistory
+                    markNetworkUpdated(HISTORY_ALL_NETWORKS_OPTION_ID)
+
+                    // Save to Cache
+                    cacheStore.put(cacheKey, finalHistory.toTypedArray())
+                } finally {
+                    setNetworksRefreshing(networkOptionIds, false)
+                }
+            } finally {
+                _isLoading.value = false
+                setNetworkRefreshing(HISTORY_ALL_NETWORKS_OPTION_ID, false)
+            }
         }
     }
 
     private fun getHistoryCacheKey(walletId: String, networkName: String?, address: String?): String {
-        return "history_${walletId}_${networkName ?: "all"}_${address ?: "all"}"
+        return "history_v${HISTORY_CACHE_SCHEMA_VERSION}_${walletId}_${networkName ?: "all"}_${address ?: "all"}"
+    }
+
+    private fun rebuildNetworkOptions(keys: List<WalletKey>) {
+        currentWalletKeys = keys
+        publishNetworkOptions()
+        if (selectedNetworkOptionId == null || _networkOptions.value.none { it.id == selectedNetworkOptionId }) {
+            selectedNetworkOptionId = HISTORY_ALL_NETWORKS_OPTION_ID
+        }
+        publishNetworkOptions()
+    }
+
+    private fun selectedNetworkSource(): HistoryNetworkOption? {
+        val selectedId = selectedNetworkOptionId
+        return _networkOptions.value.firstOrNull { it.id == selectedId }
+            ?: _networkOptions.value.firstOrNull()
+    }
+
+    private fun selectNetworkFor(networkName: String?, address: String?) {
+        val id = optionIdFor(networkName, address) ?: return
+        if (_networkOptions.value.any { it.id == id }) {
+            selectedNetworkOptionId = id
+            publishNetworkOptions()
+        }
+    }
+
+    private fun selectAllNetworks() {
+        selectedNetworkOptionId = HISTORY_ALL_NETWORKS_OPTION_ID
+        publishNetworkOptions()
+    }
+
+    private fun optionIdFor(networkName: String?, address: String?): String? {
+        if (networkName.isNullOrBlank() || address.isNullOrBlank()) return null
+        return optionId(networkName, address)
+    }
+
+    private fun optionId(networkName: String, address: String): String {
+        return buildHistoryNetworkOptionsUseCase.optionId(networkName, address)
+    }
+
+    private fun setNetworkRefreshing(optionId: String?, refreshing: Boolean) {
+        if (optionId == null) return
+        refreshingNetworkIds = if (refreshing) {
+            refreshingNetworkIds + optionId
+        } else {
+            refreshingNetworkIds - optionId
+        }
+        publishNetworkOptions()
+    }
+
+    private fun setNetworksRefreshing(optionIds: List<String>, refreshing: Boolean) {
+        if (optionIds.isEmpty()) return
+        refreshingNetworkIds = if (refreshing) {
+            refreshingNetworkIds + optionIds
+        } else {
+            refreshingNetworkIds - optionIds.toSet()
+        }
+        publishNetworkOptions()
+    }
+
+    private fun markNetworkUpdated(optionId: String?) {
+        if (optionId == null) return
+        lastNetworkRefreshTimes[optionId] = System.currentTimeMillis()
+        publishNetworkOptions()
+    }
+
+    private fun markNetworksUpdated(optionIds: List<String>) {
+        val now = System.currentTimeMillis()
+        optionIds.forEach { optionId ->
+            lastNetworkRefreshTimes[optionId] = now
+        }
+        publishNetworkOptions()
+    }
+
+    private fun publishNetworkOptions() {
+        _networkOptions.value = buildHistoryNetworkOptionsUseCase(
+            keys = currentWalletKeys,
+            selectedId = selectedNetworkOptionId,
+            refreshingIds = refreshingNetworkIds,
+            lastRefreshTimes = lastNetworkRefreshTimes,
+            now = System.currentTimeMillis(),
+            staleAfterMs = HISTORY_NETWORK_STALE_MS
+        )
+    }
+
+    private fun flattenAssetItems(assets: List<AssetItem>): List<AssetItem> {
+        return assets.flatMap { asset ->
+            if (asset.groupAssets.isEmpty()) {
+                listOf(asset)
+            } else {
+                listOf(asset) + asset.groupAssets
+            }
+        }
     }
 
     private suspend fun fetchHistoryForWalletKey(key: WalletKey): List<TransactionRecord> {
         return try {
             when (val result = getTransactionHistoryUseCase(key.networkName, key.address)) {
-                is ResultResponse.Success -> result.data
+                is ResultResponse.Success -> normalizeTransactionHistoryUseCase(result.data, key.address)
                 is ResultResponse.Error -> emptyList()
             }
         } catch (_: Exception) {
             emptyList()
-        }
-    }
-
-    private suspend fun refreshAssetPrices(history: List<TransactionRecord>) {
-        val symbols = history
-            .map { transactionSymbol(it) }
-            .filter { it.isNotBlank() }
-            .distinctBy { it.uppercase(Locale.US) }
-
-        if (symbols.isEmpty()) {
-            assetUsdPrices = emptyMap()
-            return
-        }
-
-        val existing = assetUsdPrices.keys
-        val missing = symbols.filterNot { symbol ->
-            existing.any { it.equals(symbol, ignoreCase = true) }
-        }
-        if (missing.isEmpty()) return
-
-        when (val result = getLatestAssetPricesUseCase(missing)) {
-            is ResultResponse.Success -> {
-                assetUsdPrices = assetUsdPrices + result.data.associate { price ->
-                    price.assetId.uppercase(Locale.US) to price.priceUsd
-                }
-            }
-
-            is ResultResponse.Error -> Unit
-        }
-    }
-
-    private fun PendingTransactionHint.toTransactionRecord(): TransactionRecord? {
-        val resolvedNetworkName = NetworkName.entries.find {
-            it.name.equals(networkName, ignoreCase = true)
-        } ?: return null
-        val amountValue = amount.toBigIntegerOrNull() ?: return null
-        val feeValue = fee.toBigIntegerOrNull() ?: BigInteger.ZERO
-        val tokenDetails = contractAddress?.takeIf { it.isNotBlank() }?.let { contract ->
-            TokenTransferDetails(
-                from = fromAddress.orEmpty(),
-                to = toAddress.orEmpty(),
-                amount = amountValue,
-                tokenSymbol = tokenSymbol.orEmpty(),
-                tokenDecimals = tokenDecimals ?: 0,
-                contractAddress = contract
-            )
-        }
-
-        return when (networkType.uppercase(Locale.US)) {
-            NetworkType.TVM.name -> TronTransaction(
-                hash = hash,
-                timestamp = 0L,
-                submittedAt = submittedAtSeconds,
-                pendingDurationSeconds = 0L,
-                fee = feeValue,
-                status = TransactionStatus.PENDING,
-                networkName = resolvedNetworkName,
-                fromAddress = fromAddress.orEmpty(),
-                toAddress = toAddress.orEmpty(),
-                amount = amountValue,
-                isOutgoing = isOutgoing,
-                contractAddress = contractAddress,
-                tokenTransferDetails = tokenDetails
-            )
-
-            NetworkType.BITCOIN.name,
-            NetworkType.UTXO.name -> BitcoinTransaction(
-                hash = hash,
-                timestamp = 0L,
-                submittedAt = submittedAtSeconds,
-                pendingDurationSeconds = 0L,
-                fee = feeValue,
-                status = TransactionStatus.PENDING,
-                networkName = resolvedNetworkName,
-                fromAddress = fromAddress,
-                toAddress = toAddress,
-                amount = amountValue,
-                isOutgoing = isOutgoing
-            )
-
-            else -> EvmTransaction(
-                hash = hash,
-                timestamp = 0L,
-                submittedAt = submittedAtSeconds,
-                pendingDurationSeconds = 0L,
-                fee = feeValue,
-                status = TransactionStatus.PENDING,
-                networkName = resolvedNetworkName,
-                fromAddress = fromAddress.orEmpty(),
-                toAddress = toAddress.orEmpty(),
-                amount = amountValue,
-                isOutgoing = isOutgoing,
-                contractAddress = contractAddress,
-                tokenTransferDetails = tokenDetails
-            )
         }
     }
 
@@ -441,7 +516,7 @@ class TransactionHistoryViewModel @Inject constructor(
             record.status == TransactionStatus.PENDING &&
                 record.hash.lowercase(Locale.US) !in freshHashes
         }
-        return normalizeHistory(retained + fresh)
+        return normalizeTransactionHistoryUseCase(retained + fresh)
     }
 
     private fun matchesWalletKey(record: TransactionRecord, key: WalletKey): Boolean {
@@ -469,75 +544,32 @@ class TransactionHistoryViewModel @Inject constructor(
 
     fun selectTransaction(transaction: TransactionRecord?) {
         _selectedTransaction.value = transaction
+        transaction?.let(::loadTransactionDetails)
     }
 
-    private fun normalizeHistory(items: List<TransactionRecord>): List<TransactionRecord> {
-        return items
-            .filter { isTransactionSupported(it) }
-            .distinctBy { transactionIdentity(it) }
-            .sortedWith(
-                compareByDescending<TransactionRecord> { it.status == TransactionStatus.PENDING }
-                    .thenByDescending { it.submittedAt ?: it.timestamp }
-                    .thenByDescending { it.timestamp }
-            )
-    }
-
-    private fun isTransactionSupported(transaction: TransactionRecord): Boolean {
-        if (transaction.amount <= BigInteger.ZERO) {
-            return false
+    fun loadTransactionDetails(transaction: TransactionRecord) {
+        if (transaction !is TronTransaction) return
+        val networkName = transaction.networkName ?: return
+        val key = transactionDetailKey(transaction) ?: return
+        if (_transactionFeeDetails.value.containsKey(key) ||
+            _transactionFeeDetailsLoading.value.contains(key)
+        ) {
+            return
         }
 
-        val networkName = transaction.networkName ?: return true
-        val network = networkCatalog.getNetworkInfoByName(networkName) ?: return true
-        val networkId = network.id
+        _transactionFeeDetailsLoading.update { it + key }
+        launchSafe {
+            try {
+                when (val result = getTransactionFeeDetailsUseCase(networkName, transaction.hash)) {
+                    is ResultResponse.Success -> {
+                        _transactionFeeDetails.update { it + (key to result.data) }
+                        applyTransactionFeeDetails(key, result.data)
+                    }
 
-        val contractAddr = when (transaction) {
-            is EvmTransaction -> transaction.contractAddress ?: transaction.tokenTransferDetails?.contractAddress
-            is TronTransaction -> transaction.contractAddress ?: transaction.tokenTransferDetails?.contractAddress
-            else -> null
-        }
-
-        if (!contractAddr.isNullOrBlank()) {
-            val supportedAssets = assetCatalog.getAssetConfigsForNetwork(networkId)
-            return supportedAssets.any { 
-                it.contractAddress.equals(contractAddr, ignoreCase = true) 
-            }
-        }
-
-        return true
-    }
-
-    private fun transactionIdentity(transaction: TransactionRecord): String {
-        return buildString {
-            append(transaction.networkName?.name ?: "unknown")
-            append('|')
-            append(transaction.hash)
-            append('|')
-            append(transaction.timestamp)
-            append('|')
-            append(transaction.submittedAt ?: 0L)
-            append('|')
-            append(transaction.fromAddress.orEmpty())
-            append('|')
-            append(transaction.toAddress.orEmpty())
-            append('|')
-            append(transaction.amount.toString())
-            append('|')
-            append(transaction.status.name)
-            when (transaction) {
-                is EvmTransaction -> {
-                    append('|')
-                    append(transaction.contractAddress.orEmpty())
-                    append('|')
-                    append(transaction.tokenTransferDetails?.contractAddress.orEmpty())
+                    is ResultResponse.Error -> Unit
                 }
-                is TronTransaction -> {
-                    append('|')
-                    append(transaction.contractAddress.orEmpty())
-                    append('|')
-                    append(transaction.tokenTransferDetails?.contractAddress.orEmpty())
-                }
-                is BitcoinTransaction -> Unit
+            } finally {
+                _transactionFeeDetailsLoading.update { it - key }
             }
         }
     }
@@ -617,8 +649,7 @@ class TransactionHistoryViewModel @Inject constructor(
     fun formatTransactionFiatDetail(transaction: TransactionRecord): String? {
         val amount = transactionFiatValue(transaction) ?: return null
         val formatted = BalanceFormatter.formatUsdValue(amount, false)
-        val sign = if (transaction.isOutgoing) "-" else "+"
-        return "$sign\$$formatted"
+        return formatted
     }
 
     private fun transactionFiatValue(transaction: TransactionRecord): BigDecimal? {
@@ -629,10 +660,11 @@ class TransactionHistoryViewModel @Inject constructor(
     }
 
     fun formatTransactionFee(transaction: TransactionRecord): String {
-        val feeDecimal = rawFeeToDecimal(transaction)
+        val feeValue = transactionDetailFor(transaction)?.fee ?: transaction.fee
+        val feeDecimal = rawFeeToDecimal(transaction, feeValue)
         val symbol = transactionSymbol(transaction, forFee = true)
 
-        return if (transaction.fee == BigInteger.ZERO) {
+        return if (feeValue == BigInteger.ZERO) {
             "0 $symbol".trim()
         } else {
             val formatted = BalanceFormatter.formatBalance(
@@ -642,6 +674,33 @@ class TransactionHistoryViewModel @Inject constructor(
             )
             "$formatted $symbol".trim()
         }
+    }
+
+    fun isTransactionFeeDetailsLoading(transaction: TransactionRecord): Boolean {
+        val key = transactionDetailKey(transaction) ?: return false
+        return _transactionFeeDetailsLoading.value.contains(key)
+    }
+
+    fun formatTronEnergyUsed(transaction: TransactionRecord): String? {
+        val tron = transaction as? TronTransaction ?: return null
+        val value = transactionDetailFor(tron)?.energyUsed ?: tron.energyUsed
+        return value?.toString()
+    }
+
+    fun formatTronBandwidthUsed(transaction: TransactionRecord): String? {
+        val tron = transaction as? TronTransaction ?: return null
+        val value = transactionDetailFor(tron)?.bandwidthUsed ?: tron.bandwidthUsed
+        return value?.toString()
+    }
+
+    fun formatTronEnergyFee(transaction: TransactionRecord): String? {
+        val fee = transactionDetailFor(transaction)?.energyFee ?: return null
+        return formatNativeFeeAmount(transaction, fee)
+    }
+
+    fun formatTronNetworkFee(transaction: TransactionRecord): String? {
+        val fee = transactionDetailFor(transaction)?.networkFee ?: return null
+        return formatNativeFeeAmount(transaction, fee)
     }
 
     fun getTransactionTypeLabel(transaction: TransactionRecord): String {
@@ -736,8 +795,68 @@ class TransactionHistoryViewModel @Inject constructor(
         return BigDecimal(transaction.amount).movePointLeft(transactionDecimals(transaction))
     }
 
+    private fun transactionDetailFor(transaction: TransactionRecord): TransactionFeeDetails? {
+        val key = transactionDetailKey(transaction) ?: return null
+        return _transactionFeeDetails.value[key]
+    }
+
+    private fun transactionDetailKey(transaction: TransactionRecord): String? {
+        val networkName = transaction.networkName?.name ?: return null
+        val hash = transaction.hash.takeIf { it.isNotBlank() } ?: return null
+        return "${networkName.lowercase(Locale.US)}:${hash.lowercase(Locale.US)}"
+    }
+
+    private fun applyTransactionFeeDetails(
+        transactionKey: String,
+        details: TransactionFeeDetails
+    ) {
+        _transactions.update { transactions ->
+            transactions.map { transaction ->
+                if (transactionDetailKey(transaction) == transactionKey) {
+                    transaction.withFeeDetails(details)
+                } else {
+                    transaction
+                }
+            }
+        }
+
+        _selectedTransaction.update { transaction ->
+            if (transaction != null && transactionDetailKey(transaction) == transactionKey) {
+                transaction.withFeeDetails(details)
+            } else {
+                transaction
+            }
+        }
+    }
+
+    private fun TransactionRecord.withFeeDetails(details: TransactionFeeDetails): TransactionRecord {
+        return when (this) {
+            is TronTransaction -> copy(
+                fee = details.fee,
+                energyUsed = details.energyUsed ?: energyUsed,
+                bandwidthUsed = details.bandwidthUsed ?: bandwidthUsed
+            )
+
+            else -> this
+        }
+    }
+
     private fun rawFeeToDecimal(transaction: TransactionRecord): BigDecimal {
-        return BigDecimal(transaction.fee).movePointLeft(networkDecimals(transaction))
+        return rawFeeToDecimal(transaction, transaction.fee)
+    }
+
+    private fun rawFeeToDecimal(transaction: TransactionRecord, fee: BigInteger): BigDecimal {
+        return BigDecimal(fee).movePointLeft(networkDecimals(transaction))
+    }
+
+    private fun formatNativeFeeAmount(transaction: TransactionRecord, fee: BigInteger): String {
+        val formatted = BalanceFormatter.formatBalance(
+            balance = rawFeeToDecimal(transaction, fee),
+            decimals = networkDecimals(transaction),
+            usePersianSeparator = true
+        )
+        val symbol = transactionSymbol(transaction, forFee = true)
+        return "$formatted $symbol".trim()
     }
 
     private fun transactionDecimals(transaction: TransactionRecord): Int {

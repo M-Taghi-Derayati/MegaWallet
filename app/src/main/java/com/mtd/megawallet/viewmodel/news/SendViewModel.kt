@@ -3,8 +3,8 @@ package com.mtd.megawallet.viewmodel.news
 import androidx.lifecycle.viewModelScope
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.utils.BalanceFormatter
-import com.mtd.data.repository.transfer.UnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.IAppEventBus
+import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
@@ -54,7 +54,7 @@ import kotlin.math.max
 @HiltViewModel
 class SendViewModel @Inject constructor(
     private val networkCatalog: INetworkCatalog,
-    private val unifiedTransferCoordinator: UnifiedTransferCoordinator,
+    private val unifiedTransferCoordinator: IUnifiedTransferCoordinator,
     private val appEventBus: IAppEventBus,
     private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
     private val getUsdToIrrRateUseCase: GetUsdToIrrRateUseCase,

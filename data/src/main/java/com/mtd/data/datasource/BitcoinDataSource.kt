@@ -1,7 +1,6 @@
 package com.mtd.data.datasource
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.mtd.domain.model.core.NetworkName
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.data.datasource.IChainDataSource.FeeData
 import com.mtd.data.dto.PushTxRequest
@@ -14,6 +13,7 @@ import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
+import com.mtd.domain.model.core.NetworkName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -48,7 +48,6 @@ import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 class BitcoinDataSource(
     private val network: BlockchainNetwork,
@@ -84,8 +83,6 @@ class BitcoinDataSource(
 
     private class BitcoinRpcResponse : Response<JsonNode>()
 
-    private val currentRpcIndex = AtomicInteger(0)
-    private var currentWeb3j: Web3j? = null
 
     private object BitcoinRpcFactory {
         private val cache = ConcurrentHashMap<String, HttpService>()
@@ -556,26 +553,62 @@ class BitcoinDataSource(
             throw IllegalStateException("Mempool API error: ${response.code()}")
         }
 
-        return response.body()!!.map { tx ->
-            val fromAddress = tx.vin.firstOrNull()?.prevout?.scriptpubkey_address
-            val toOutput = tx.vout.firstOrNull { it.scriptpubkey_address != fromAddress }
-            val toAddress = toOutput?.scriptpubkey_address
-            val amount = toOutput?.value ?: 0L
+        val sortedTxs = response.body()!!
+            .sortedByDescending { it.status.block_height ?: 0L }
+            .sortedBy { if (it.status.confirmed == true) 1 else 0 }
+
+        var prevTime = Long.MAX_VALUE
+        return sortedTxs.mapNotNull { tx ->
+            val sent = tx.vin.sumOf { input ->
+                input.prevout
+                    ?.takeIf { it.scriptpubkey_address == address }
+                    ?.value
+                    ?: 0L
+            }
+            val received = tx.vout.sumOf { output ->
+                if (output.scriptpubkey_address == address) output.value else 0L
+            }
+            val net = received - sent
+            if (net == 0L) return@mapNotNull null
+
+            val isOutgoing = net < 0L
+            val fee = tx.fee ?: 0L
+            val amount = if (isOutgoing) {
+                val actualAmount = (-net) - fee
+                if (actualAmount > 0) actualAmount else -net
+            } else {
+                net
+            }
+            
+            val externalInputAddress = tx.vin
+                .mapNotNull { it.prevout?.scriptpubkey_address }
+                .firstOrNull { it != address }
+            val externalOutputAddress = tx.vout
+                .mapNotNull { it.scriptpubkey_address }
+                .firstOrNull { it != address }
+
+            var currentTime = tx.status.block_time ?: 0L
+            if (currentTime >= prevTime && currentTime > 0L) {
+                currentTime = prevTime - 1L
+            }
+            if (currentTime > 0L) {
+                prevTime = currentTime
+            }
 
             BitcoinTransaction(
                 hash = tx.txid,
                 amount = amount.toBigInteger(),
-                fromAddress = fromAddress,
-                toAddress = toAddress,
-                fee = BigInteger.valueOf(tx.fee ?: 0L),
-                timestamp = tx.status.block_time ?: 0L,
+                fromAddress = if (isOutgoing) address else externalInputAddress,
+                toAddress = if (isOutgoing) externalOutputAddress else address,
+                fee = BigInteger.valueOf(fee),
+                timestamp = currentTime,
                 status = if (tx.status.confirmed == true) {
                     TransactionStatus.CONFIRMED
                 } else {
                     TransactionStatus.PENDING
                 },
                 networkName = network.name,
-                isOutgoing = fromAddress == address
+                isOutgoing = isOutgoing
             )
         }
     }
@@ -611,7 +644,7 @@ class BitcoinDataSource(
                 .toMap()
         }
 
-        return refs
+        val mappedTxs = refs
             .groupBy { it.txHash }
             .map { (txHash, txRefs) ->
                 val txDetail = txDetailByHash[txHash]
@@ -623,34 +656,67 @@ class BitcoinDataSource(
                     .sumOf { it.value ?: 0L }
                 val net = received - sent
                 val isOutgoing = net < 0
-                val amount = if (net < 0) -net else net
+                val fee = BigInteger.valueOf((txDetail?.fees ?: 0L).coerceAtLeast(0L))
+                
+                val amount = if (isOutgoing) {
+                    val actualAmount = (-net) - fee.toLong()
+                    if (actualAmount > 0) actualAmount else -net
+                } else {
+                    net
+                }
+                
                 val anyConfirmed =
                     txDetail?.confirmations ?: (txRefs.maxOfOrNull { it.confirmations ?: 0 } ?: 0)
+                val blockHeight =0L /*txDetail?.blockHeight ?: (txRefs.maxOfOrNull { it.blockHeight ?: 0 } ?: 0).toLong()*/
+                
                 val timestamp = listOfNotNull(
                     parseIsoTimestamp(txDetail?.confirmed),
                     parseIsoTimestamp(txDetail?.received),
                     txRefs.mapNotNull { parseIsoTimestamp(it.confirmed) }.maxOrNull()
-                ).maxOrNull()
-                    ?: 0L
-                val fee = BigInteger.valueOf((txDetail?.fees ?: 0L).coerceAtLeast(0L))
+                ).maxOrNull() ?: 0L
+                
+               /* val externalInputAddress = txDetail?.inputs
+                    ?.flatMap { it.addresses ?: emptyList() }
+                    ?.firstOrNull { it != address }
+                val externalOutputAddress = txDetail?.outputs
+                    ?.flatMap { it.addresses ?: emptyList() }
+                    ?.firstOrNull { it != address }*/
 
-                BitcoinTransaction(
-                    hash = txHash,
-                    amount = amount.toBigInteger(),
-                    fromAddress = if (isOutgoing) address else null,
-                    toAddress = if (isOutgoing) null else address,
-                    fee = fee,
-                    timestamp = timestamp,
-                    status = if (anyConfirmed > 0) {
-                        TransactionStatus.CONFIRMED
-                    } else {
-                        TransactionStatus.PENDING
-                    },
-                    networkName = network.name,
-                    isOutgoing = isOutgoing
+                Pair(
+                    BitcoinTransaction(
+                        hash = txHash,
+                        amount = amount.toBigInteger(),
+                        fromAddress = if (isOutgoing) address else address, /*externalInputAddress*/
+                        /*externalOutputAddress*/ toAddress = if (isOutgoing) address else address,
+                        fee = fee,
+                        timestamp = timestamp,
+                        status = if (anyConfirmed > 0) {
+                            TransactionStatus.CONFIRMED
+                        } else {
+                            TransactionStatus.PENDING
+                        },
+                        networkName = network.name,
+                        isOutgoing = isOutgoing
+                    ),
+                    blockHeight
                 )
             }
-            .sortedByDescending { it.timestamp }
+            
+        val sortedTxs = mappedTxs
+            .sortedByDescending { it.second }
+            .sortedBy { if (it.first.status == TransactionStatus.CONFIRMED) 1 else 0 }
+
+        var prevTime = Long.MAX_VALUE
+        return sortedTxs.map { (tx, _) ->
+            var currentTime = tx.timestamp
+            if (currentTime >= prevTime && currentTime > 0L) {
+                currentTime = prevTime - 1L
+            }
+            if (currentTime > 0L) {
+                prevTime = currentTime
+            }
+            tx.copy(timestamp = currentTime)
+        }
     }
 
     private suspend fun fetchBlockCypherTransactionDetail(

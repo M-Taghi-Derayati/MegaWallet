@@ -1,8 +1,8 @@
 package com.mtd.megawallet.ui.compose.components
 
+import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,10 +16,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -40,6 +43,9 @@ import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 
+private const val BOTTOM_SHEET_CONTENT_TRANSITION_MS = 360
+
+@SuppressLint("RememberInComposition")
 @Composable
 fun AnimatedBottomSheetCard(
     visible: Boolean,
@@ -49,10 +55,10 @@ fun AnimatedBottomSheetCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     BackHandler(enabled = visible, onBack = onDismiss)
+    val topInsetPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
+        modifier = modifier.fillMaxSize()
     ) {
         AnimatedVisibility(
             visible = visible,
@@ -75,7 +81,7 @@ fun AnimatedBottomSheetCard(
             enter = fadeIn(animationSpec = tween(400)) +
                 slideInVertically(
                     initialOffsetY = { it },
-                    animationSpec = spring(dampingRatio = 0.85f, stiffness = 400f)
+                    animationSpec = tween(durationMillis = BOTTOM_SHEET_CONTENT_TRANSITION_MS)
                 ),
             exit = fadeOut(animationSpec = tween(300)) +
                 slideOutVertically(
@@ -86,7 +92,8 @@ fun AnimatedBottomSheetCard(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 24.dp, vertical = 40.dp)
+                    .padding(horizontal = 15.dp)
+                    .padding(top = topInsetPadding + 20.dp, bottom = 20.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(MainScreenConstants.FAB_CORNER_RADIUS_EXPANDED))
                     .background(
@@ -97,7 +104,6 @@ fun AnimatedBottomSheetCard(
                         }
                     )
                     .clickable(enabled = false) {}
-                    .padding(bottom = 24.dp)
             ) {
                 if (title.isNotBlank()) {
                     Row(

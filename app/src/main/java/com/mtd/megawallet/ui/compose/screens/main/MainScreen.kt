@@ -13,7 +13,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -79,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mtd.common_ui.R
+import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.ImportData
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWalletScreen
@@ -90,10 +93,10 @@ import com.mtd.megawallet.ui.compose.screens.wallet.AssetDetailScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.MultiWalletScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.ReceiveScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.WalletScreens
+import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
 import com.mtd.megawallet.viewmodel.news.HomeViewModel
 import com.mtd.megawallet.viewmodel.news.MainScreenViewModel
-import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -217,6 +220,25 @@ private fun MainDashboardContent(
     var isFromMultiWallet by remember { mutableStateOf(false) }
     val selectedTab by mainViewModel.selectedTab.collectAsState()
     val selectedHistoryTransaction by historyViewModel.selectedTransaction.collectAsState()
+    val homeUiState by homeViewModel.uiState.collectAsState()
+    val shouldShowMainFab = selectedTab == MainTab.WALLET &&
+        selectedAssetId == null &&
+        !showSendScreen &&
+        !showReceiveScreen &&
+        !showMultiWalletScreen &&
+        !showCreateWalletScreen &&
+        !showImportWalletScreen
+
+    LaunchedEffect(homeUiState) {
+        val success = homeUiState as? HomeUiState.Success ?: return@LaunchedEffect
+        historyViewModel.syncAssetPricesFromHomeAssets(success.assets)
+    }
+
+    LaunchedEffect(shouldShowMainFab) {
+        if (!shouldShowMainFab) {
+            isFabExpanded = false
+        }
+    }
 
     // مدیریت دکمه Back برای بستن لایه‌های مختلف
     BackHandler(enabled = showSendScreen || showMultiWalletScreen || showReceiveScreen || showCreateWalletScreen || showImportWalletScreen || selectedAssetId != null) {
@@ -364,19 +386,29 @@ private fun MainDashboardContent(
                     )
                 },
                 floatingActionButton = {
-                    MorphingFabMenu(
-                        isExpanded = isFabExpanded,
-                        onToggle = { isFabExpanded = !isFabExpanded },
-                        onSendClick = {
-                            sendInitialAssetId = null
-                            showSendScreen = true
-                            isFabExpanded = false
-                        },
-                        onReceiveClick = { 
-                            showReceiveScreen = true
-                            isFabExpanded = false
-                        }
-                    )
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = shouldShowMainFab,
+                        enter = fadeIn(animationSpec = tween(180)) +
+                                scaleIn(initialScale = 0.86f, animationSpec = tween(220)) +
+                                slideInHorizontally(initialOffsetX = { it / 3 }, animationSpec = tween(220)),
+                        exit = fadeOut(animationSpec = tween(140)) +
+                                androidx.compose.animation.scaleOut(targetScale = 0.86f, animationSpec = tween(160)) +
+                                slideOutHorizontally(targetOffsetX = { it / 3 }, animationSpec = tween(160))
+                    ) {
+                        MorphingFabMenu(
+                            isExpanded = isFabExpanded,
+                            onToggle = { isFabExpanded = !isFabExpanded },
+                            onSendClick = {
+                                sendInitialAssetId = null
+                                showSendScreen = true
+                                isFabExpanded = false
+                            },
+                            onReceiveClick = {
+                                showReceiveScreen = true
+                                isFabExpanded = false
+                            }
+                        )
+                    }
                 },
                 contentWindowInsets = WindowInsets.statusBars
             ) { innerPadding ->
@@ -404,6 +436,7 @@ private fun MainDashboardContent(
                             MainTab.HISTORY -> {
                                 TransactionHistoryScreen(
                                     viewModel = historyViewModel,
+                                    homeViewModel = homeViewModel,
                                     showDetailsBottomSheet = false
                                 )
                             }
@@ -801,7 +834,7 @@ fun MainBottomNavigation(
 
                 // آیکون کیف پول (وسط)
                 BottomNavItem(
-                    filledIconRes = R.drawable.ic_wallet_fill,
+                    filledIconRes = com.mtd.megawallet.R.drawable.ic_wallet_fill,
                     outlinedIconRes = R.drawable.ic_wallet,
                     isSelected = selectedTab == MainTab.WALLET,
                     onClick = onWalletClick
@@ -828,7 +861,6 @@ fun BottomNavItem(
     showPendingIndicator: Boolean = false,
     onClick: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
 
     Box(
         modifier = Modifier

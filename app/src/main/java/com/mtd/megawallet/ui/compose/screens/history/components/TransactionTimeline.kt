@@ -1,8 +1,12 @@
 package com.mtd.megawallet.ui.compose.screens.history.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -14,203 +18,180 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mtd.common_ui.R
-import com.mtd.domain.model.TransactionStatus
+import kotlinx.coroutines.delay
 
 @Composable
 fun TransactionTimeline(
-    status: TransactionStatus,
-    submittedTime: String,
-    progressText: String,
-    completedTime: String?,
     modifier: Modifier = Modifier
 ) {
+    val line1Progress = remember { Animatable(0f) }
+    val line2Progress = remember { Animatable(0f) }
+
+    var showNode2 by remember { mutableStateOf(false) }
+    var showNode3 by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        // Step 1: Draw the first vertical line from Node 1 to Node 2
+        line1Progress.animateTo(1f, animationSpec = tween(300, easing = FastOutSlowInEasing))
+
+        // Step 2: Exactly when the first line finishes, Node 2 appears
+        showNode2 = true
+        delay(300) // Wait for Node 2's slide/fade animation to complete
+
+        // Step 3: Draw the second vertical line from Node 2 to Node 3
+        line2Progress.animateTo(1f, animationSpec = tween(300, easing = FastOutSlowInEasing))
+
+        // Step 4: When the second line finishes, Node 3 appears
+        showNode3 = true
+    }
+
+    val neonBlue = Color(0xFF2081E2)
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-            .padding(16.dp)
+            .background(Color(0xFF121212)) // Dark theme background
+            .padding(24.dp)
     ) {
-        TimelineRow(
-            state = StepState.COMPLETED,
-            title = "ثبت شد",
-            rightText = submittedTime,
+        // Node 1: Submitted (Always visible initially)
+        TimelineNode(
+            title = "Submitted",
+            timestamp = "Apr 25 2026 - 18:28",
+            iconColor = neonBlue,
+            isFirst = true,
             isLast = false,
-            isLineActive = status != TransactionStatus.PENDING
+            lineProgress = line1Progress.value,
+            visible = true
         )
 
-        TimelineRow(
-            state = when (status) {
-                TransactionStatus.PENDING -> StepState.CURRENT
-                TransactionStatus.CONFIRMED -> StepState.COMPLETED
-                TransactionStatus.FAILED -> StepState.COMPLETED
-            },
-            title = when (status) {
-                TransactionStatus.PENDING -> "در حال بررسی"
-                TransactionStatus.CONFIRMED -> "تأیید شبکه"
-                TransactionStatus.FAILED -> "بررسی ناموفق"
-            },
-            rightText = progressText,
+        // Node 2: Pending (Appears sequentially)
+        TimelineNode(
+            title = "Pending",
+            timestamp = "00:01",
+            iconColor = neonBlue,
+            isFirst = false,
             isLast = false,
-            isLineActive = status != TransactionStatus.PENDING
+            lineProgress = line2Progress.value,
+            visible = showNode2
         )
 
-        TimelineRow(
-            state = when (status) {
-                TransactionStatus.PENDING -> StepState.INACTIVE
-                TransactionStatus.CONFIRMED -> StepState.COMPLETED
-                TransactionStatus.FAILED -> StepState.FAILED
-            },
-            title = when (status) {
-                TransactionStatus.PENDING -> "تکمیل"
-                TransactionStatus.CONFIRMED -> "تکمیل شد"
-                TransactionStatus.FAILED -> "ناموفق"
-            },
-            rightText = completedTime ?: if (status == TransactionStatus.FAILED) "بدون تایید" else "- -",
+        // Node 3: Completed (Appears sequentially)
+        TimelineNode(
+            title = "Completed",
+            timestamp = "Apr 25 2026 - 18:28",
+            iconColor = neonBlue,
+            isFirst = false,
             isLast = true,
-            isLineActive = false
+            lineProgress = 0f,
+            visible = showNode3
         )
     }
-}
-
-private enum class StepState {
-    COMPLETED,
-    CURRENT,
-    INACTIVE,
-    FAILED
 }
 
 @Composable
-private fun TimelineRow(
-    state: StepState,
+private fun TimelineNode(
     title: String,
-    rightText: String,
+    timestamp: String,
+    iconColor: Color,
+    isFirst: Boolean,
     isLast: Boolean,
-    isLineActive: Boolean
+    lineProgress: Float,
+    visible: Boolean
 ) {
-    val activeColor = MaterialTheme.colorScheme.secondary
-    val inactiveColor = Color(0xFFBDBDBD)
-    val inactiveBorderColor = Color(0xFFE0E0E0)
-    val failedColor = MaterialTheme.colorScheme.error
-
-    val tint = when (state) {
-        StepState.COMPLETED, StepState.CURRENT -> activeColor
-        StepState.FAILED -> failedColor
-        StepState.INACTIVE -> inactiveColor
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-        verticalAlignment = Alignment.Top
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(300)) + slideInVertically(tween(300), initialOffsetY = { 20 })
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(24.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when (state) {
-                            StepState.COMPLETED, StepState.CURRENT -> tint
-                            StepState.FAILED -> failedColor.copy(alpha = 0.15f)
-                            StepState.INACTIVE -> Color.Transparent
-                        }
-                    )
-                    .border(
-                        width = if (state == StepState.INACTIVE) 2.dp else 0.dp,
-                        color = if (state == StepState.INACTIVE) inactiveBorderColor else Color.Transparent,
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+            // Icon & Connecting Line
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(24.dp)
             ) {
-                when (state) {
-                    StepState.COMPLETED -> {
+                // Circular Icon
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(iconColor, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isFirst || isLast) {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(10.dp)
+                            modifier = Modifier.size(16.dp)
                         )
-                    }
-
-                    StepState.CURRENT -> {
+                    } else {
+                        // Dot for pending state
                         Box(
                             modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(Color.White)
+                                .size(8.dp)
+                                .background(Color.White, CircleShape)
                         )
                     }
+                }
 
-                    StepState.FAILED -> {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = null,
-                            tint = failedColor,
-                            modifier = Modifier.size(10.dp)
-                        )
-                    }
-
-                    StepState.INACTIVE -> Unit
+                // Vertical Line
+                if (!isLast) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .width(2.dp)
+                            .drawBehind {
+                                val totalHeight = size.height
+                                drawLine(
+                                    color = iconColor,
+                                    start = Offset(size.width / 2, 0f),
+                                    end = Offset(size.width / 2, totalHeight * lineProgress),
+                                    strokeWidth = 2.dp.toPx()
+                                )
+                            }
+                    )
                 }
             }
 
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .weight(1f)
-                        .padding(vertical = 4.dp)
-                        .background(if (isLineActive) tint else inactiveBorderColor)
-                )
-            }
-        }
+            Spacer(modifier = Modifier.width(16.dp))
 
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(bottom = if (isLast) 0.dp else 24.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Text Content
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(bottom = if (isLast) 0.dp else 40.dp) // Spacing between nodes
             ) {
                 Text(
                     text = title,
-                    color = tint,
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
                 )
-
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = rightText,
-                    color = if (state == StepState.INACTIVE) inactiveColor else tint,
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                    text = timestamp,
+                    color = Color.Gray,
+                    fontSize = 14.sp
                 )
             }
         }

@@ -9,8 +9,9 @@ data class EVMTransactionDto(
     @SerializedName("from") val from: FromToDto,
     @SerializedName("to") val to: FromToDto?, // 'to' می‌تواند در تراکنش‌های ساخت قرارداد null باشد
     @SerializedName("value") val value: BigInteger,
-    @SerializedName("gas_used") val gasUsed: String?,
-    @SerializedName("gas_price") val gasPrice: String?,
+    @SerializedName("gas_used") val gasUsed: BigInteger?,
+    @SerializedName("gas_price") val gasPrice: BigInteger?,
+    @SerializedName("nonce") val nonce: Long?,
     @SerializedName("timestamp") val timestamp: String,
     @SerializedName("status") val status: String // e.g., "ok" or "error"
 )

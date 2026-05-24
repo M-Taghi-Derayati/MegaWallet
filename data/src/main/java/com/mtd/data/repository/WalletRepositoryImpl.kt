@@ -12,6 +12,7 @@ import com.mtd.data.utils.safeApiCall
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.core.Wallet
@@ -38,6 +39,16 @@ class WalletRepositoryImpl @Inject constructor(
 
         // Keys format for individual secrets: "wallet_secret_{id}"
         private fun getSecretKey(id: String) = "wallet_secret_$id"
+    }
+
+    private fun com.mtd.data.datasource.IChainDataSource.TransactionFeeDetails.toDomainModel(): TransactionFeeDetails {
+        return TransactionFeeDetails(
+            fee = fee,
+            energyUsed = energyUsed,
+            bandwidthUsed = bandwidthUsed,
+            energyFee = energyFee,
+            networkFee = networkFee
+        )
     }
 
     private data class WalletStorageMetadata(
@@ -470,6 +481,21 @@ class WalletRepositoryImpl @Inject constructor(
                 val dataSource = dataSourceFactory.create(chainId?.chainId!!)
                 val result = dataSource.getTransactionHistory(userAddress)
                 if (result is ResultResponse.Success) result.data else throw Exception("Failed to fetch history")
+            }
+        }
+
+        override suspend fun getTransactionFeeDetails(
+            networkName: NetworkName,
+            txId: String
+        ): ResultResponse<TransactionFeeDetails> {
+            return safeApiCall {
+                val chainId = blockchainRegistry.getNetworkByName(networkName)
+                    ?: throw IllegalStateException("Network not found")
+                val dataSource = dataSourceFactory.create(chainId.chainId!!)
+                when (val result = dataSource.getTransactionFeeDetails(txId)) {
+                    is ResultResponse.Success -> result.data.toDomainModel()
+                    is ResultResponse.Error -> throw result.exception
+                }
             }
         }
 

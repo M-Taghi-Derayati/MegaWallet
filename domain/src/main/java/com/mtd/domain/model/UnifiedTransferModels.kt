@@ -39,3 +39,10 @@ data class GaslessFinalResult(
     val queueId: String,
     val status: GaslessTxStatus
 )
+
+data class GaslessDisplayPreview(
+    val displayPolicy: GaslessDisplayPolicyBundle?,
+    val gaslessFeeAmount: BigInteger,
+    val needsApprove: Boolean,
+    val smartFee: GaslessSmartFee? = null
+)

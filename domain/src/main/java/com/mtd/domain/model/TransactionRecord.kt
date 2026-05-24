@@ -34,7 +34,7 @@ data class EvmTransaction(
     
     // EVM Specific
     val gasPrice: BigInteger? = null,
-    val gasLimit: BigInteger? = null,
+    val gasUsed: BigInteger? = null,
     val nonce: Long? = null,
     val contractAddress: String? = null,
     val tokenTransferDetails: TokenTransferDetails? = null

@@ -4,6 +4,7 @@ import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionParams
+import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.core.Wallet
 
@@ -123,7 +124,9 @@ interface IWalletRepository {
     suspend fun getActiveWalletId(): String?
  
     suspend fun getTransactionHistory( networkName: NetworkName, userAddress: String): ResultResponse<List<TransactionRecord>>
- 
+
+    suspend fun getTransactionFeeDetails(networkName: NetworkName, txId: String): ResultResponse<TransactionFeeDetails>
+  
     suspend fun getActiveAddressForNetwork(networkId: String): String?
 
     /**

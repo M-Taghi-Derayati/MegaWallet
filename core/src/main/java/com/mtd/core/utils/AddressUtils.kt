@@ -14,7 +14,7 @@ object AddressUtils {
         val trimmed = address.trim()
         if (trimmed.length <= 10) return trimmed
         
-        // Format: First 4 chars + ... + last 4 chars
-        return "${trimmed.take(4)}...${trimmed.takeLast(4)}"
+        // Format: First 6 chars + ... + last 6 chars
+        return "${trimmed.take(6)}...${trimmed.takeLast(6)}"
     }
 }
