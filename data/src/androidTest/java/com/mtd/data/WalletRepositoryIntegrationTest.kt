@@ -7,17 +7,19 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
-import com.mtd.domain.model.core.NetworkName
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.di.NetworkModule.provideGson
 import com.mtd.data.di.NetworkModule.provideRetrofitBuilder
-import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.data.repository.WalletRepositoryImpl
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
+import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.Wallet
-import com.mtd.core.wallet.ActiveWalletManager
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
@@ -54,15 +56,20 @@ class WalletRepositoryIntegrationTest {
 
         val gson = provideGson()
         val retrofitBuilder = provideRetrofitBuilder(okHttpClient, gson)
+        val mode=object : IBlockchainConnectionModeProvider{
+            override fun currentMode(): BlockchainConnectionMode {
+               return BlockchainConnectionMode.DIRECT
+            }
 
+        }
         val assetRegistry=AssetRegistry(blockchainRegistry)
-        val chainDataSourceFactory = ChainDataSourceFactory(blockchainRegistry, retrofitBuilder,assetRegistry,okHttpClient)
+        val chainDataSourceFactory = ChainDataSourceFactory(blockchainRegistry, mode,retrofitBuilder,assetRegistry,okHttpClient)
 
         val activeWalletManager= ActiveWalletManager(keyManager)
         keyManager = KeyManager(blockchainRegistry)
 
         // نمونه واقعی از Repository را با وابستگی‌های واقعی می‌سازیم
-        walletRepository = WalletRepositoryImpl(keyManager, secureStorage,activeWalletManager,blockchainRegistry,chainDataSourceFactory)
+        walletRepository = WalletRepositoryImpl(keyManager, secureStorage,activeWalletManager,blockchainRegistry,gson,chainDataSourceFactory)
 
         // قبل از هر تست، مطمئن می‌شویم که هیچ کیف پولی از تست قبلی باقی نمانده
         runTest { walletRepository.deleteWallet() }

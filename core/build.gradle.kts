@@ -18,11 +18,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            proguardFiles(
+            isMinifyEnabled = true
+           /* proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
-            )
+            )*/
         }
     }
     compileOptions {
@@ -48,7 +48,7 @@ dependencies {
     implementation(libs.bundles.okhttp)
 
     api(libs.timber)
-    api("org.bouncycastle:bcprov-jdk15to18:1.70")
+  /*  api("org.bouncycastle:bcprov-jdk15to18:1.70")
     api(libs.bundles.web3){
         exclude(group = "org.bouncycastle")
     }
@@ -60,7 +60,13 @@ dependencies {
     api(libs.bitcoin.jni)
 
 
-    api(libs.bundles.google.auth)
+    api(libs.bundles.google.auth)*/
+
+
+    implementation(libs.bundles.web3)
+    implementation(libs.bitcoinj)
+    implementation(libs.bitcoin.kmp)
+    implementation(libs.bitcoin.jni)
 
 
     implementation(libs.security.crypto)
@@ -68,10 +74,9 @@ dependencies {
     {
         exclude(group = "org.json", module = "json")
     }
+    implementation(libs.gson)
     implementation(libs.material)
-
     implementation(libs.dagger.hilt)
-
     ksp(libs.dagger.hilt.compiler)
 
     testImplementation(libs.junit)

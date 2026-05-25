@@ -8,3 +8,15 @@ plugins {
     alias(libs.plugins.android.hilt) apply false
     alias (libs.plugins.android.navsafeArgs) apply false
 }
+
+// اضافه کردن به انتهای فایل build.gradle.kts ریشه پروژه
+subprojects {
+    configurations.all {
+        resolutionStrategy.eachDependency {
+            if (requested.group == "org.bouncycastle") {
+                // اجبار کل پروژه به استفاده از نسخه پایدار بدون تعارض در زمان کامپایل
+                useVersion("1.73")
+            }
+        }
+    }
+}

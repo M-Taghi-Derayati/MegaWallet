@@ -73,31 +73,24 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
-        dataBinding= true
-        viewBinding=true
         buildConfig= true
         compose = true
     }
 
     packaging {
         resources {
-            // حل مشکل مانیفست که قبلاً خوردید
+            // حذف امضاهای تکراری و فایل‌های بیهوده برای کاهش حجم APK
+            excludes += setOf(
+                "META-INF/*.SF",
+                "META-INF/*.DSA",
+                "META-INF/*.RSA",
+                "META-INF/INDEX.LIST",
+                "META-INF/DEPENDENCIES",
+                "org/bouncycastle/check.properties",
+                "google/protobuf/*.proto"
+            )
+
             pickFirsts.add("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
-
-            // موارد تکراری رایج
-            pickFirsts.add("META-INF/INDEX.LIST")
-            pickFirsts.add("META-INF/LICENSE*")
-            pickFirsts.add("META-INF/DEPENDENCIES")
-            pickFirsts.add("META-INF/NOTICE*")
-            pickFirsts.add("META-INF/io.netty.versions.properties")
-            pickFirsts.add("META-INF/FastDoubleParser-LICENSE")
-            pickFirsts.add("META-INF/FastDoubleParser-NOTICE")
-
-            // حذف امضاهای BouncyCastle برای جلوگیری از SecurityException
-            excludes += "META-INF/*.SF"
-            excludes += "META-INF/*.DSA"
-            excludes += "META-INF/*.RSA"
-            excludes += "org/bouncycastle/check.properties"
         }
     }
 }

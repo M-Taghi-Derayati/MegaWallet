@@ -7,19 +7,21 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.gson.Gson
 import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
-import com.mtd.domain.model.core.NetworkName
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.di.NetworkConnectionInterceptor
 import com.mtd.data.di.NetworkModule.httpLoggingInterceptorProvider
 import com.mtd.data.di.NetworkModule.provideOkHttpClient
 import com.mtd.data.di.NetworkModule.provideRetrofitBuilder
-import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.data.repository.WalletRepositoryImpl
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
+import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.Asset
+import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.ResultResponse
-import com.mtd.core.wallet.ActiveWalletManager
+import com.mtd.domain.model.core.NetworkName
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -66,7 +68,13 @@ class TronIntegrationTest {
         val assetRegistry=AssetRegistry(blockchainRegistry).apply {
             loadAssetsFromAssets(context)
         }
-        val dataSourceFactory = ChainDataSourceFactory(blockchainRegistry, retrofitBuilder,assetRegistry,okHttpClient)
+        val mode=object : IBlockchainConnectionModeProvider{
+            override fun currentMode(): BlockchainConnectionMode {
+                return BlockchainConnectionMode.DIRECT
+            }
+
+        }
+        val dataSourceFactory = ChainDataSourceFactory(blockchainRegistry,mode, retrofitBuilder,assetRegistry,okHttpClient)
 
         val activeWalletManager = ActiveWalletManager(keyManager)
 
@@ -75,6 +83,7 @@ class TronIntegrationTest {
             keyManager = keyManager,
             secureStorage = secureStorage,
             blockchainRegistry = blockchainRegistry,
+            gson = gson,
             dataSourceFactory = dataSourceFactory
         )
 

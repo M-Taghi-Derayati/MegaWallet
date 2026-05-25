@@ -1,6 +1,5 @@
 package com.mtd.domain.model.error
 
-import retrofit2.HttpException
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -12,12 +11,6 @@ object ErrorMapper {
             is UnknownHostException -> AppError.Network.NoInternet
             is SocketTimeoutException -> AppError.Network.Timeout
             is IOException -> AppError.Network.NoInternet // سایر خطاهای IO معمولاً قطعی نت هستند
-            is HttpException -> {
-                when (throwable.code()) {
-                    in 500..599 -> AppError.Network.ServerUnavailable
-                    else -> AppError.Network.Unknown(throwable)
-                }
-            }
             else -> AppError.Unexpected(throwable)
         }
     }

@@ -4,13 +4,14 @@ import android.graphics.Color
 import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.keymanager.MnemonicHelper
-import com.mtd.domain.model.core.WalletKey
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.data.datasource.ChainDataSourceFactory
+import com.mtd.data.di.NetworkModule.provideGson
 import com.mtd.data.repository.WalletRepositoryImpl
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.Wallet
-import com.mtd.core.wallet.ActiveWalletManager
+import com.mtd.domain.model.core.WalletKey
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -40,12 +41,13 @@ class WalletRepositoryImplTest {
         activeWalletManager = mockk(relaxed = true)
         blockchainRegistry = mockk(relaxed = true)
         chainDataSourceFactory = mockk(relaxed = true)
-
+        val gson = provideGson()
         walletRepository = WalletRepositoryImpl(
             keyManager = keyManager,
             secureStorage = secureStorage,
             activeWalletManager = activeWalletManager,
             blockchainRegistry = blockchainRegistry,
+            gson = gson,
             dataSourceFactory = chainDataSourceFactory
         )
 

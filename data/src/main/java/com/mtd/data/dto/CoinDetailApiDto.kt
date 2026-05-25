@@ -1,7 +1,7 @@
 package com.mtd.data.dto
 
 import com.google.gson.annotations.SerializedName
-import com.mtd.domain.model.assets.AssetPriceDto
+import java.math.BigDecimal
 
 data class HistoricalOhlcResponse(
     @SerializedName("Data") val data: List<OhlcCandle>? = null,
@@ -16,8 +16,16 @@ data class OhlcCandle(
 
 data class AssetPriceResponse(
     @SerializedName("Data")
-    val data: Map<String, AssetPriceDto>
+    val data: Map<String, AssetPriceDataDto>
 )
 
+data class AssetPriceDataDto(
+    @SerializedName("BASE")
+    val assetId: String? = null,
+    @SerializedName("PRICE")
+    val priceUsd: BigDecimal,
+    @SerializedName("MOVING_24_HOUR_CHANGE_PERCENTAGE")
+    val priceChanges24h: BigDecimal
+)
 
 

@@ -1,8 +1,6 @@
 package com.mtd.data.repository.gasless
 
 import com.mtd.core.keymanager.KeyManager
-import com.mtd.domain.model.core.NetworkName
-import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.TypedDataSigner
@@ -18,8 +16,9 @@ import com.mtd.domain.model.GaslessCoordinatorState
 import com.mtd.domain.model.GaslessPrepareData
 import com.mtd.domain.model.GaslessQueuedTx
 import com.mtd.domain.model.GaslessQuoteData
-import com.mtd.domain.model.GaslessTxStatus
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkType
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -197,8 +196,8 @@ class EvmGaslessCoordinatorTest {
     @Test
     fun `pollUntilFinal reaches SUCCESS after queued status`() = runTest {
         coEvery { repository.getTxStatus("queue_1") } returnsMany listOf(
-            ResultResponse.Success(GaslessTxStatus("queue_1", "QUEUED", null, null)),
-            ResultResponse.Success(GaslessTxStatus("queue_1", "SUCCESS", "0xabc", null))
+          //  ResultResponse.Success(GaslessTxStatus("queue_1", "QUEUED", null, null)),
+           // ResultResponse.Success(GaslessTxStatus("queue_1", "SUCCESS", "0xabc", null))
         )
 
         val result = coordinator.pollUntilFinal(

@@ -7,15 +7,14 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.gson.Gson
 import com.mtd.core.encryption.SecureStorage
-import com.mtd.domain.model.error.AppError
 import com.mtd.core.keymanager.KeyManager
-import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.EvmAbiEncoder
 import com.mtd.core.utils.TronAbiEncoder
 import com.mtd.core.utils.TronAddressConverter
 import com.mtd.core.utils.TypedDataSigner
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.di.NetworkConnectionInterceptor
 import com.mtd.data.di.NetworkModule
@@ -29,8 +28,10 @@ import com.mtd.data.repository.gasless.EvmGaslessRepositoryImpl
 import com.mtd.data.repository.gasless.GaslessApiGateway
 import com.mtd.data.repository.gasless.TronGaslessRepositoryImpl
 import com.mtd.data.service.GaslessApiService
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.Asset
+import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.EvmQuoteRequest
 import com.mtd.domain.model.EvmRelayParams
 import com.mtd.domain.model.EvmRelayPayload
@@ -47,7 +48,8 @@ import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TronApproveQuoteRequest
 import com.mtd.domain.model.TronSponsorApproveRequest
 import com.mtd.domain.model.TronSponsorMode
-import com.mtd.core.wallet.ActiveWalletManager
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.error.AppError
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -110,11 +112,18 @@ class GaslessFullBackendIntegrationTest {
         blockchainRegistry = BlockchainRegistry().apply { loadNetworksFromAssets(context) }
         keyManager = KeyManager(blockchainRegistry)
         val assetRegistry = AssetRegistry(blockchainRegistry).apply { loadAssetsFromAssets(context) }
+        val mode=object :IBlockchainConnectionModeProvider{
+            override fun currentMode(): BlockchainConnectionMode {
+                return BlockchainConnectionMode.DIRECT
+            }
+
+        }
         dataSourceFactory = ChainDataSourceFactory(
             blockchainRegistry = blockchainRegistry,
             retrofitBuilder = retrofitBuilder,
             assetRegistry = assetRegistry,
-            okHttpClient = okHttpClient
+            okHttpClient = okHttpClient,
+            modeProvider = mode
         )
 
         val secureStorage = SecureStorage(context)
@@ -124,7 +133,8 @@ class GaslessFullBackendIntegrationTest {
             secureStorage = secureStorage,
             activeWalletManager = activeWalletManager,
             blockchainRegistry = blockchainRegistry,
-            dataSourceFactory = dataSourceFactory
+            dataSourceFactory = dataSourceFactory,
+            gson = gson
         )
 
         gaslessApiService = Retrofit.Builder()

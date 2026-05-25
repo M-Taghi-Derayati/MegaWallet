@@ -16,11 +16,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            proguardFiles(
+            isMinifyEnabled = true
+            /*proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
-            )
+            )*/
         }
     }
     compileOptions {
@@ -36,7 +36,7 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
-    api(libs.bundles.sdp)
+
     api(libs.bundles.coil)
     api(libs.qrgen)
     api(libs.rxbinding)

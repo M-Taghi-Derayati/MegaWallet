@@ -3,7 +3,7 @@ package com.mtd.data.repository.gasless
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.mtd.core.json.GsonJsonCodec
 import com.mtd.domain.model.GaslessChain
 import com.mtd.domain.model.PendingGaslessTx
 import javax.inject.Inject
@@ -40,15 +40,14 @@ class PendingGaslessTxStore @Inject constructor(
     private fun readUnsafe(): List<PendingGaslessTx> {
         val raw = sharedPreferences.getString(KEY, null) ?: return emptyList()
         return try {
-            val type = object : TypeToken<List<PendingGaslessTx>>() {}.type
-            gson.fromJson<List<PendingGaslessTx>>(raw, type) ?: emptyList()
+            GsonJsonCodec.decodeList<PendingGaslessTx>(raw, gson)
         } catch (_: Exception) {
             emptyList()
         }
     }
 
     private fun saveUnsafe(items: List<PendingGaslessTx>) {
-        val encoded = gson.toJson(items)
+        val encoded = GsonJsonCodec.encode(items, gson)
         sharedPreferences.edit() { putString(KEY, encoded) }
     }
 
@@ -56,5 +55,4 @@ class PendingGaslessTxStore @Inject constructor(
         private const val KEY = "pending_gasless_txs_v1"
     }
 }
-
 

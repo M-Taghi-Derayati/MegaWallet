@@ -1,11 +1,10 @@
 package com.mtd.domain.usecase.wallet.importwallet
 
 import android.content.Intent
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.mtd.domain.interfaceRepository.IAuthManager
 import com.mtd.domain.interfaceRepository.IBackupRepository
 import com.mtd.domain.interfaceRepository.ICloudBackupDataSource
+import com.mtd.domain.interfaceRepository.ICloudWalletBackupCodec
 import com.mtd.domain.interfaceRepository.ICloudWalletBalanceCalculator
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.interfaceRepository.IWalletSecretValidator
@@ -86,15 +85,14 @@ class ConnectCloudBackupUseCase @Inject constructor(
 
 class RestoreCloudWalletsUseCase @Inject constructor(
     private val backupRepository: IBackupRepository,
-    private val gson: Gson
+    private val cloudWalletBackupCodec: ICloudWalletBackupCodec
 ) {
     suspend operator fun invoke(password: String): ResultResponse<List<CloudWalletItem>> {
         return when (val result = backupRepository.restoreData(password)) {
             is ResultResponse.Success -> {
                 try {
-                    val type = object : TypeToken<List<CloudWalletMetadata>>() {}.type
                     val metadataList: List<CloudWalletMetadata> =
-                        gson.fromJson(result.data, type) ?: emptyList()
+                        cloudWalletBackupCodec.decode(result.data)
                     ResultResponse.Success(
                         metadataList.map { metadata ->
                             CloudWalletItem(

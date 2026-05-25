@@ -4,34 +4,36 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.mtd.core.di.CryptoModule
 import com.mtd.data.GoogleAuthManager
+import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
 import com.mtd.data.datasource.GoogleDriveDataSource
 import com.mtd.data.datasource.ICloudDataSource
-import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
 import com.mtd.data.repository.BackupRepositoryImpl
 import com.mtd.data.repository.CachedWalletBalanceReaderImpl
 import com.mtd.data.repository.CloudWalletBalanceCalculatorImpl
-import com.mtd.data.repository.gasless.EvmGaslessRepositoryImpl
-import com.mtd.domain.interfaceRepository.IBackupRepository
-import com.mtd.domain.interfaceRepository.IGaslessEvmRepository
-import com.mtd.domain.interfaceRepository.IGaslessTronRepository
-import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.data.repository.GsonCloudWalletBackupCodec
 import com.mtd.data.repository.MarketDataRepositoryImpl
-import com.mtd.data.repository.gasless.TronGaslessRepositoryImpl
-import com.mtd.data.repository.UserPreferencesRepositoryImpl
 import com.mtd.data.repository.SendAssetDataSourceImpl
-import com.mtd.data.repository.transfer.UnifiedTransferCoordinator
+import com.mtd.data.repository.UserPreferencesRepositoryImpl
 import com.mtd.data.repository.WalletBalanceSynchronizerImpl
 import com.mtd.data.repository.WalletRepositoryImpl
-import com.mtd.domain.model.IUserPreferencesRepository
+import com.mtd.data.repository.gasless.EvmGaslessRepositoryImpl
+import com.mtd.data.repository.gasless.TronGaslessRepositoryImpl
+import com.mtd.data.repository.transfer.UnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.IAuthManager
+import com.mtd.domain.interfaceRepository.IBackupRepository
 import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.interfaceRepository.ICachedWalletBalanceReader
 import com.mtd.domain.interfaceRepository.ICloudBackupDataSource
+import com.mtd.domain.interfaceRepository.ICloudWalletBackupCodec
 import com.mtd.domain.interfaceRepository.ICloudWalletBalanceCalculator
+import com.mtd.domain.interfaceRepository.IGaslessEvmRepository
+import com.mtd.domain.interfaceRepository.IGaslessTronRepository
 import com.mtd.domain.interfaceRepository.IMarketDataRepository
 import com.mtd.domain.interfaceRepository.ISendAssetDataSource
 import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.IWalletBalanceSynchronizer
+import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.IUserPreferencesRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -94,6 +96,12 @@ abstract class DataModule {
     abstract fun bindCloudBackupDataSource(
         googleDriveDataSource: GoogleDriveDataSource
     ): ICloudBackupDataSource
+
+    @Binds
+    @Singleton
+    abstract fun bindCloudWalletBackupCodec(
+        impl: GsonCloudWalletBackupCodec
+    ): ICloudWalletBackupCodec
 
     @Binds
     @Singleton

@@ -7,19 +7,21 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.mtd.core.encryption.SecureStorage
 import com.mtd.core.keymanager.KeyManager
-import com.mtd.domain.model.core.NetworkName
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.di.NetworkConnectionInterceptor
 import com.mtd.data.di.NetworkModule.httpLoggingInterceptorProvider
 import com.mtd.data.di.NetworkModule.provideGson
 import com.mtd.data.di.NetworkModule.provideOkHttpClient
 import com.mtd.data.di.NetworkModule.provideRetrofitBuilder
-import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.data.repository.WalletRepositoryImpl
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
+import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.ResultResponse
-import com.mtd.core.wallet.ActiveWalletManager
+import com.mtd.domain.model.core.NetworkName
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -57,14 +59,22 @@ class AssetFetchingIntegrationTest {
         val gson = provideGson()
         val retrofitBuilder = provideRetrofitBuilder(okHttpClient, gson)
         val activeWalletManager= ActiveWalletManager(keyManager)
+        val mode=object :IBlockchainConnectionModeProvider{
+            override fun currentMode(): BlockchainConnectionMode {
+                return BlockchainConnectionMode.DIRECT
+            }
+
+        }
         val assetRegistry=AssetRegistry(blockchainRegistry)
-        val dataSourceFactory = ChainDataSourceFactory(blockchainRegistry, retrofitBuilder,assetRegistry,okHttpClient)
+        val dataSourceFactory = ChainDataSourceFactory(blockchainRegistry,mode,
+             retrofitBuilder,assetRegistry,okHttpClient)
 
         walletRepository = WalletRepositoryImpl(
             keyManager,
             secureStorage,
             activeWalletManager,
             blockchainRegistry,
+            gson,
             dataSourceFactory // استفاده از فکتوری
         )
 

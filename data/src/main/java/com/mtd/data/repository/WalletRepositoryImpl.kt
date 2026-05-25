@@ -1,12 +1,14 @@
 package com.mtd.data.repository
 
+import com.google.gson.Gson
 import com.mtd.core.encryption.SecureStorage
+import com.mtd.core.json.GsonJsonCodec
 import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.keymanager.MnemonicHelper
 import com.mtd.core.keymanager.MnemonicHelper.isPrivateKeyValid
-import com.mtd.domain.model.core.NetworkName
 import com.mtd.core.network.tron.TronUtils.Base58.hexToBase58
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.data.datasource.ChainDataSourceFactory
 import com.mtd.data.utils.safeApiCall
 import com.mtd.domain.interfaceRepository.IWalletRepository
@@ -15,8 +17,8 @@ import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
+import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.Wallet
-import com.mtd.core.wallet.ActiveWalletManager
 import org.web3j.utils.Numeric
 import javax.inject.Inject
 
@@ -25,6 +27,7 @@ class WalletRepositoryImpl @Inject constructor(
     private val secureStorage: SecureStorage,
     private val activeWalletManager: ActiveWalletManager,
     private val blockchainRegistry: BlockchainRegistry,
+    private val gson: Gson,
      var dataSourceFactory: ChainDataSourceFactory
 ) : IWalletRepository {
     private companion object {
@@ -65,14 +68,12 @@ class WalletRepositoryImpl @Inject constructor(
         return if (json.isNullOrEmpty()) {
             emptyList()
         } else {
-            val type =
-                object : com.google.gson.reflect.TypeToken<List<WalletStorageMetadata>>() {}.type
-            com.google.gson.Gson().fromJson(json, type)
+            GsonJsonCodec.decodeList<WalletStorageMetadata>(json, gson)
         }
     }
 
     private fun saveWalletsMetadata(list: List<WalletStorageMetadata>) {
-        val json = com.google.gson.Gson().toJson(list)
+        val json = GsonJsonCodec.encode(list, gson)
         secureStorage.putEncrypted(WALLETS_METADATA_KEY, json)
     }
 

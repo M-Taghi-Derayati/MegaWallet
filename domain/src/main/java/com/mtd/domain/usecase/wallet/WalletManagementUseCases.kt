@@ -1,13 +1,12 @@
 package com.mtd.domain.usecase.wallet
 
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.mtd.domain.interfaceRepository.IBackupRepository
+import com.mtd.domain.interfaceRepository.ICloudWalletBackupCodec
 import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.Asset
 import com.mtd.domain.model.CloudWalletMetadata
 import com.mtd.domain.model.ImportData
 import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.model.Asset
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.Wallet
 import javax.inject.Inject
@@ -141,7 +140,7 @@ class CreateOrImportWalletUseCase @Inject constructor(
 
 class BackupCloudWalletMetadataUseCase @Inject constructor(
     private val backupRepository: IBackupRepository,
-    private val gson: Gson
+    private val cloudWalletBackupCodec: ICloudWalletBackupCodec
 ) {
     suspend operator fun invoke(
         walletMetadata: CloudWalletMetadata,
@@ -168,7 +167,7 @@ class BackupCloudWalletMetadataUseCase @Inject constructor(
             is ResultResponse.Error -> return ResultResponse.Error(hasBackup.exception)
         }
 
-        val jsonData = gson.toJson(
+        val jsonData = cloudWalletBackupCodec.encode(
             existingBackup
                 .filterNot { it.id == walletMetadata.id }
                 .plus(walletMetadata)
@@ -186,8 +185,7 @@ class BackupCloudWalletMetadataUseCase @Inject constructor(
 
     private fun parseBackup(jsonData: String): List<CloudWalletMetadata> {
         return try {
-            val type = object : TypeToken<List<CloudWalletMetadata>>() {}.type
-            gson.fromJson<List<CloudWalletMetadata>>(jsonData, type) ?: emptyList()
+            cloudWalletBackupCodec.decode(jsonData)
         } catch (_: Exception) {
             emptyList()
         }
