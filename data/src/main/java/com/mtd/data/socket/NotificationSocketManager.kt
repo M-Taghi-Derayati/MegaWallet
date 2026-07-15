@@ -211,6 +211,7 @@ class NotificationSocketManager @Inject constructor(
                 // tryEmit (never suspends) + the buffered/DROP_OLDEST flow above: a burst of frames can
                 // never block this listener callback or the OkHttp read thread.
                 _events.tryEmit(parsed.event)
+                dispatchRefreshFor(parsed.event)
             }
             handleNotification(parsed.event)
         }
@@ -234,6 +235,32 @@ class NotificationSocketManager @Inject constructor(
             // next attempt carries the new bearer.
             if (shouldBeConnected) scheduleReconnect()
         }
+    }
+
+    /**
+     * Fan a live event out to the app-wide refresh bus so the foreground UI reflects it immediately.
+     * Previously live frames refreshed *nothing* (they only produced a system notification); a wallet
+     * would only re-read on the next reconnect or a manual pull. Meaningful events now trigger a refresh.
+     *
+     * NOTE: this is deliberately **coarse** (a full wallet / current-history refresh). Surgically
+     * targeting only the affected asset — `AppEvent.WalletAssetNeedsRefresh(networkId, assetId, …)` —
+     * needs the socket's identifier formats confirmed first: the server's `chain` is a "relayPrefix"-style
+     * key (not the app's `networkId`, so it needs a reverse map) and `token` is ambiguous
+     * (symbol vs contract address). That surgical pass is tracked separately; coarse-but-correct here is a
+     * strict improvement and can never silently miss an update by guessing the mapping wrong.
+     */
+    private fun dispatchRefreshFor(event: SocketEvent) {
+        val refreshEvents: List<AppEvent> = when (event) {
+            is SocketEvent.BalanceUpdated -> listOf(AppEvent.WalletNeedsRefresh)
+            is SocketEvent.TxStatusChanged -> listOf(
+                AppEvent.WalletNeedsRefresh,             // a status change can move the balance
+                AppEvent.TransactionHistoryNeedsRefresh() // …and the history list
+            )
+            is SocketEvent.GrowthFeeShareAccrued -> listOf(AppEvent.WalletNeedsRefresh)
+            is SocketEvent.ConnectionReady, SocketEvent.Unknown -> emptyList()
+        }
+        if (refreshEvents.isEmpty()) return
+        scope.launch { refreshEvents.forEach { appEventBus.postEvent(it) } }
     }
 
     private data class ParsedFrame(val event: SocketEvent, val isHeartbeat: Boolean)

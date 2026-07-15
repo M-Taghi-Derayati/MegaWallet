@@ -275,6 +275,14 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
     auth-flow's post-JWT `connect()` actually opens a socket that an earlier (token-less) `connect()` had
     deferred. `attemptConnection()` stays a no-op when a socket already exists, so repeat calls can't
     produce duplicate sockets.
+  - ✅ **Live events now refresh the UI** — previously a live frame refreshed *nothing* (only a system
+    notification; a wallet re-read only on reconnect). `dispatchRefreshFor` now fans meaningful events to
+    the refresh bus: `BalanceUpdated`/`GrowthFeeShareAccrued` → `WalletNeedsRefresh`; `TxStatusChanged` →
+    `WalletNeedsRefresh` + `TransactionHistoryNeedsRefresh`. **Coarse by design:** surgical per-asset
+    targeting (`WalletAssetNeedsRefresh`) is deferred until the socket's `chain` (a "relayPrefix"-style
+    key, not the app `networkId`) and ambiguous `token` (symbol vs contract address) formats are confirmed
+    against the relayer WS contract / a real on-device frame — guessing the map wrong would silently miss
+    updates, so coarse-but-correct ships first. (Tracked as the spawned "targeted socket events" task.)
   - **Verify on-device:** burst of tx events (no drops beyond buffer), airplane-mode toggle →
     reconnect fires a refresh, and a token minted after a premature `connect()` still opens the socket.
 - **Problem:** `SharedFlow(replay=1)` event loss; no confirmed reconnect re-sync; socket reconnect guard;
