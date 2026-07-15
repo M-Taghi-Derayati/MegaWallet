@@ -61,8 +61,9 @@ class TronGaslessCoordinator @Inject constructor(
 
     // Phase 3: data-driven routing. relayPrefix comes from networkId via capability;
     // falls back to the TVM family path when no route is known (no behavior change).
+    // Resolve-or-default logic is shared (TASK-24); this keeps the TVM family default.
     private suspend fun relayPrefixFor(networkId: String): String =
-        routeResolver.resolve(networkId)?.relayPrefix ?: FAMILY_RELAY_PREFIX
+        routeResolver.relayPrefixFor(networkId, FAMILY_RELAY_PREFIX)
 
     suspend fun getSupportedTokens(networkId: String): ResultResponse<List<GaslessSupportedToken>> {
         return gaslessRepository.getSupportedTokens(relayPrefixFor(networkId))

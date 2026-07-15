@@ -328,7 +328,16 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   flows; no signed payloads in logs; repos HTTPS. **Rollback:** per change. **Regression:** build/log. **Testing:**
   debug run under StrictMode; decompile check for secret.
 
-### TASK-24 — Reuse/simplification cleanups
+### TASK-24 — Reuse/simplification cleanups — 🟡 Partially implemented
+- **Status:** 🟡 In progress:
+  - ✅ **`relayPrefixFor` dup** — the identical `routeResolver.resolve(networkId)?.relayPrefix ?: <family>`
+    rule was copy-pasted in `EvmGaslessCoordinator` and `TronGaslessCoordinator`. Extracted a shared
+    `IGaslessRouteResolver.relayPrefixFor(networkId, familyDefault)` extension (in `GaslessRouteResolver.kt`);
+    each coordinator keeps a one-line wrapper carrying its own family default (`"evm"`/`"tron"`), so **all
+    call sites are unchanged and behavior is identical**.
+  - ⏳ **Remaining:** duplicated backoff (socket inline vs `ExponentialBackoff` util), hex-parse,
+    prepare→broadcast boilerplate ×5, SmartFee/CreditFee copy-paste — deferred (touch the send path; safer
+    with build/on-device verification available).
 - **Problem:** duplicated backoff/hex-parse, prepare→broadcast boilerplate ×5, SmartFee/CreditFee copy-paste,
   `relayPrefixFor` dup. **TD:** code-review cleanup set. **Priority:** P3 · **Est:** 1 · **Risk:** Low.
 - **Testing:** existing tests green; behavior unchanged.

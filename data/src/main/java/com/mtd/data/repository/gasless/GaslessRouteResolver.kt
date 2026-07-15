@@ -46,3 +46,12 @@ class GaslessRouteResolver @Inject constructor(
         return GaslessRoute(relayPrefix = relayPrefix, networkType = networkType)
     }
 }
+
+/**
+ * TASK-24 — the "resolve the relayer prefix, else fall back to a family default" rule, shared by the
+ * EVM and TVM gasless coordinators (previously copy-pasted in each). [familyDefault] is the family path
+ * used only when capability has no route yet (offline / not-yet-fetched): `"evm"` for EVM, `"tron"` for
+ * TVM. Behavior is identical to the former per-coordinator helpers.
+ */
+suspend fun IGaslessRouteResolver.relayPrefixFor(networkId: String, familyDefault: String): String =
+    resolve(networkId)?.relayPrefix ?: familyDefault
