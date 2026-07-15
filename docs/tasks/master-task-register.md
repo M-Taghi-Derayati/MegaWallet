@@ -173,8 +173,11 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
     wrong/empty prices. Now always `getPrices(ids = idsString)`; dead `symbolString` removed.
   - ⏳ **Tron PROXY feeLevel** & **EVM L1 fee units** — money-math; **deferred** pending on-device
     verification (send on TRON PROXY + a Base L1-fee check) so the fix can be validated, not changed blind.
-  - ⏳ **nullable-fee "0"** — conflates unknown (null) fee with genuine 0 in `formatTransactionFee`; a
-    display/UX decision (placeholder vs "0") best confirmed visually.
+  - ✅ **nullable-fee "0"** — `formatTransactionFee` fell through to the `else` branch on a `null` fee
+    (`null == ZERO` is false) and formatted `null ?: ZERO`, so an **unknown** fee rendered as "0",
+    indistinguishable from a genuine zero-fee tx. Now a `when` shows a neutral placeholder ("—") for
+    `null`, "0 SYMBOL" only for a real zero, and the formatted value otherwise. Display-only; the
+    placeholder glyph is a trivial visual tweak if a different marker is preferred.
   - ↔ **socket reconnect guard** — overlaps TASK-22 (realtime robustness); handled there to avoid double work.
 - **Problem:** multi-asset price param, chart lexicographic sort, Tron PROXY feeLevel, EVM L1 fee units,
   socket reconnect guard, nullable-fee "0". **Root cause:** various. **TD:** code-review set.

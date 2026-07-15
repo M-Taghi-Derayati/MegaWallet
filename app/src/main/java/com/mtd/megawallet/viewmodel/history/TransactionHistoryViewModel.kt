@@ -759,18 +759,22 @@ class TransactionHistoryViewModel @Inject constructor(
 
     fun formatTransactionFee(transaction: TransactionRecord): String {
         val feeValue = transactionDetailFor(transaction)?.fee ?: transaction.fee
-        val feeDecimal = rawFeeToDecimal(transaction, feeValue?: BigInteger.ZERO)
         val symbol = transactionSymbol(transaction, forFee = true)
 
-        return if (feeValue == BigInteger.ZERO) {
-            "0 $symbol".trim()
-        } else {
-            val formatted = BalanceFormatter.formatBalance(
-                balance = feeDecimal,
-                decimals = networkDecimals(transaction),
-                usePersianSeparator = true
-            )
-            "$formatted $symbol".trim()
+        return when {
+            // TASK-16 — an unknown fee (not yet fetched, or not provided by the source) must NOT read as
+            // "0": that conflated "we don't know" with a genuine zero-fee tx. Show a neutral placeholder.
+            feeValue == null -> FEE_UNKNOWN_PLACEHOLDER
+            feeValue == BigInteger.ZERO -> "0 $symbol".trim()
+            else -> {
+                val feeDecimal = rawFeeToDecimal(transaction, feeValue)
+                val formatted = BalanceFormatter.formatBalance(
+                    balance = feeDecimal,
+                    decimals = networkDecimals(transaction),
+                    usePersianSeparator = true
+                )
+                "$formatted $symbol".trim()
+            }
         }
     }
 
@@ -1018,5 +1022,9 @@ class TransactionHistoryViewModel @Inject constructor(
             }
         }
 
-
+    private companion object {
+        // Neutral "no data" glyph shown when a transaction's fee is unknown (not yet fetched / not
+        // reported), so it can't be mistaken for a genuine zero-fee transaction.
+        const val FEE_UNKNOWN_PLACEHOLDER = "—"
+    }
 }
