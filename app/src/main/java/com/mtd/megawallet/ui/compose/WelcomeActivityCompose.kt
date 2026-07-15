@@ -31,7 +31,7 @@ import com.mtd.megawallet.ui.compose.screens.OnboardingScreen
 import com.mtd.megawallet.ui.compose.screens.SplashScreen
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWalletScreen
 import com.mtd.megawallet.ui.compose.screens.createwallet.CreateWalletScreen
-import com.mtd.megawallet.ui.compose.theme.MegaWalletTheme
+import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
 import com.mtd.megawallet.viewmodel.news.WalletImportViewModel
 import com.mtd.megawallet.viewmodel.news.WelcomeViewModel
@@ -56,6 +56,9 @@ class WelcomeActivityCompose : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MegaWalletTheme {
+                // TASK-02/TD-36 — all onboarding screens (recovery-phrase display, import, passcode
+                // setup) are sensitive, so protect the whole flow from screen capture.
+                com.mtd.megawallet.ui.compose.components.SecureFlagEffect()
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

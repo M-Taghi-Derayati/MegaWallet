@@ -1,19 +1,32 @@
 package com.mtd.domain.model
 
+import com.mtd.domain.model.core.NetworkType
 import java.math.BigInteger
 
-enum class GaslessChain(val apiPath: String) {
-    EVM("evm"),
-    TRON("tron")
-}
+// Phase 4: `GaslessChain` is removed. Routing is the data-driven `relayPrefix`
+// (networkId → capability → relayPrefix); the EVM/TVM execution family is carried
+// by `NetworkType`. Nothing in the gasless layer derives an /api path from an enum.
 
 enum class GaslessServiceType(val apiValue: String) {
     GASLESS("gasless"),
     SPONSOR("sponsor")
 }
 
+/** Who funds the relayer fee for a gasless quote. Sent verbatim as [apiValue] on the quote request. */
+enum class GaslessFeeFundingSource(val apiValue: String) {
+    GAS_CREDIT("GAS_CREDIT"),
+    WALLET("WALLET"),
+    SPONSOR("SPONSOR");
+
+    companion object {
+        fun fromApiValue(value: String?): GaslessFeeFundingSource? {
+            return entries.firstOrNull { it.apiValue.equals(value, ignoreCase = true) }
+        }
+    }
+}
+
 data class GaslessSupportedToken(
-    val chain: GaslessChain,
+    val networkType: NetworkType,
     val token: String,
     val symbol: String?,
     val gaslessEnabled: Boolean,
@@ -28,7 +41,7 @@ data class GaslessEligibilityReason(
 )
 
 data class GaslessEligibilityResult(
-    val chain: GaslessChain,
+    val networkType: NetworkType,
     val service: GaslessServiceType,
     val user: String?,
     val token: String,
@@ -88,6 +101,7 @@ data class GaslessQuoteRequest(
     val token: String,
     val target: String,
     val amount: BigInteger,
+    val feeFundingSource: GaslessFeeFundingSource = GaslessFeeFundingSource.WALLET,
     val clientFeeAmount: BigInteger? = null
 )
 
@@ -107,7 +121,16 @@ data class GaslessQuoteData(
     val canonicalParams: GaslessCanonicalParams,
     val serverFeeAmount: BigInteger? = null,
     val displayPolicy: GaslessDisplayPolicyBundle? = null,
-    val smartFee: GaslessSmartFee? = null
+    val smartFee: GaslessSmartFee? = null,
+    // Latest backend fee-funding contract. All nullable/defaulted for backward compatibility.
+    val accepted: Boolean? = null,
+    val quoteId: String? = null,
+    /** Who actually covers the relayer fee for this quote, as resolved by the server. */
+    val feeFundingSource: GaslessFeeFundingSource? = null,
+    val gasCreditApplied: Boolean? = null,
+    val gasCredit: BigInteger? = null,
+    val totalFee: BigInteger? = null,
+    val finalFee: BigInteger? = null
 )
 
 data class GaslessRelayParams(
@@ -121,7 +144,7 @@ data class GaslessRelayParams(
 )
 
 data class GaslessRelayPayload(
-    val chain: GaslessChain,
+    val networkType: NetworkType,
     val quoteToken: String,
     val params: GaslessRelayParams,
     val permitSignature: String? = null,
@@ -131,7 +154,9 @@ data class GaslessRelayPayload(
 
 data class GaslessQueuedTx(
     val id: String,
-    val stage: String?
+    val stage: String?,
+    /** true when the relayer replayed a prior submission for the same idempotency key (no new tx). */
+    val idempotent: Boolean = false
 )
 
 data class GaslessTxStatus(
@@ -192,6 +217,40 @@ data class TronApproveQuoteResult(
     val requiredTrx: String?,
     val requiredUsdApprox: Double?,
     val source: String?,
+    val sponsorDisplayPolicy: GaslessDisplayPolicy? = null
+)
+
+data class EvmApproveTxTemplate(
+    val to: String?,
+    val spender: String?,
+    val data: String?,
+    val approvalAmount: BigInteger?,
+    val approvalAmountMode: String?,
+    val gasLimit: BigInteger?,
+    val gasPriceWei: BigInteger?,
+    val maxFeePerGasWei: BigInteger?,
+    val maxPriorityFeePerGasWei: BigInteger?,
+    val valueWei: BigInteger?
+)
+
+data class EvmApproveQuoteRequest(
+    val userAddress: String,
+    val tokenAddress: String
+)
+
+data class EvmApproveQuoteResult(
+    val approveRequired: Boolean = true,
+    val approvalAmount: BigInteger? = null,
+    val approvalAmountMode: String? = null,
+    val approveTxTemplate: EvmApproveTxTemplate? = null,
+    val requiredAllowance: BigInteger? = null,
+    val estimatedApproveGasLimit: BigInteger? = null,
+    val gasPriceWei: BigInteger? = null,
+    val maxFeePerGasWei: BigInteger? = null,
+    val maxPriorityFeePerGasWei: BigInteger? = null,
+    val requiredApproveWei: BigInteger = BigInteger.ZERO,
+    val requiredWithBufferWei: BigInteger? = null,
+    val source: String? = null,
     val sponsorDisplayPolicy: GaslessDisplayPolicy? = null
 )
 

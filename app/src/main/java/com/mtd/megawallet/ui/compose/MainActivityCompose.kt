@@ -1,8 +1,13 @@
 package com.mtd.megawallet.ui.compose
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.core.animateDpAsState
@@ -12,26 +17,32 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.domain.model.AuthPurpose
 import com.mtd.megawallet.security.BiometricAuthHelper
+import com.mtd.megawallet.session.RealtimeLifecycleCoordinator
+import com.mtd.megawallet.session.WalletLockKeyCoordinator
+import com.mtd.megawallet.session.WalletSessionAuthCoordinator
 import com.mtd.megawallet.ui.compose.screens.main.MainScreen
 import com.mtd.megawallet.ui.compose.screens.security.LockedFingerprintOverlay
 import com.mtd.megawallet.ui.compose.screens.security.PasscodeKeypadSheet
 import com.mtd.megawallet.ui.compose.screens.security.PasscodeSetupSheet
 import com.mtd.megawallet.ui.compose.screens.security.SecuritySettingsSheet
-import com.mtd.megawallet.ui.compose.theme.MegaWalletTheme
 import com.mtd.megawallet.viewmodel.news.AppLockViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Activity اصلی اپلیکیشن که MainScreen را نمایش می‌دهد.
@@ -42,17 +53,29 @@ class MainActivityCompose : FragmentActivity() {
 
     private val appLockViewModel: AppLockViewModel by viewModels()
 
+    // Phase 2 — drives Web3 sign-in off the wallet lifecycle (mints JWT + connects /ws after unlock).
+    @Inject lateinit var sessionAuthCoordinator: WalletSessionAuthCoordinator
+
+    // TASK-06 — clears decrypted keys from the heap on lock/background, re-hydrates on unlock/foreground.
+    @Inject lateinit var lockKeyCoordinator: WalletLockKeyCoordinator
+
+    // TASK-22 — disconnects the realtime socket in the background, reconnects it in the foreground.
+    @Inject lateinit var realtimeLifecycleCoordinator: RealtimeLifecycleCoordinator
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         appLockViewModel.initialize()
+        sessionAuthCoordinator.start()
+        lockKeyCoordinator.start()
+        realtimeLifecycleCoordinator.start()
         setContent {
             MegaWalletTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val lockUiState by appLockViewModel.uiState.collectAsState()
+                    val lockUiState by appLockViewModel.uiState.collectAsStateWithLifecycle()
                     var showSecuritySettings by remember { mutableStateOf(false) }
                     var showPasscodeSetup by remember { mutableStateOf(false) }
                     var showPasscodeUnlock by remember { mutableStateOf(false) }
@@ -64,8 +87,10 @@ class MainActivityCompose : FragmentActivity() {
                     val canUseBiometricUnlock = biometricAvailable && lockUiState.snapshot.biometricEnabled
                     val overlayVisible = lockUiState.isInitialized && lockUiState.isLocked
                     val showLockedFingerprint = overlayVisible && canUseBiometricUnlock && !showPasscodeUnlock
+                    // KAN-NEW-02: reduced blur radius (was 72.dp) to cut per-frame RenderEffect
+                    // cost on mid-range devices; the 0.9-alpha scrim below already occludes content.
                     val blurRadius by animateDpAsState(
-                        targetValue = if (overlayVisible) 72.dp else 0.dp,
+                        targetValue = if (overlayVisible) 24.dp else 0.dp,
                         animationSpec = tween(durationMillis = 280),
                         label = "app_lock_blur"
                     )
@@ -123,6 +148,28 @@ class MainActivityCompose : FragmentActivity() {
                     LaunchedEffect(showLockedFingerprint) {
                         if (showLockedFingerprint) {
                             launchBiometricPrompt()
+                        }
+                    }
+
+                    // TASK-23 — request POST_NOTIFICATIONS on Android 13+. Deferred until the app is
+                    // unlocked (i.e. past onboarding + any app-lock) so the prompt lands in context, not
+                    // over the lock screen. Denial is non-fatal: the socket/NotificationService guards
+                    // already no-op without the permission. rememberSaveable → asked at most once per
+                    // process (survives rotation); a fresh launch retries until the OS stops re-prompting.
+                    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.RequestPermission()
+                    ) { /* granted or denied — no blocking follow-up either way */ }
+                    var notificationPermissionAsked by rememberSaveable { mutableStateOf(false) }
+                    LaunchedEffect(lockUiState.isInitialized, lockUiState.isLocked) {
+                        val unlocked = lockUiState.isInitialized && !lockUiState.isLocked
+                        val needsRequest = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(
+                                this@MainActivityCompose,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) != PackageManager.PERMISSION_GRANTED
+                        if (unlocked && !notificationPermissionAsked && needsRequest) {
+                            notificationPermissionAsked = true
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         }
                     }
 

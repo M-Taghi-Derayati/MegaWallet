@@ -1,1 +1,7 @@
 /build
+
+# Release build outputs (APKs, baseline profiles, metadata) — generated artifacts, not source
+/release/
+/prod/
+*.apk
+*.dm

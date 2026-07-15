@@ -2,6 +2,8 @@ package com.mtd.domain.interfaceRepository
 
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.Asset
+import com.mtd.domain.model.HistoryAddress
+import com.mtd.domain.model.HistoryPage
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionFeeDetails
@@ -124,6 +126,18 @@ interface IWalletRepository {
     suspend fun getActiveWalletId(): String?
  
     suspend fun getTransactionHistory( networkName: NetworkName, userAddress: String): ResultResponse<List<TransactionRecord>>
+
+    /**
+     * Unified multi-network history (§1.7, `POST /api/mobile/v1/history`) — PROXY mode only.
+     * Returns a cursor [HistoryPage]; [cursor] is opaque (null ⇒ first page). In DIRECT mode the
+     * underlying data source returns [com.mtd.domain.model.error.ApiError.UnsupportedOperation] so
+     * callers fall back to per-network aggregation. Max 25 [addresses] pairs (enforced downstream).
+     */
+    suspend fun getUnifiedHistory(
+        addresses: List<HistoryAddress>,
+        cursor: String? = null,
+        limit: Int? = null
+    ): ResultResponse<HistoryPage>
 
     suspend fun getTransactionFeeDetails(networkName: NetworkName, txId: String): ResultResponse<TransactionFeeDetails>
   

@@ -42,6 +42,9 @@ fun PasscodeSetupSheet(
     onClose: () -> Unit,
     onSubmit: (passcode: String, biometricEnabled: Boolean) -> Unit
 ) {
+    // TASK-02/TD-36 — block screen capture during passcode setup.
+    com.mtd.megawallet.ui.compose.components.SecureFlagEffect(active = visible)
+
     if (!visible) return
 
     var passcode by rememberSaveable { mutableStateOf("") }

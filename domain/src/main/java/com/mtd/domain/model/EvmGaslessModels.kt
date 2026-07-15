@@ -27,11 +27,14 @@ typealias EvmTxStatus = GaslessTxStatus
 
 data class EvmGaslessTransferRequest(
     val networkId: String,
+    val assetId: String,
     val tokenAddress: String,
     val targetAddress: String,
     val amount: BigInteger,
     val permit2Address: String,
     val feeAmount: BigInteger = BigInteger.ZERO,
+    // Who covers the relayer fee on /quote — set from the user's selection (GAS_CREDIT/WALLET/SPONSOR).
+    val feeFundingSource: GaslessFeeFundingSource = GaslessFeeFundingSource.WALLET,
     val deadlineEpochSeconds: Long? = null
 )
 
@@ -47,6 +50,7 @@ data class EvmGaslessSession(
     val networkName: NetworkName,
     val userAddress: String,
     val chainId: Long,
+    val assetId: String,
     val relayerContract: String,
     val treasuryAddress: String,
     val nonce: BigInteger,

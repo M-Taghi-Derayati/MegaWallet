@@ -1,7 +1,7 @@
 package com.mtd.domain.interfaceRepository
 
 interface ICloudBackupDataSource {
-    suspend fun initializeWithAuthCode(authCode: String)
+    suspend fun initializeWithAccountName(accountName: String)
     fun isInitialized(): Boolean
     fun signOut()
     suspend fun uploadBackup(data: ByteArray)

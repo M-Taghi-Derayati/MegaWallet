@@ -4,21 +4,23 @@ import androidx.lifecycle.viewModelScope
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.domain.interfaceRepository.IAppEventBus
-import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
+import com.mtd.domain.interfaceRepository.IFeatureAvailabilityResolver
 import com.mtd.domain.interfaceRepository.INetworkCatalog
+import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.EvmSponsorMode
 import com.mtd.domain.model.FeeOption
 import com.mtd.domain.model.GaslessDisplayPolicy
 import com.mtd.domain.model.GaslessServiceType
+import com.mtd.domain.model.PendingTransactionHint
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransferMode
 import com.mtd.domain.model.TronApproveQuoteResult
 import com.mtd.domain.model.TronSponsorMode
 import com.mtd.domain.model.UnifiedGaslessSession
 import com.mtd.domain.model.UnifiedTransferRequest
-import com.mtd.domain.model.PendingTransactionHint
+import com.mtd.domain.model.capability.FeatureAvailabilityContext
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.gassless.FeeState
 import com.mtd.domain.model.gassless.FeeTrend
@@ -55,6 +57,10 @@ import kotlin.math.max
 class SendViewModel @Inject constructor(
     private val networkCatalog: INetworkCatalog,
     private val unifiedTransferCoordinator: IUnifiedTransferCoordinator,
+    // Capability Platform (Phase B) — advisory gasless visibility decision only.
+    // Used solely inside refreshGaslessAvailability behind USE_CAPABILITY_RESOLVER;
+    // touches no transport/execution path.
+    private val featureAvailabilityResolver: IFeatureAvailabilityResolver,
     private val appEventBus: IAppEventBus,
     private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
     private val getUsdToIrrRateUseCase: GetUsdToIrrRateUseCase,
@@ -76,6 +82,13 @@ class SendViewModel @Inject constructor(
         private val MIN_EVM_APPROVE_GAS_LIMIT = BigInteger.valueOf(120_000L)
         private const val APPROVE_FEE_BUFFER_NUMERATOR = 12L
         private const val APPROVE_FEE_BUFFER_DENOMINATOR = 10L
+
+        // Capability Platform (Phase B) feature flag. OFF = the exact legacy gasless
+        // visibility path (byte-identical behavior). Flip to true to route the final
+        // gasless availability decision through FeatureAvailabilityResolver (capability
+        // + token). Kept a compile-time const so the default ships the old path; can be
+        // promoted to BuildConfig / remote config for a staged rollout.
+        private const val USE_CAPABILITY_RESOLVER = false
     }
 
     private val _feeState = MutableStateFlow<FeeState>(FeeState.Idle)
@@ -197,12 +210,35 @@ class SendViewModel @Inject constructor(
                     val matched = result.data.firstOrNull { supported ->
                         addressesMatchForGasless(network.networkType, supported.token, tokenAddress)
                     }
-                    _gaslessAvailability.value = when {
-                        matched == null -> GaslessAvailability.Unavailable("این توکن فعلاً برای سرویس گس‌لس فعال نیست")
-                        matched.gaslessEnabled -> GaslessAvailability.Available(note = matched.note)
-                        else -> GaslessAvailability.Unavailable(
-                            matched.note ?: "این توکن فعلاً برای سرویس گس ‌لس فعال نیست"
+                    _gaslessAvailability.value = if (USE_CAPABILITY_RESOLVER) {
+                        // NEW path: combine capability (backend-authoritative) with the SAME
+                        // token signal already fetched above. Fail-safe inside the resolver →
+                        // when capability is offline it reproduces the legacy decision below.
+                        val ctx = FeatureAvailabilityContext(
+                            networkId = asset.networkId,
+                            networkType = network.networkType,
+                            tokenId = tokenAddress,
+                            isContractToken = true, // past the native/contract guard above
+                            tokenGaslessEnabled = matched?.gaslessEnabled ?: false, // no match → not enabled
+                            tokenNote = matched?.note
                         )
+                        val decision = featureAvailabilityResolver.isGaslessAvailable(ctx)
+                        if (decision.available) {
+                            GaslessAvailability.Available(note = decision.note)
+                        } else {
+                            GaslessAvailability.Unavailable(
+                                decision.note ?: matched?.note ?: "این توکن فعلاً برای سرویس گس‌لس فعال نیست"
+                            )
+                        }
+                    } else {
+                        // LEGACY path (default): unchanged behavior.
+                        when {
+                            matched == null -> GaslessAvailability.Unavailable("این توکن فعلاً برای سرویس گس‌لس فعال نیست")
+                            matched.gaslessEnabled -> GaslessAvailability.Available(note = matched.note)
+                            else -> GaslessAvailability.Unavailable(
+                                matched.note ?: "این توکن فعلاً برای سرویس گس ‌لس فعال نیست"
+                            )
+                        }
                     }
                 }
 
@@ -390,23 +426,29 @@ class SendViewModel @Inject constructor(
 
                         UnifiedTransferRequest(
                             networkId = asset.networkId,
+                            assetId = asset.id,
                             mode = TransferMode.NORMAL,
                             toAddress = recipient,
                             amount = amountSmallest,
                             tokenAddress = asset.contractAddress,
                             gasPrice = gasPrice,
-                            gasLimit = gasLimit
+                            gasLimit = gasLimit,
+                            // Forward the already-selected tier so PROXY /prepare prices it (DIRECT ignores).
+                            feeLevel = selectedFee.level
                         )
                     }
 
                     NetworkType.TVM -> {
                         UnifiedTransferRequest(
                             networkId = asset.networkId,
+                            assetId = asset.id,
                             mode = TransferMode.NORMAL,
                             toAddress = recipient,
                             amount = amountSmallest,
                             tokenAddress = asset.contractAddress,
-                            feeLimit = deriveFeeLimit(selectedFee, asset.contractAddress != null)
+                            feeLimit = deriveFeeLimit(selectedFee, asset.contractAddress != null),
+                            // Forward the already-selected tier so PROXY /prepare prices it (DIRECT ignores).
+                            feeLevel = selectedFee?.level
                         )
                     }
 
@@ -414,6 +456,7 @@ class SendViewModel @Inject constructor(
                     NetworkType.UTXO -> {
                         UnifiedTransferRequest(
                             networkId = asset.networkId,
+                            assetId = asset.id,
                             mode = TransferMode.NORMAL,
                             toAddress = recipient,
                             amount = amountSmallest,
@@ -572,6 +615,7 @@ class SendViewModel @Inject constructor(
         return when (network.networkType) {
             NetworkType.EVM -> UnifiedTransferRequest(
                 networkId = asset.networkId,
+                assetId = asset.id,
                 mode = TransferMode.GASLESS,
                 toAddress = recipient,
                 amount = amountSmallest,
@@ -582,6 +626,7 @@ class SendViewModel @Inject constructor(
 
             NetworkType.TVM -> UnifiedTransferRequest(
                 networkId = asset.networkId,
+                assetId = asset.id,
                 mode = TransferMode.GASLESS,
                 toAddress = recipient,
                 amount = amountSmallest,
@@ -676,18 +721,36 @@ class SendViewModel @Inject constructor(
     ) {
         val approveTx = when (session) {
             is UnifiedGaslessSession.Evm -> {
+                val approveQuote = unifiedTransferCoordinator.quoteEvmApproveRequirement(session)
+                    .requireSuccess("EVM approve quote failed")
+                if (!approveQuote.approveRequired) {
+                    return
+                }
+
                 val approveFee = resolveApproveFeeOption(selectedFee)
                     ?: throw IllegalStateException("کارمزد approve برای شبکه EVM در دسترس نیست")
-                val gasPrice = approveFee.gasPrice
+                val gasPrice = approveQuote.approveTxTemplate?.gasPriceWei
+                    ?: approveQuote.approveTxTemplate?.maxFeePerGasWei
+                    ?: approveQuote.gasPriceWei
+                    ?: approveQuote.maxFeePerGasWei
+                    ?: approveFee.gasPrice
                     ?: throw IllegalStateException("گس پرایس approve دریافت نشد")
-                val gasLimit = approveFee.gasLimit
-                    ?.let(::normalizeApproveGasLimit)
-                    ?: MIN_EVM_APPROVE_GAS_LIMIT
+                val gasLimit = (approveQuote.approveTxTemplate?.gasLimit
+                    ?: approveQuote.estimatedApproveGasLimit
+                    ?: approveFee.gasLimit
+                    ?: MIN_EVM_APPROVE_GAS_LIMIT)
+                    .let(::normalizeApproveGasLimit)
+
+                val approvalAmount = approveQuote.approveTxTemplate?.approvalAmount
+                    ?: approveQuote.approvalAmount
+                    ?: approveQuote.requiredAllowance
+                    ?: throw IllegalStateException("EVM approve amount was not returned by server")
 
                 unifiedTransferCoordinator.buildApproveTransaction(
                     session = session,
                     gasPrice = gasPrice,
-                    gasLimit = gasLimit
+                    gasLimit = gasLimit,
+                    approveAmount = approvalAmount
                 ).requireSuccess("ساخت تراکنش approve ناموفق بود")
             }
 
@@ -926,7 +989,13 @@ class SendViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                when (val result = estimateSendFeesUseCase(wallet, asset, recipientAddress)) {
+                val feeEstimateAmount = runCatching {
+                    val amount = getBaseCryptoAmount(asset, _amountText.value, _isUsdMode.value)
+                        .coerceAtMost(asset.balanceRaw)
+                    toSmallestUnit(amount, asset.decimals)
+                }.getOrDefault(BigInteger.ONE).takeIf { it > BigInteger.ZERO } ?: BigInteger.ONE
+
+                when (val result = estimateSendFeesUseCase(wallet, asset, recipientAddress, feeEstimateAmount)) {
                     is ResultResponse.Success -> {
                         val quote = result.data
                         val firstCoinAmount = quote.options.firstOrNull()?.feeInCoin ?: BigDecimal.ZERO
@@ -984,7 +1053,7 @@ class SendViewModel @Inject constructor(
             if (cached > BigDecimal.ZERO) return cached
         }
 
-        return when (val result = getLatestAssetPricesUseCase(listOf(symbol))) {
+        return when (val result = getLatestAssetPricesUseCase(Pair(listOf(asset.symbol), listOf(asset.name)))) {
             is ResultResponse.Success -> {
                 val resolved = result.data
                     .firstOrNull { it.assetId.equals(symbol, ignoreCase = true) }

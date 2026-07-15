@@ -1,17 +1,19 @@
 package com.mtd.data.repository.transfer
 
-import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.EvmAbiEncoder
 import com.mtd.data.repository.gasless.EvmGaslessCoordinator
 import com.mtd.data.repository.gasless.PendingGaslessTxStore
 import com.mtd.data.repository.gasless.TronGaslessCoordinator
+import com.mtd.domain.interfaceRepository.IAssetCatalog
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.EvmApproveQuoteResult
 import com.mtd.domain.model.EvmGaslessTransferRequest
 import com.mtd.domain.model.EvmSponsorApproveResult
 import com.mtd.domain.model.EvmSponsorMode
-import com.mtd.domain.model.GaslessChain
 import com.mtd.domain.model.GaslessDisplayPreview
 import com.mtd.domain.model.GaslessEligibilityResult
 import com.mtd.domain.model.GaslessFinalResult
@@ -27,6 +29,7 @@ import com.mtd.domain.model.TronSponsorApproveResult
 import com.mtd.domain.model.TronSponsorMode
 import com.mtd.domain.model.UnifiedGaslessSession
 import com.mtd.domain.model.UnifiedTransferRequest
+import com.mtd.domain.model.core.NetworkType
 import java.math.BigInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,8 +40,12 @@ class UnifiedTransferCoordinator @Inject constructor(
     private val blockchainRegistry: BlockchainRegistry,
     private val evmGaslessCoordinator: EvmGaslessCoordinator,
     private val tronGaslessCoordinator: TronGaslessCoordinator,
-    private val pendingGaslessTxStore: PendingGaslessTxStore
+    private val pendingGaslessTxStore: PendingGaslessTxStore,
+    // PROXY routing inputs (both Hilt-bound: IAssetCatalog→AssetRegistry, mode provider in DataModule).
+    private val connectionModeProvider: IBlockchainConnectionModeProvider,
+    private val assetCatalog: IAssetCatalog
 ) : IUnifiedTransferCoordinator {
+
 
     override suspend fun sendNormal(request: UnifiedTransferRequest): ResultResponse<String> {
         return try {
@@ -48,6 +55,11 @@ class UnifiedTransferCoordinator @Inject constructor(
 
             when (network.networkType) {
                 NetworkType.EVM -> {
+                    if (connectionModeProvider.currentMode() == BlockchainConnectionMode.PROXY) {
+                        // PROXY: forward raw {recipient, amount, assetId}; the relayer builds the
+                        // unsigned tx (native-vs-token from the registry) and the client signs it.
+                        sendEvmViaProxy(request, network.name)
+                    } else {
                     val gasPrice = request.gasPrice
                         ?: throw IllegalStateException("gasPrice is required for EVM normal transfer")
                     val gasLimit = request.gasLimit
@@ -59,6 +71,7 @@ class UnifiedTransferCoordinator @Inject constructor(
                             to = request.toAddress,
                             amount = request.amount,
                             data = request.data,
+                            assetId = request.assetId,
                             gasPrice = gasPrice,
                             gasLimit = gasLimit
                         )
@@ -72,25 +85,34 @@ class UnifiedTransferCoordinator @Inject constructor(
                             to = request.tokenAddress!!,
                             amount = BigInteger.ZERO,
                             data = transferData,
+                            assetId = request.assetId,
                             gasPrice = gasPrice,
                             gasLimit = gasLimit
                         )
                     }
 
                     walletRepository.sendTransaction(params)
+                    }
                 }
 
                 NetworkType.TVM -> {
+                    if (connectionModeProvider.currentMode() == BlockchainConnectionMode.PROXY) {
+                        // PROXY: forward raw {recipient, amount, assetId}; the relayer builds the
+                        // unsigned tx (native-vs-TRC20 from the registry) and the client signs it.
+                        sendTvmViaProxy(request, network.name)
+                    } else {
                     val params = TransactionParams.Tvm(
                         networkName = network.name,
                         toAddress = request.toAddress,
                         amount = request.amount,
+                        assetId = request.assetId,
                         contractAddress = request.tokenAddress,
                         feeLimit = request.feeLimit ?: 10_000_000L,
                         contractFunction = request.contractFunction,
                         contractParameter = request.contractParameter
                     )
                     walletRepository.sendTransaction(params)
+                    }
                 }
 
                 NetworkType.BITCOIN,
@@ -110,7 +132,13 @@ class UnifiedTransferCoordinator @Inject constructor(
                         chainId = chainId,
                         toAddress = request.toAddress,
                         amountInSatoshi = amountInSatoshi,
-                        feeRateInSatsPerByte = feeRate
+                        feeRateInSatsPerByte = feeRate,
+                        // PROXY needs the registry assetId; DIRECT ignores it (native-only UTXO).
+                        assetId = if (connectionModeProvider.currentMode() == BlockchainConnectionMode.PROXY) {
+                            resolveProxyAssetId(request)
+                        } else {
+                            null
+                        }
                     )
                     walletRepository.sendTransaction(params)
                 }
@@ -138,8 +166,8 @@ class UnifiedTransferCoordinator @Inject constructor(
                 ?: throw IllegalStateException("Network not found: $networkId")
 
             when (network.networkType) {
-                NetworkType.EVM -> evmGaslessCoordinator.getSupportedTokens()
-                NetworkType.TVM -> tronGaslessCoordinator.getSupportedTokens()
+                NetworkType.EVM -> evmGaslessCoordinator.getSupportedTokens(networkId)
+                NetworkType.TVM -> tronGaslessCoordinator.getSupportedTokens(networkId)
                 else -> ResultResponse.Error(
                     IllegalStateException("Gasless token list is not supported for network type ${network.networkType}")
                 )
@@ -164,12 +192,14 @@ class UnifiedTransferCoordinator @Inject constructor(
                 NetworkType.EVM -> evmGaslessCoordinator.checkEligibility(
                     service = service,
                     userAddress = userAddress,
-                    tokenAddress = tokenAddress
+                    tokenAddress = tokenAddress,
+                    networkId = networkId
                 )
                 NetworkType.TVM -> tronGaslessCoordinator.checkEligibility(
                     service = service,
                     userAddress = userAddress,
-                    tokenAddress = tokenAddress
+                    tokenAddress = tokenAddress,
+                    networkId = networkId
                 )
                 else -> ResultResponse.Error(
                     IllegalStateException("Gasless eligibility is not supported for network type ${network.networkType}")
@@ -188,6 +218,8 @@ class UnifiedTransferCoordinator @Inject constructor(
 
             when (network.networkType) {
                 NetworkType.EVM -> {
+                    // Phase 4: per-network gasless availability (incl. BSC) is decided by the
+                    // backend capability via FeatureAvailabilityResolver — no hardcoded chainId block.
                     val permit2 = request.permit2Address
                         ?: throw IllegalStateException("permit2Address is required for EVM gasless")
                     when (
@@ -198,8 +230,10 @@ class UnifiedTransferCoordinator @Inject constructor(
                                     ?: throw IllegalStateException("tokenAddress is required for EVM gasless"),
                                 targetAddress = request.toAddress,
                                 amount = request.amount,
+                                assetId = request.assetId,
                                 permit2Address = permit2,
                                 feeAmount = request.feeAmount,
+                                feeFundingSource = request.feeFundingSource,
                                 deadlineEpochSeconds = request.deadlineEpochSeconds
                             )
                         )
@@ -220,7 +254,9 @@ class UnifiedTransferCoordinator @Inject constructor(
                                     ?: throw IllegalStateException("tokenAddress is required for TRON gasless"),
                                 targetAddress = request.toAddress,
                                 amount = request.amount,
+                                assetId = request.assetId,
                                 feeAmount = request.feeAmount,
+                                feeFundingSource = request.feeFundingSource,
                                 deadlineEpochSeconds = request.deadlineEpochSeconds
                             )
                         )
@@ -255,7 +291,11 @@ class UnifiedTransferCoordinator @Inject constructor(
                                     displayPolicy = quote.data.displayPolicy,
                                     gaslessFeeAmount = quote.data.canonicalParams.feeAmount,
                                     needsApprove = session.value.needsApprove,
-                                    smartFee = quote.data.smartFee
+                                    smartFee = quote.data.smartFee,
+                                    feeFundingSource = quote.data.feeFundingSource,
+                                    gasCreditApplied = quote.data.gasCreditApplied,
+                                    totalFee = quote.data.totalFee,
+                                    finalFee = quote.data.finalFee
                                 )
                             )
                             is ResultResponse.Error -> quote
@@ -269,7 +309,11 @@ class UnifiedTransferCoordinator @Inject constructor(
                                     displayPolicy = quote.data.displayPolicy,
                                     gaslessFeeAmount = quote.data.canonicalParams.feeAmount,
                                     needsApprove = session.value.needsApprove,
-                                    smartFee = quote.data.smartFee
+                                    smartFee = quote.data.smartFee,
+                                    feeFundingSource = quote.data.feeFundingSource,
+                                    gasCreditApplied = quote.data.gasCreditApplied,
+                                    totalFee = quote.data.totalFee,
+                                    finalFee = quote.data.finalFee
                                 )
                             )
                             is ResultResponse.Error -> quote
@@ -340,6 +384,17 @@ class UnifiedTransferCoordinator @Inject constructor(
         }
     }
 
+    override suspend fun quoteEvmApproveRequirement(
+        session: UnifiedGaslessSession
+    ): ResultResponse<EvmApproveQuoteResult> {
+        return when (session) {
+            is UnifiedGaslessSession.Evm -> evmGaslessCoordinator.quoteApproveRequirement(session.value)
+            is UnifiedGaslessSession.Tron -> ResultResponse.Error(
+                IllegalStateException("EVM approve quote is only available for EVM gasless")
+            )
+        }
+    }
+
     override suspend fun requestEvmSponsorForApprove(
         session: UnifiedGaslessSession,
         mode: EvmSponsorMode
@@ -359,7 +414,6 @@ class UnifiedTransferCoordinator @Inject constructor(
                     is ResultResponse.Success -> {
                         pendingGaslessTxStore.put(
                             PendingGaslessTx(
-                                chain = GaslessChain.EVM,
                                 queueId = queued.data.id,
                                 networkId = session.value.request.networkId,
                                 walletId = walletRepository.getActiveWalletId()
@@ -368,7 +422,8 @@ class UnifiedTransferCoordinator @Inject constructor(
                         ResultResponse.Success(
                             GaslessSubmission(
                                 queueId = queued.data.id,
-                                stage = queued.data.stage
+                                stage = queued.data.stage,
+                                idempotent = queued.data.idempotent
                             )
                         )
                     }
@@ -381,7 +436,6 @@ class UnifiedTransferCoordinator @Inject constructor(
                     is ResultResponse.Success -> {
                         pendingGaslessTxStore.put(
                             PendingGaslessTx(
-                                chain = GaslessChain.TRON,
                                 queueId = queued.data.id,
                                 networkId = session.value.request.networkId,
                                 walletId = walletRepository.getActiveWalletId()
@@ -390,7 +444,8 @@ class UnifiedTransferCoordinator @Inject constructor(
                         ResultResponse.Success(
                             GaslessSubmission(
                                 queueId = queued.data.id,
-                                stage = queued.data.stage
+                                stage = queued.data.stage,
+                                idempotent = queued.data.idempotent
                             )
                         )
                     }
@@ -411,13 +466,14 @@ class UnifiedTransferCoordinator @Inject constructor(
                 when (
                     val status = evmGaslessCoordinator.pollUntilFinal(
                         txId = queueId,
+                        networkId = session.value.request.networkId,
                         pollIntervalMs = pollIntervalMs,
                         timeoutMs = timeoutMs
                     )
                 ) {
                     is ResultResponse.Success -> {
                         if (status.data.isFinal) {
-                            pendingGaslessTxStore.remove(GaslessChain.EVM, queueId)
+                            pendingGaslessTxStore.remove(session.value.request.networkId, queueId)
                         }
                         ResultResponse.Success(GaslessFinalResult(queueId, status.data))
                     }
@@ -429,13 +485,14 @@ class UnifiedTransferCoordinator @Inject constructor(
                 when (
                     val status = tronGaslessCoordinator.pollUntilFinal(
                         txId = queueId,
+                        networkId = session.value.request.networkId,
                         pollIntervalMs = pollIntervalMs,
                         timeoutMs = timeoutMs
                     )
                 ) {
                     is ResultResponse.Success -> {
                         if (status.data.isFinal) {
-                            pendingGaslessTxStore.remove(GaslessChain.TRON, queueId)
+                            pendingGaslessTxStore.remove(session.value.request.networkId, queueId)
                         }
                         ResultResponse.Success(GaslessFinalResult(queueId, status.data))
                     }
@@ -451,6 +508,64 @@ class UnifiedTransferCoordinator @Inject constructor(
 
     override fun clearPendingGaslessTransactions() {
         pendingGaslessTxStore.clear()
+    }
+
+    /**
+     * PROXY EVM send: resolve the registry assetId from (networkId, tokenAddress|native), then hand
+     * raw {recipient, amount, assetId} to [walletRepository.sendTransaction]. The ProxyChainDataSource
+     * calls /prepare (server builds the unsigned tx), signs locally, and broadcasts. No ABI encoding
+     * here — that is the DIRECT path's job and is left untouched.
+     */
+    private suspend fun sendEvmViaProxy(
+        request: UnifiedTransferRequest,
+        networkName: com.mtd.domain.model.core.NetworkName
+    ): ResultResponse<String> {
+        val params = TransactionParams.Evm(
+            networkName = networkName,
+            to = request.toAddress,
+            amount = request.amount,
+            data = null,
+            // Unused in PROXY mode — the relayer supplies gas in /prepare (scaled by feeLevel).
+            gasPrice = BigInteger.ZERO,
+            gasLimit = BigInteger.ZERO,
+            assetId = resolveProxyAssetId(request),
+            feeLevel = request.feeLevel
+        )
+        return walletRepository.sendTransaction(params)
+    }
+
+    /**
+     * PROXY TVM send: same shape as EVM — forward raw {recipient, amount, assetId}. The relayer builds
+     * the unsigned Tron tx (native-vs-TRC20 from the registry) and the client signs it. No ABI/contract
+     * encoding here — that is the DIRECT path's job and is left untouched.
+     */
+    private suspend fun sendTvmViaProxy(
+        request: UnifiedTransferRequest,
+        networkName: com.mtd.domain.model.core.NetworkName
+    ): ResultResponse<String> {
+        val params = TransactionParams.Tvm(
+            networkName = networkName,
+            toAddress = request.toAddress,
+            amount = request.amount,
+            assetId = resolveProxyAssetId(request),
+            feeLevel = request.feeLevel
+        )
+        return walletRepository.sendTransaction(params)
+    }
+
+    /** Resolve the registry assetId from (networkId, tokenAddress|native) for a PROXY send. */
+    private fun resolveProxyAssetId(request: UnifiedTransferRequest): String {
+        return assetCatalog.getAssetConfigsForNetwork(request.networkId)
+            .firstOrNull { cfg ->
+                if (request.tokenAddress.isNullOrBlank()) {
+                    cfg.contractAddress.isNullOrBlank()
+                } else {
+                    cfg.contractAddress?.equals(request.tokenAddress, ignoreCase = true) == true
+                }
+            }?.id
+            ?: throw IllegalStateException(
+                "No registry assetId for ${request.networkId}/${request.tokenAddress ?: "native"}"
+            )
     }
 
     private fun validateRequest(request: UnifiedTransferRequest) {

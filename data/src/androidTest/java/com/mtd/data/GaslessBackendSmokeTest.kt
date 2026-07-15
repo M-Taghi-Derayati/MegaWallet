@@ -99,7 +99,7 @@ class GaslessBackendSmokeTest {
         assumeTrue("Gasless backend is unreachable", isBackendReachable(host, port))
 
         val response = kotlinx.coroutines.runBlocking {
-            service.sponsorTronApprove(
+            service.sponsorTronApprove("TRON",
                 TronSponsorApproveRequestDto(
                     chain = "TRON",
                     params = TronSponsorApproveParamsDto(
@@ -139,7 +139,7 @@ class GaslessBackendSmokeTest {
         assumeTrue("Gasless backend is unreachable", isBackendReachable(host, port))
 
         val response = kotlinx.coroutines.runBlocking {
-            service.sponsorEvmApprove(
+            service.sponsorEvmApprove("EVM",
                 EvmSponsorApproveRequestDto(
                     chain = "EVM",
                     params = EvmSponsorApproveParamsDto(

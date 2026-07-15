@@ -66,7 +66,7 @@ class ConnectCloudBackupUseCase @Inject constructor(
         return when (val result = authManager.processSignInResult(data)) {
             is ResultResponse.Success -> {
                 try {
-                    cloudBackupDataSource.initializeWithAuthCode(result.data)
+                    cloudBackupDataSource.initializeWithAccountName(result.data)
                     ResultResponse.Success(
                         if (cloudBackupDataSource.hasCloudBackup()) {
                             DriveBackupState.BackupFound
@@ -122,14 +122,14 @@ class CalculateCloudWalletBalancesUseCase @Inject constructor(
 }
 
 class ImportCloudWalletsUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(wallets: List<CloudWalletItem>): ImportCloudWalletsResult {
         var failedCount = 0
         wallets.forEach { walletItem ->
             val walletColor = parseColor(walletItem.colorHex) ?: 0xFF22C55E.toInt()
             val importResult = if (walletItem.isMnemonic) {
-                walletRepository.importWalletFromMnemonic(
+                walletRepository.get().importWalletFromMnemonic(
                     mnemonic = walletItem.key,
                     name = walletItem.name,
                     color = walletColor,
@@ -138,7 +138,7 @@ class ImportCloudWalletsUseCase @Inject constructor(
                     isCloudBackedUp = true
                 )
             } else {
-                walletRepository.importWalletFromPrivateKey(
+                walletRepository.get().importWalletFromPrivateKey(
                     privateKey = walletItem.key,
                     name = walletItem.name,
                     color = walletColor,

@@ -1,7 +1,7 @@
 
 package com.mtd.megawallet.ui.compose.screens.wallet
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -33,13 +33,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.tooling.preview.Preview
 import com.mtd.megawallet.ui.compose.animations.constants.ShimmerConstants
 
-
-/**
- * نمایش حالت لودینگ به صورت Shimmer
- * شبیه به ساختار اصلی صفحه طراحی شده تا پرش UI کمتر باشد
- * 
- * @param shimmerItemCount تعداد آیتم‌های shimmer برای لیست دارایی‌ها (پیش‌فرض: 6)
- */
 @Composable
 fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_COUNT) {
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
@@ -52,13 +45,19 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
     }
 
     val transition = rememberInfiniteTransition(label = "Shimmer")
+
+    // عرض ثابت نوار درخشان (Shimmer)
+    val gradientWidth = 500f
+    // مقداری بزرگتر از ابعاد صفحه تا مطمئن شویم ریست شدن انیمیشن کاملاً خارج از دید کاربر رخ می‌دهد
+    val maxTranslate = 3000f
+
     val translateAnim = transition.animateFloat(
         initialValue = 0f,
-        targetValue = ShimmerConstants.ANIMATION_TARGET_VALUE,
+        targetValue = maxTranslate,
         animationSpec = infiniteRepeatable(
             animation = tween(
                 durationMillis = ShimmerConstants.ANIMATION_DURATION,
-                easing = FastOutSlowInEasing
+                easing = LinearEasing // حرکت یکنواخت برای پیوستگی کامل (به جای FastOutSlowIn)
             ),
             repeatMode = RepeatMode.Restart
         ),
@@ -68,8 +67,9 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
     val brush = remember(translateAnim.value) {
         Brush.linearGradient(
             colors = shimmerColors,
-            start = Offset.Zero,
-            end = Offset(x = translateAnim.value, y = translateAnim.value)
+            // حرکت دادن گرادیان با اندازه ثابت به جای کشیدن آن
+            start = Offset(translateAnim.value - gradientWidth, translateAnim.value - gradientWidth),
+            end = Offset(translateAnim.value, translateAnim.value)
         )
     }
 
@@ -84,7 +84,6 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
                 ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // جایگزین عدد بزرگ
             Box(
                 modifier = Modifier
                     .width(ShimmerConstants.TOTAL_BALANCE_WIDTH)
@@ -93,7 +92,6 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
                     .background(brush)
             )
             Spacer(modifier = Modifier.height(ShimmerConstants.TOTAL_BALANCE_SUBTITLE_SPACING))
-            // جایگزین متن کوچک زیرش
             Box(
                 modifier = Modifier
                     .width(ShimmerConstants.TOTAL_BALANCE_SUBTITLE_WIDTH)
@@ -110,7 +108,6 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
                 .padding(horizontal = ShimmerConstants.TABS_PADDING_HORIZONTAL),
             horizontalArrangement = Arrangement.End
         ) {
-
             Box(
                 modifier = Modifier
                     .width(ShimmerConstants.TAB_WIDTH_2)
@@ -127,7 +124,7 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
                     .background(brush)
             )
         }
-        
+
         HorizontalDivider(
             modifier = Modifier.padding(
                 top = ShimmerConstants.DIVIDER_PADDING_TOP,
@@ -154,7 +151,6 @@ private fun ShimmerAssetItem(brush: Brush) {
             .padding(vertical = ShimmerConstants.ASSET_ITEM_PADDING_VERTICAL),
         verticalAlignment = Alignment.CenterVertically
     ) {
-
         // ستون آخر (قیمت و درصد)
         Column(horizontalAlignment = Alignment.Start) {
             Box(
@@ -193,9 +189,7 @@ private fun ShimmerAssetItem(brush: Brush) {
             )
         }
 
-
         Spacer(modifier = Modifier.width(ShimmerConstants.ASSET_ICON_SPACING))
-
 
         // آیکون دایره‌ای
         Box(
@@ -204,11 +198,8 @@ private fun ShimmerAssetItem(brush: Brush) {
                 .clip(CircleShape)
                 .background(brush)
         )
-
     }
 }
-
-
 
 @Preview
 @Composable

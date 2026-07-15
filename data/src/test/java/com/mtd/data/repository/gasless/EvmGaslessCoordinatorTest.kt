@@ -11,14 +11,16 @@ import com.mtd.domain.model.EvmGaslessTransferRequest
 import com.mtd.domain.model.EvmSponsorApproveResult
 import com.mtd.domain.model.EvmSponsorMode
 import com.mtd.domain.model.GaslessCanonicalParams
-import com.mtd.domain.model.GaslessChain
 import com.mtd.domain.model.GaslessCoordinatorState
 import com.mtd.domain.model.GaslessPrepareData
 import com.mtd.domain.model.GaslessQueuedTx
 import com.mtd.domain.model.GaslessQuoteData
+import com.mtd.domain.model.GaslessTxStatus
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.error.ApiError
+import com.mtd.domain.model.error.ApiException
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -43,6 +45,7 @@ class EvmGaslessCoordinatorTest {
     private lateinit var walletRepository: IWalletRepository
     private lateinit var keyManager: KeyManager
     private lateinit var blockchainRegistry: BlockchainRegistry
+    private lateinit var routeResolver: com.mtd.domain.interfaceRepository.IGaslessRouteResolver
     private lateinit var coordinator: EvmGaslessCoordinator
 
     @Before
@@ -51,7 +54,10 @@ class EvmGaslessCoordinatorTest {
         walletRepository = mockk(relaxed = true)
         keyManager = mockk(relaxed = true)
         blockchainRegistry = mockk(relaxed = true)
-        coordinator = EvmGaslessCoordinator(repository, walletRepository, keyManager, blockchainRegistry)
+        // Relaxed → resolve() returns null → coordinator falls back to the EVM family path
+        // ("evm"), i.e. identical routing to the pre-Phase-3 behavior under test.
+        routeResolver = mockk(relaxed = true)
+        coordinator = EvmGaslessCoordinator(repository, walletRepository, keyManager, blockchainRegistry, routeResolver)
     }
 
     @After
@@ -80,6 +86,7 @@ class EvmGaslessCoordinatorTest {
         val result = coordinator.prepareSession(
             EvmGaslessTransferRequest(
                 networkId = "sepolia",
+                assetId = "USDC-SEPOLIA",
                 tokenAddress = "0x186cca6904490818AB0DC409ca59D932A2366031",
                 targetAddress = "0x000000000000000000000000000000000000dEaD",
                 amount = BigInteger("100"),
@@ -112,6 +119,7 @@ class EvmGaslessCoordinatorTest {
         val result = coordinator.prepareSession(
             EvmGaslessTransferRequest(
                 networkId = "sepolia",
+                assetId = "USDC-SEPOLIA",
                 tokenAddress = "0x186cca6904490818AB0DC409ca59D932A2366031",
                 targetAddress = "0x000000000000000000000000000000000000dEaD",
                 amount = BigInteger("100"),
@@ -166,6 +174,7 @@ class EvmGaslessCoordinatorTest {
         val session = EvmGaslessSession(
             request = EvmGaslessTransferRequest(
                 networkId = "sepolia",
+                assetId = "USDC-SEPOLIA",
                 tokenAddress = "0x186cca6904490818AB0DC409ca59D932A2366031",
                 targetAddress = "0x000000000000000000000000000000000000dEaD",
                 amount = BigInteger("100"),
@@ -176,6 +185,7 @@ class EvmGaslessCoordinatorTest {
             networkName = NetworkName.SEPOLIA,
             userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
             chainId = 11155111L,
+            assetId = "USDC-SEPOLIA",
             relayerContract = "0x1111111111111111111111111111111111111111",
             treasuryAddress = "0x2222222222222222222222222222222222222222",
             nonce = BigInteger.ONE,
@@ -190,18 +200,107 @@ class EvmGaslessCoordinatorTest {
         assertEquals(GaslessCoordinatorState.QUEUED, coordinator.state.value)
         assertEquals("0xpermitSig", payloadSlot.captured.permitSignature)
         assertEquals("0xmegaSig", payloadSlot.captured.megaSignature)
-        assertEquals(GaslessChain.EVM, payloadSlot.captured.chain)
+        assertEquals(NetworkType.EVM, payloadSlot.captured.networkType)
+    }
+
+    @Test
+    fun `signAndSubmit re-runs prepare and quote once on RequoteRequired then succeeds`() = runTest {
+        assumeWeb3jCredentialsAvailable()
+        val credentials = Credentials.create("4f3edf983ac636a65a842ce7c78d9aa706d3b113bce036f9e6f9446f06f2f8f4")
+        every { keyManager.getCredentialsForChain(11155111L) } returns credentials
+
+        mockkObject(TypedDataSigner)
+        every {
+            TypedDataSigner.signTypedDataHex(any(), any(), any(), any(), any())
+        } returnsMany listOf("0xpermitSig", "0xmegaSig")
+
+        // Re-prepare dependencies (bounded requote re-runs prepareSession on RequoteRequired).
+        every { blockchainRegistry.getNetworkById("sepolia") } returns evmNetwork()
+        coEvery { walletRepository.getActiveAddressForNetwork("sepolia") } returns "0x17b51d4928668B50065C589bAfBC32736f196216"
+        coEvery { repository.prepare(any(), any()) } returns ResultResponse.Success(
+            GaslessPrepareData(
+                userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
+                nonce = BigInteger("8"),
+                deadline = 1_900_000_000L,
+                chainId = 11155111L,
+                relayerContract = "0x1111111111111111111111111111111111111111",
+                treasuryAddress = "0x2222222222222222222222222222222222222222",
+                prepareToken = "prepare_token_2"
+            )
+        )
+        coEvery { repository.getAllowance(any(), any(), any(), any()) } returns ResultResponse.Success(BigInteger("1000"))
+
+        coEvery { repository.quote(any()) } returnsMany listOf(
+            ResultResponse.Error(ApiException(ApiError.RequoteRequired, httpStatus = 409)),
+            ResultResponse.Success(
+                GaslessQuoteData(
+                    quoteToken = "quote_token_2",
+                    canonicalParams = GaslessCanonicalParams(
+                        user = "0x17b51d4928668B50065C589bAfBC32736f196216",
+                        token = "0x186cca6904490818AB0DC409ca59D932A2366031",
+                        target = "0x000000000000000000000000000000000000dEaD",
+                        amount = BigInteger("100"),
+                        feeAmount = BigInteger("1"),
+                        nonce = BigInteger("8"),
+                        deadline = 1_900_000_000L,
+                        treasury = "0x2222222222222222222222222222222222222222"
+                    )
+                )
+            )
+        )
+        coEvery { repository.submitRelay(any(), any()) } returns ResultResponse.Success(
+            GaslessQueuedTx(id = "queue_2", stage = "QUEUED")
+        )
+
+        val result = coordinator.signAndSubmit(baseSession(allowance = BigInteger("1000")))
+
+        assertTrue(result is ResultResponse.Success)
+        assertEquals(GaslessCoordinatorState.QUEUED, coordinator.state.value)
+        coVerify(exactly = 2) { repository.quote(any()) }
+        coVerify(exactly = 1) { repository.prepare(any(), any()) }
+    }
+
+    @Test
+    fun `signAndSubmit caps requote at one retry`() = runTest {
+        assumeWeb3jCredentialsAvailable()
+        val credentials = Credentials.create("4f3edf983ac636a65a842ce7c78d9aa706d3b113bce036f9e6f9446f06f2f8f4")
+        every { keyManager.getCredentialsForChain(11155111L) } returns credentials
+
+        every { blockchainRegistry.getNetworkById("sepolia") } returns evmNetwork()
+        coEvery { walletRepository.getActiveAddressForNetwork("sepolia") } returns "0x17b51d4928668B50065C589bAfBC32736f196216"
+        coEvery { repository.prepare(any(), any()) } returns ResultResponse.Success(
+            GaslessPrepareData(
+                userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
+                nonce = BigInteger("8"),
+                deadline = 1_900_000_000L,
+                chainId = 11155111L,
+                relayerContract = "0x1111111111111111111111111111111111111111",
+                treasuryAddress = "0x2222222222222222222222222222222222222222",
+                prepareToken = "prepare_token_2"
+            )
+        )
+        coEvery { repository.getAllowance(any(), any(), any(), any()) } returns ResultResponse.Success(BigInteger("1000"))
+        // Server is stuck returning RequoteRequired — must NOT loop forever.
+        coEvery { repository.quote(any()) } returns ResultResponse.Error(ApiException(ApiError.RequoteRequired, httpStatus = 409))
+
+        val result = coordinator.signAndSubmit(baseSession(allowance = BigInteger("1000")))
+
+        assertTrue(result is ResultResponse.Error)
+        // Initial attempt + exactly one requote retry = 2 quote calls, 1 re-prepare.
+        coVerify(exactly = 2) { repository.quote(any()) }
+        coVerify(exactly = 1) { repository.prepare(any(), any()) }
     }
 
     @Test
     fun `pollUntilFinal reaches SUCCESS after queued status`() = runTest {
         coEvery { repository.getTxStatus("queue_1") } returnsMany listOf(
-          //  ResultResponse.Success(GaslessTxStatus("queue_1", "QUEUED", null, null)),
-           // ResultResponse.Success(GaslessTxStatus("queue_1", "SUCCESS", "0xabc", null))
+            ResultResponse.Success(GaslessTxStatus(id = "queue_1", status = "QUEUED", txHash = null, lastError = null)),
+            ResultResponse.Success(GaslessTxStatus(id = "queue_1", status = "SUCCESS", txHash = "0xabc", lastError = null))
         )
 
         val result = coordinator.pollUntilFinal(
             txId = "queue_1",
+            networkId = "ethereum_mainnet",
             pollIntervalMs = 1L,
             timeoutMs = 50L
         )
@@ -217,6 +316,7 @@ class EvmGaslessCoordinatorTest {
         val session = EvmGaslessSession(
             request = EvmGaslessTransferRequest(
                 networkId = "sepolia",
+                assetId = "USDC-SEPOLIA",
                 tokenAddress = "0x186cca6904490818AB0DC409ca59D932A2366031",
                 targetAddress = "0x000000000000000000000000000000000000dEaD",
                 amount = BigInteger("100"),
@@ -225,6 +325,7 @@ class EvmGaslessCoordinatorTest {
             networkName = NetworkName.SEPOLIA,
             userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
             chainId = 11155111L,
+            assetId = "USDC-SEPOLIA",
             relayerContract = "0x1111111111111111111111111111111111111111",
             treasuryAddress = "0x2222222222222222222222222222222222222222",
             nonce = BigInteger.ONE,
@@ -255,6 +356,7 @@ class EvmGaslessCoordinatorTest {
         val session = EvmGaslessSession(
             request = EvmGaslessTransferRequest(
                 networkId = "sepolia",
+                assetId = "USDC-SEPOLIA",
                 tokenAddress = "0x186cca6904490818AB0DC409ca59D932A2366031",
                 targetAddress = "0x000000000000000000000000000000000000dEaD",
                 amount = BigInteger("100"),
@@ -263,6 +365,7 @@ class EvmGaslessCoordinatorTest {
             networkName = NetworkName.SEPOLIA,
             userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
             chainId = 11155111L,
+            assetId = "USDC-SEPOLIA",
             relayerContract = "0x1111111111111111111111111111111111111111",
             treasuryAddress = "0x2222222222222222222222222222222222222222",
             nonce = BigInteger.ONE,
@@ -287,6 +390,29 @@ class EvmGaslessCoordinatorTest {
         assertFalse((result as ResultResponse.Success).data.funded)
         assertEquals(GaslessCoordinatorState.NEEDS_APPROVE, coordinator.state.value)
     }
+
+    private fun baseSession(allowance: BigInteger): EvmGaslessSession = EvmGaslessSession(
+        request = EvmGaslessTransferRequest(
+            networkId = "sepolia",
+            assetId = "USDC-SEPOLIA",
+            tokenAddress = "0x186cca6904490818AB0DC409ca59D932A2366031",
+            targetAddress = "0x000000000000000000000000000000000000dEaD",
+            amount = BigInteger("100"),
+            permit2Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+            feeAmount = BigInteger("1"),
+            deadlineEpochSeconds = 1_900_000_000L
+        ),
+        networkName = NetworkName.SEPOLIA,
+        userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
+        chainId = 11155111L,
+        assetId = "USDC-SEPOLIA",
+        relayerContract = "0x1111111111111111111111111111111111111111",
+        treasuryAddress = "0x2222222222222222222222222222222222222222",
+        nonce = BigInteger.ONE,
+        allowance = allowance,
+        prepareToken = "prepare_token_1",
+        idempotencyKey = "idem_1"
+    )
 
     private fun evmNetwork(chainId: Long = 11155111L): BlockchainNetwork {
         val network = mockk<BlockchainNetwork>(relaxed = true)

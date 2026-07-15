@@ -2,6 +2,7 @@ package com.mtd.data.repository
 
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.IUserPreferencesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,9 +21,19 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         const val KEY_LAST_BACKGROUND_AT = "last_background_at"
         const val KEY_FAILED_UNLOCK_ATTEMPTS = "failed_unlock_attempts"
         const val KEY_LOCKOUT_UNTIL = "lockout_until"
+        const val KEY_CONNECTION_MODE = "blockchain_connection_mode"
         const val DEFAULT_LOCK_TIMEOUT_SECONDS = 30
     }
 
+    override suspend fun getConnectionMode(): BlockchainConnectionMode {
+        val stored = prefs.getString(KEY_CONNECTION_MODE, null)
+        return runCatching { BlockchainConnectionMode.valueOf(stored ?: "") }
+            .getOrDefault(BlockchainConnectionMode.DIRECT)
+    }
+
+    override suspend fun setConnectionMode(mode: BlockchainConnectionMode) {
+        prefs.edit { putString(KEY_CONNECTION_MODE, mode.name) }
+    }
 
     override suspend fun isAppLockEnabled(): Boolean {
         return prefs.getBoolean(KEY_APP_LOCK_ENABLED, false)

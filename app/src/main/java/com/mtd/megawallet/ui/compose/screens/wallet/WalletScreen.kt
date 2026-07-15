@@ -36,7 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,9 +85,10 @@ fun WalletScreens(
     onAssetClick: (AssetItem, Rect) -> Unit,
     listItemModifier: (String) -> Modifier,
     userScrollEnabled: Boolean = true,
+    captureItemBounds: Boolean = true,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val selectedTabIndex by viewModel.selectedTab.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedTabIndex by viewModel.selectedTab.collectAsStateWithLifecycle()
     val tabs = listOf("توکن‌ها", "کلکسیون‌ها")
 
     // وضعیت مخفی بودن موجودی
@@ -215,12 +216,17 @@ fun WalletScreens(
                                     key = { it.id }
                                 ) { asset ->
                                     var itemBounds by remember { mutableStateOf(Rect.Zero) }
+                                    val boundsModifier = if (captureItemBounds) {
+                                        Modifier.onGloballyPositioned {
+                                            itemBounds = it.boundsInWindow()
+                                        }
+                                    } else {
+                                        Modifier
+                                    }
 
                                     AssetListItems(
                                         modifier = listItemModifier(asset.id)
-                                            .onGloballyPositioned {
-                                                itemBounds = it.boundsInWindow()
-                                            },
+                                            .then(boundsModifier),
                                         asset = asset,
                                         displayCurrency = state.displayCurrency,
                                         isBalanceHidden = isBalanceHidden,
@@ -723,6 +729,7 @@ fun getLocalIconResId(symbol: String): Int {
         "BTC" -> R.drawable.ic_btc
         "ETH" -> R.drawable.ic_eth
         "BASE" -> R.drawable.ic_base
+        "ARB" -> R.drawable.ic_arb
         "POL" -> R.drawable.ic_pol
         "USDT" -> R.drawable.ic_usdt
         "BNB","tBNB" -> R.drawable.ic_bnb
@@ -747,6 +754,7 @@ fun getNetworkIconResId(networkId: String): Int {
         "tron_mainnet", "shasta_testnet" -> R.drawable.ic_trx
         "doge_testnet", "doge_mainnet" -> R.drawable.ic_doge
         "base_sepolia", "base_mainnet" -> R.drawable.ic_base
+        "arb_sepolia", "arb_mainnet" -> R.drawable.ic_arb
         else -> R.drawable.ic_wallet // پیش‌فرض
     }
 }

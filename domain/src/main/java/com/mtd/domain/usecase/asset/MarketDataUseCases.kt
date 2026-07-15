@@ -9,7 +9,7 @@ import javax.inject.Inject
 class GetLatestAssetPricesUseCase @Inject constructor(
     private val marketDataRepository: IMarketDataRepository
 ) {
-    suspend operator fun invoke(symbols: List<String>): ResultResponse<List<AssetPriceDto>> {
+    suspend operator fun invoke(symbols: Pair<List<String>,List<String>>): ResultResponse<List<AssetPriceDto>> {
         return marketDataRepository.getLatestPrices(symbols)
     }
 }

@@ -74,7 +74,7 @@ class BitcoinIntegrationTest {
             secureStorage = secureStorage,
             blockchainRegistry = blockchainRegistry,
             gson = gson,
-            dataSourceFactory = dataSourceFactory
+            dataSourceFactory = dagger.Lazy{dataSourceFactory}
         )
 //f2449cde31e0e3960132206f9fac3fe50c250d403a11f610dedfb72e0594a253
         // وارد کردن کیف پول و استخراج آدرس بیت‌کوین
@@ -94,7 +94,7 @@ class BitcoinIntegrationTest {
         println("--- 1. Testing Bitcoin Balance ---")
 
         // چون getAssets برای بیت‌کوین پیاده‌سازی نشده، مستقیماً getBalance از DataSource را تست می‌کنیم
-        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.create(-1) // -1 for Bitcoin Testnet
+        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.get().create(-1) // -1 for Bitcoin Testnet
         val result = dataSource.getBalance(userBitcoinAddress)
 
         assertTrue("Fetching balance should be successful, but was $result", result is ResultResponse.Success)

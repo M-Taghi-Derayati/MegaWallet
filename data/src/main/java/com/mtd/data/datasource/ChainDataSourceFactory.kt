@@ -1,12 +1,14 @@
 package com.mtd.data.datasource
 
-import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.network.bitcoin.UtxoNetworkParametersResolver
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.data.BuildConfig
+import com.mtd.data.service.MobileProxyApiService
 import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.core.NetworkType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import javax.inject.Inject
@@ -75,6 +77,9 @@ class ChainDataSourceFactory @Inject constructor(
                 }
             },
             object : ChainDataSourceProvider {
+                // PROXY transport — selected when the connection mode is PROXY. (Previously mis-tagged
+                // DIRECT, which left PROXY mode with NO matching provider, so create() threw before any
+                // HTTP call and balances/history were never sent to the relayer.)
                 override val mode: BlockchainConnectionMode = BlockchainConnectionMode.PROXY
 
                 override fun supports(network: BlockchainNetwork): Boolean {
@@ -85,7 +90,23 @@ class ChainDataSourceFactory @Inject constructor(
                 }
 
                 override fun create(network: BlockchainNetwork): IChainDataSource {
-                    return ProxyChainDataSource(network)
+                    // Built from the shared retrofitBuilder (which already carries the BigInteger-aware
+                    // Gson + scalars converters); cached per (mode, network) by the factory.
+                    val proxyService = retrofitBuilder
+                        .baseUrl(BuildConfig.RELAYER_BASE_URL)
+                        .build()
+                        .create(MobileProxyApiService::class.java)
+                    // UTXO send needs local bitcoinj assembly; resolve NetworkParameters the same way
+                    // the DIRECT UTXO source does. Non-UTXO networks get null (EVM/TVM sign differently).
+                    val utxoTxBuilder = if (
+                        network.networkType == NetworkType.BITCOIN ||
+                        network.networkType == NetworkType.UTXO
+                    ) {
+                        BitcoinjUtxoTxBuilder(network, UtxoNetworkParametersResolver.resolve(network.name))
+                    } else {
+                        null
+                    }
+                    return ProxyChainDataSource(network, proxyService, utxoTxBuilder = utxoTxBuilder)
                 }
             }
         )

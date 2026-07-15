@@ -24,6 +24,7 @@ import com.mtd.data.di.NetworkModule.provideRetrofitBuilder
 import com.mtd.data.dto.GaslessRelayParamsDto
 import com.mtd.data.dto.GaslessRelayRequestDto
 import com.mtd.data.repository.WalletRepositoryImpl
+import com.mtd.data.repository.gasless.DirectGaslessChainReader
 import com.mtd.data.repository.gasless.EvmGaslessRepositoryImpl
 import com.mtd.data.repository.gasless.GaslessApiGateway
 import com.mtd.data.repository.gasless.TronGaslessRepositoryImpl
@@ -37,7 +38,6 @@ import com.mtd.domain.model.EvmRelayParams
 import com.mtd.domain.model.EvmRelayPayload
 import com.mtd.domain.model.EvmSponsorApproveRequest
 import com.mtd.domain.model.GaslessApiException
-import com.mtd.domain.model.GaslessChain
 import com.mtd.domain.model.GaslessQueuedTx
 import com.mtd.domain.model.GaslessQuoteRequest
 import com.mtd.domain.model.GaslessRelayParams
@@ -133,7 +133,7 @@ class GaslessFullBackendIntegrationTest {
             secureStorage = secureStorage,
             activeWalletManager = activeWalletManager,
             blockchainRegistry = blockchainRegistry,
-            dataSourceFactory = dataSourceFactory,
+            dataSourceFactory = dagger.Lazy{dataSourceFactory},
             gson = gson
         )
 
@@ -151,8 +151,9 @@ class GaslessFullBackendIntegrationTest {
             .build()
             .create(GaslessApiService::class.java)
         gaslessApiGateway = GaslessApiGateway(gaslessApiService)
-        evmRepository = EvmGaslessRepositoryImpl(gaslessApiGateway, blockchainRegistry, okHttpClient)
-        tronRepository = TronGaslessRepositoryImpl(gaslessApiGateway, blockchainRegistry, okHttpClient)
+        val gaslessChainReader = DirectGaslessChainReader(blockchainRegistry, okHttpClient)
+        evmRepository = EvmGaslessRepositoryImpl(gaslessApiGateway, gaslessChainReader)
+        tronRepository = TronGaslessRepositoryImpl(gaslessApiGateway, gaslessChainReader)
     }
 
     @Test
@@ -314,7 +315,7 @@ class GaslessFullBackendIntegrationTest {
         )
 
         val relayPayload = EvmRelayPayload(
-            chain = GaslessChain.EVM,
+            networkType = NetworkType.EVM,
             quoteToken = quote.quoteToken,
             params = EvmRelayParams(
                 user = userAddress,
@@ -334,7 +335,7 @@ class GaslessFullBackendIntegrationTest {
             .requireSuccess("evm.relay")
 
         val duplicateResponse = gaslessApiService.relayGasless(
-            chain = GaslessChain.EVM.apiPath,
+            chain = "evm",
             idempotencyKey = idempotencyKey,
             request = relayPayload.toRelayRequestDto()
         )
@@ -461,7 +462,7 @@ class GaslessFullBackendIntegrationTest {
         )
 
         val relayPayload = GaslessRelayPayload(
-            chain = GaslessChain.TRON,
+            networkType = NetworkType.TVM,
             quoteToken = quote.quoteToken,
             params = GaslessRelayParams(
                 user = userAddress,
@@ -480,7 +481,7 @@ class GaslessFullBackendIntegrationTest {
             .requireSuccess("tron.relay")
 
         val duplicateResponse = gaslessApiService.relayGasless(
-            chain = GaslessChain.TRON.apiPath,
+            chain = "tron",
             idempotencyKey = idempotencyKey,
             request = relayPayload.toRelayRequestDto()
         )
@@ -823,15 +824,15 @@ class GaslessFullBackendIntegrationTest {
 
     private fun GaslessRelayPayload.toRelayRequestDto(): GaslessRelayRequestDto {
         return GaslessRelayRequestDto(
-            chain = chain.name,
+            chain = "TRON",
             quoteToken = quoteToken,
             params = GaslessRelayParamsDto(
                 user = params.user,
                 token = params.token,
                 target = params.target,
-                amount = params.amount.toString(),
-                feeAmount = params.feeAmount.toString(),
-                nonce = params.nonce.toString(),
+                amount = params.amount,
+                feeAmount = params.feeAmount,
+                nonce = params.nonce,
                 deadline = params.deadline
             ),
             permitSignature = permitSignature,

@@ -17,8 +17,10 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.runs
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -48,11 +50,18 @@ class WalletRepositoryImplTest {
             activeWalletManager = activeWalletManager,
             blockchainRegistry = blockchainRegistry,
             gson = gson,
-            dataSourceFactory = chainDataSourceFactory
+            dataSourceFactory = dagger.Lazy{chainDataSourceFactory}
         )
 
         mockkObject(MnemonicHelper)
         every { secureStorage.getDecrypted(any()) } returns null
+    }
+
+    @After
+    fun tearDown() {
+        // Release the static object-mock so it can't leak (mocked → relaxed/null) into other test
+        // classes in the same JVM fork and cause order-dependent NullPointerExceptions.
+        unmockkObject(MnemonicHelper)
     }
 
     @Test

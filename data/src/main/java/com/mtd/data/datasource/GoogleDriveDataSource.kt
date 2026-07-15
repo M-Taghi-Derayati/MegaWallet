@@ -2,12 +2,12 @@ package com.mtd.data.datasource
 
 
 import android.content.Context
-import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeTokenRequest
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
+import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.http.ByteArrayContent
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.drive.Drive
+import com.google.api.services.drive.DriveScopes
 import com.google.api.services.drive.model.File
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -24,30 +24,20 @@ class GoogleDriveDataSource @Inject constructor(
     private var drive: Drive? = null
     private val jsonFactory = GsonFactory.getDefaultInstance()
     private val transport = NetHttpTransport()
-    private val androidClientId =
-        "1046615759222-r16ths1csmqc0jtf3hi1421ghauoa8ff.apps.googleusercontent.com"
-    private val webClientId =
-        "1046615759222-vl9okabqo2a4j8ji9eg496v3s1h38jn4.apps.googleusercontent.com"
-
-    private val clientSecret = "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"
 
     private companion object {
         private const val BACKUP_FILE_NAME = "megawallet_backup.dat"
         private const val APP_DATA_FOLDER = "appDataFolder"
     }
 
-    override suspend fun initializeWithAuthCode(authCode: String): Unit = withContext(Dispatchers.IO) {
+    override suspend fun initializeWithAccountName(accountName: String): Unit = withContext(Dispatchers.IO) {
+        val credential = GoogleAccountCredential.usingOAuth2(
+            context,
+            listOf(DriveScopes.DRIVE_APPDATA)
+        ).apply {
+            setSelectedAccountName(accountName)
+        }
 
-
-        val tokenResponse = GoogleAuthorizationCodeTokenRequest(
-            transport, jsonFactory, webClientId, clientSecret, authCode, "urn:ietf:wg:oauth:2.0:oob"
-        ).execute()
-        val credential = GoogleCredential.Builder()
-            .setJsonFactory(jsonFactory)
-            .setTransport(transport)
-            .setClientSecrets(androidClientId, clientSecret)
-            .build()
-            .setFromTokenResponse(tokenResponse)
         drive = Drive.Builder(transport, jsonFactory, credential)
             .setApplicationName("MegaWallet")
             .build()
@@ -95,4 +85,3 @@ class GoogleDriveDataSource @Inject constructor(
         driveService.files().delete(fileId).execute()
     }
 }
-

@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.google.gson.Gson
 import com.mtd.core.json.GsonJsonCodec
-import com.mtd.domain.model.GaslessChain
 import com.mtd.domain.model.PendingGaslessTx
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,13 +22,13 @@ class PendingGaslessTxStore @Inject constructor(
 
     fun put(item: PendingGaslessTx) = synchronized(lock) {
         val current = readUnsafe().toMutableList()
-        val withoutSame = current.filterNot { it.queueId == item.queueId && it.chain == item.chain }
+        val withoutSame = current.filterNot { it.queueId == item.queueId && it.networkId == item.networkId }
         saveUnsafe(withoutSame + item)
     }
 
-    fun remove(chain: GaslessChain, queueId: String) = synchronized(lock) {
+    fun remove(networkId: String, queueId: String) = synchronized(lock) {
         val current = readUnsafe()
-        val filtered = current.filterNot { it.chain == chain && it.queueId == queueId }
+        val filtered = current.filterNot { it.networkId == networkId && it.queueId == queueId }
         saveUnsafe(filtered)
     }
 
@@ -52,7 +51,9 @@ class PendingGaslessTxStore @Inject constructor(
     }
 
     companion object {
-        private const val KEY = "pending_gasless_txs_v1"
+        // Phase 4: bumped to v2 (the persisted shape dropped `chain` and is now keyed by
+        // networkId). Old v1 entries are ignored (in-flight trackers expire naturally).
+        private const val KEY = "pending_gasless_txs_v2"
     }
 }
 

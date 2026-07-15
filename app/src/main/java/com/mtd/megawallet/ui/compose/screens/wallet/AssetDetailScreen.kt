@@ -47,7 +47,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -104,14 +104,14 @@ fun AssetDetailScreen(
     viewModel: AssetDetailViewModel = hiltViewModel(),
     homeViewModel: HomeViewModel? = null
 ) {
-    val asset by viewModel.asset.collectAsState()
-    val chartData by viewModel.chartData.collectAsState()
-    val isLoadingChart by viewModel.isLoadingChart.collectAsState()
+    val asset by viewModel.asset.collectAsStateWithLifecycle()
+    val chartData by viewModel.chartData.collectAsStateWithLifecycle()
+    val isLoadingChart by viewModel.isLoadingChart.collectAsStateWithLifecycle()
     var isContentVisible by remember { mutableStateOf(false) }
     var showChooseBalance by remember { mutableStateOf<AssetItem?>(null) }
 
     // State برای تعامل با نمودار (Scrubbing)
-    var scrubbedPoint by remember { mutableStateOf<Pair<Long, Double>?>(null) }
+    var scrubbedPoint by remember { mutableStateOf<Pair<Long, String>?>(null) }
 
     // ✅ ابتدا asset را از HomeViewModel بگیر (اگر موجود باشد)
     LaunchedEffect(assetId, homeViewModel) {
@@ -189,7 +189,7 @@ fun AssetDetailScreen(
 
                             // Timeframe Selector
                             AssetDetailTimeframeSelector(
-                                selectedTimeframe = viewModel.selectedTimeFrame.collectAsState().value,
+                                selectedTimeframe = viewModel.selectedTimeFrame.collectAsStateWithLifecycle().value,
                                 onTimeframeSelected = { viewModel.onTimeFrameSelected(it) }
                             )
 
@@ -427,7 +427,7 @@ private fun AssetDetailHeader(
 private fun AssetDetailTopSection(
     asset: AssetItem,
     homeViewModel: HomeViewModel? = null,
-    scrubbedPoint: Pair<Long, Double>? = null
+    scrubbedPoint: Pair<Long, String>? = null
 ) {
     val priceChangeText = remember(asset.priceChange24h) {
         formatPriceChange(asset.priceChange24h)
@@ -452,7 +452,7 @@ private fun AssetDetailTopSection(
 
     // فرمت کردن قیمت نمایش داده شده (اگر scrubbing فعال باشد، قیمت لحظه‌ای چارت، در غیر این صورت قیمت فعلی ارز)
     val currentPriceUsd = remember(asset.priceUsdRaw, scrubbedPoint) {
-        scrubbedPoint?.second?.let { BigDecimal.valueOf(it) } ?: asset.priceUsdRaw
+        scrubbedPoint?.second?.let { BigDecimal.valueOf(it.toDouble()) } ?: asset.priceUsdRaw
     }
 
     val priceIrr = remember(currentPriceUsd, irrRate) {
@@ -556,9 +556,9 @@ private fun AssetDetailTopSection(
 
 @Composable
 private fun AssetDetailChartSection(
-    chartData: List<Pair<Long, Double>>,
+    chartData: List<Pair<Long, String>>,
     isLoading: Boolean,
-    onScrubbing: (Pair<Long, Double>?) -> Unit
+    onScrubbing: (Pair<Long, String>?) -> Unit
 ) {
     var touchX by remember { mutableStateOf<Float?>(null) }
 
@@ -593,11 +593,14 @@ private fun AssetDetailChartSection(
                 modifier = Modifier.size(32.dp)
             )
         } else if (chartData.isNotEmpty()) {
-            val maxPrice = chartData.maxBy { it.second }.second
-            val minPrice = chartData.minBy { it.second }.second
+            // TASK-16: compare prices numerically. `maxBy { it.second }` compared the price *String*
+            // lexicographically (e.g. "9.5" > "10.5"), which corrupted the y-axis min/max and distorted
+            // the whole chart. Parse to Double first.
+            val maxPrice = chartData.maxOf { it.second.toDouble() }
+            val minPrice = chartData.minOf { it.second.toDouble() }
             val priceRange = (maxPrice - minPrice).coerceAtLeast(0.0001)
 
-            val isPositive = chartData.last().second >= chartData.first().second
+            val isPositive = chartData.last().second.toDouble() >= chartData.first().second.toDouble()
             val chartColor = if (isPositive) Color(0xFF22C55E) else Color(0xFFEF4444)
 
             val primaryColor = MaterialTheme.colorScheme.primary
@@ -616,7 +619,7 @@ private fun AssetDetailChartSection(
 
                 chartData.forEachIndexed { index, pair ->
                     val x = index * (width / (chartData.size - 1))
-                    val y = height - ((pair.second - minPrice) / priceRange * height).toFloat()
+                    val y = height - ((pair.second.toDouble() - minPrice) / priceRange * height).toFloat()
 
                     if (index == 0) {
                         path.moveTo(x, y)
@@ -654,7 +657,7 @@ private fun AssetDetailChartSection(
                     onScrubbing(selectedPoint)
 
                     val x = scrubbedIndex * (width / (chartData.size - 1))
-                    val y = height - ((selectedPoint.second - minPrice) / priceRange * height).toFloat()
+                    val y = height - ((selectedPoint.second.toDouble() - minPrice) / priceRange * height).toFloat()
 
                     // Vertical Line
                     drawLine(

@@ -8,6 +8,8 @@ object ErrorMapper {
     fun map(throwable: Throwable): AppError {
         return when (throwable) {
             is AppError -> throwable // اگر خودش از قبل AppError بود
+            // Phase 8 (KAN-20/21): typed relayer/proxy errors → curated user-facing taxonomy.
+            is ApiException -> ApiErrorMessageMapper.toAppError(throwable)
             is UnknownHostException -> AppError.Network.NoInternet
             is SocketTimeoutException -> AppError.Network.Timeout
             is IOException -> AppError.Network.NoInternet // سایر خطاهای IO معمولاً قطعی نت هستند

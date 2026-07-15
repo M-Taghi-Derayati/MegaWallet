@@ -42,7 +42,8 @@ fun AnimatedCounter(
     modifier: Modifier = Modifier,
     style: TextStyle = TextStyle(),
     animationDuration: Int = 240,
-    styleVariantKey: Any? = null
+    styleVariantKey: Any? = null,
+    animate: Boolean = true
 ) {
     val parts = remember(text) { parseComplexString(text) }
     val formatter = remember(parts.decimalPlaces, parts.hasCommas, parts.usePersianSeparator) {
@@ -54,6 +55,17 @@ fun AnimatedCounter(
     }
     val formattedNumber = remember(parts.number, formatter) {
         formatter.format(parts.number.toDouble())
+    }
+
+    if (!animate) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Text(
+                text = parts.prefix + formattedNumber + parts.suffix,
+                modifier = modifier,
+                style = style
+            )
+        }
+        return
     }
 
     var previousNumber by remember { mutableFloatStateOf(parts.number) }
@@ -329,4 +341,3 @@ private fun buildFormatter(
 }
 
 private val NUMBER_REGEX = Regex("[-+]?\\d[\\d,]*(?:\\.\\d+)?")
-

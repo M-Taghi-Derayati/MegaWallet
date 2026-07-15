@@ -1,5 +1,6 @@
 package com.mtd.data.repository.gasless
 
+import com.google.gson.JsonParser
 import com.google.gson.internal.LinkedTreeMap
 import com.mtd.data.dto.GaslessDisplayPolicyDto
 import com.mtd.data.dto.GaslessDisplayPolicyItemDto
@@ -8,6 +9,7 @@ import com.mtd.data.dto.GaslessEligibilityRequestDto
 import com.mtd.core.utils.TronAddressConverter
 import com.mtd.data.dto.EvmSponsorApproveParamsDto
 import com.mtd.data.dto.EvmSponsorApproveRequestDto
+import com.mtd.data.dto.EvmApproveQuoteRequestDto
 import com.mtd.data.dto.GaslessQuoteParamsDto
 import com.mtd.data.dto.GaslessQuoteRequestDto
 import com.mtd.data.dto.GaslessRelayParamsDto
@@ -19,10 +21,13 @@ import com.mtd.data.service.GaslessApiService
 import com.mtd.data.utils.safeApiCall
 import com.mtd.domain.model.EvmSponsorApproveRequest
 import com.mtd.domain.model.EvmSponsorApproveResult
-import com.mtd.domain.model.GaslessApiException
+import com.mtd.domain.model.EvmApproveQuoteRequest
+import com.mtd.domain.model.EvmApproveQuoteResult
+import com.mtd.domain.model.EvmApproveTxTemplate
 import com.mtd.domain.model.GaslessCanonicalParams
-import com.mtd.domain.model.GaslessChain
+import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.GaslessEligibilityReason
+import com.mtd.domain.model.GaslessFeeFundingSource
 import com.mtd.domain.model.GaslessEligibilityResult
 import com.mtd.domain.model.GaslessDisplayPolicy
 import com.mtd.domain.model.GaslessDisplayPolicyBundle
@@ -42,6 +47,9 @@ import com.mtd.domain.model.TronApproveTxTemplate
 import com.mtd.domain.model.TronSponsorApproveRequest
 import com.mtd.domain.model.TronSponsorApproveResult
 import com.mtd.domain.model.TronSponsorMode
+import com.mtd.domain.model.error.ApiError
+import com.mtd.domain.model.error.ApiException
+import retrofit2.Response
 import java.math.BigInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -51,23 +59,26 @@ class GaslessApiGateway @Inject constructor(
     private val gaslessApiService: GaslessApiService
 ) {
 
-    suspend fun getSupportedTokens(chain: GaslessChain): ResultResponse<List<GaslessSupportedToken>> {
+    // Phase 4: routing is the data-driven `relayPrefix` (networkId → capability →
+    // relayPrefix; e.g. "evm","bsc","tron"). `networkType` carries the EVM/TVM execution
+    // family (result labelling + TRON treasury conversion). The request-body `chain`
+    // field equals the route prefix UPPERCASED (= backend `evmConfig.id`, e.g. "BSC");
+    // see validateQuoteInput/Relay/Sponsor on the backend.
+    suspend fun getSupportedTokens(
+        networkType: NetworkType,
+        relayPrefix: String
+    ): ResultResponse<List<GaslessSupportedToken>> {
         return safeApiCall {
-            val response = gaslessApiService.getSupportedTokens(chain.apiPath)
+            val response = gaslessApiService.getSupportedTokens(relayPrefix)
             val body = response.body()
             if (!response.isSuccessful || body == null) {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                throw GaslessApiException(
-                    statusCode = response.code(),
-                    responseBody = errorBody,
-                    message = "tokens ${chain.name} failed (${response.code()})"
-                )
+                throw gaslessApiError(response, "tokens $relayPrefix failed (${response.code()})")
             }
 
             body.mapNotNull { item ->
                 val token = item.token?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 GaslessSupportedToken(
-                    chain = chain,
+                    networkType = networkType,
                     token = token,
                     symbol = item.symbol,
                     gaslessEnabled = item.gaslessEnabled == true,
@@ -79,16 +90,17 @@ class GaslessApiGateway @Inject constructor(
     }
 
     suspend fun checkEligibility(
-        chain: GaslessChain,
+        networkType: NetworkType,
         service: GaslessServiceType,
         userAddress: String,
-        tokenAddress: String
+        tokenAddress: String,
+        relayPrefix: String
     ): ResultResponse<GaslessEligibilityResult> {
         return safeApiCall {
             val response = gaslessApiService.checkEligibility(
-                chain = chain.apiPath,
+                chain = relayPrefix,
                 request = GaslessEligibilityRequestDto(
-                    chain = chain.name,
+                    chain = relayPrefix.uppercase(),
                     service = service.apiValue,
                     params = GaslessEligibilityParamsDto(
                         user = userAddress,
@@ -98,16 +110,13 @@ class GaslessApiGateway @Inject constructor(
             )
             val body = response.body()
             if (!response.isSuccessful || body == null) {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                throw GaslessApiException(
-                    statusCode = response.code(),
-                    responseBody = errorBody,
-                    message = "eligibility ${chain.name}/${service.apiValue} failed (${response.code()})"
+                throw gaslessApiError(
+                    response,
+                    "eligibility $relayPrefix/${service.apiValue} failed (${response.code()})"
                 )
             }
 
             GaslessEligibilityResult(
-                chain = chain,
                 service = service,
                 user = body.user ?: userAddress,
                 token = body.token ?: tokenAddress,
@@ -125,35 +134,31 @@ class GaslessApiGateway @Inject constructor(
                         reasonCode = it.reasonCode,
                         reasonFa = it.reasonFa
                     )
-                }
+                },
+                networkType = networkType
             )
         }
     }
 
     suspend fun prepare(
-        chain: GaslessChain,
         userAddress: String,
-        startNonce: String? = null
+        startNonce: String? = null,
+        relayPrefix: String
     ): ResultResponse<GaslessPrepareData> {
         return safeApiCall {
             val response = gaslessApiService.prepareGasless(
-                chain = chain.apiPath,
+                chain = relayPrefix,
                 userAddress = userAddress,
                 startNonce = startNonce
             )
             val body = response.body()
             if (!response.isSuccessful || body == null) {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                throw GaslessApiException(
-                    statusCode = response.code(),
-                    responseBody = errorBody,
-                    message = "prepare ${chain.name} failed (${response.code()})"
-                )
+                throw gaslessApiError(response, "prepare $relayPrefix failed (${response.code()})")
             }
 
             GaslessPrepareData(
                 userAddress = body.user ?: userAddress,
-                nonce = body.nonce?.toBigIntegerOrNull()
+                nonce = body.nonce
                     ?: throw IllegalStateException("Missing or invalid nonce in prepare response"),
                 deadline = body.deadline,
                 chainId = body.chainId
@@ -168,30 +173,32 @@ class GaslessApiGateway @Inject constructor(
         }
     }
 
-    suspend fun quote(chain: GaslessChain, request: GaslessQuoteRequest): ResultResponse<GaslessQuoteData> {
+    suspend fun quote(
+        networkType: NetworkType,
+        request: GaslessQuoteRequest,
+        relayPrefix: String
+    ): ResultResponse<GaslessQuoteData> {
         return safeApiCall {
             val response = gaslessApiService.quoteGasless(
-                chain = chain.apiPath,
+                chain = relayPrefix,
                 request = GaslessQuoteRequestDto(
-                    chain = chain.name,
+                    chain = relayPrefix.uppercase(),
                     prepareToken = request.prepareToken,
                     params = GaslessQuoteParamsDto(
                         user = request.user,
                         token = request.token,
                         target = request.target,
-                        amount = request.amount.toString()
+                        amount = request.amount
                     ),
-                    clientFeeAmount = request.clientFeeAmount?.toString()
+                    feeFundingSource = request.feeFundingSource.apiValue,
+                    clientFeeAmount = request.clientFeeAmount
                 ),
             )
             val body = response.body()
             if (!response.isSuccessful || body == null) {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                throw GaslessApiException(
-                    statusCode = response.code(),
-                    responseBody = errorBody,
-                    message = "quote ${chain.name} failed (${response.code()})"
-                )
+                // 400 INSUFFICIENT_GAS_CREDIT / 409 RACE_CONDITION_LOCK / REQUOTE_REQUIRED etc. are
+                // surfaced as typed ApiError so the coordinator can branch (never auto-fallback).
+                throw gaslessApiError(response, "quote $relayPrefix failed (${response.code()})")
             }
 
             val canonical = body.canonicalParams
@@ -204,39 +211,50 @@ class GaslessApiGateway @Inject constructor(
                     user = canonical.user ?: request.user,
                     token = canonical.token ?: request.token,
                     target = canonical.target ?: request.target,
-                    amount = canonical.amount.toBigIntOrThrow("canonical.amount"),
-                    feeAmount = canonical.feeAmount.toBigIntOrThrow("canonical.feeAmount"),
-                    nonce = canonical.nonce.toBigIntOrThrow("canonical.nonce"),
+                    amount = canonical.amount.orThrow("canonical.amount"),
+                    feeAmount = canonical.feeAmount.orThrow("canonical.feeAmount"),
+                    nonce = canonical.nonce.orThrow("canonical.nonce"),
                     deadline = canonical.deadline
                         ?: throw IllegalStateException("Missing canonical.deadline in quote response"),
                     treasury = normalizeTreasuryAddress(
-                        chain = chain,
+                        networkType = networkType,
                         treasury = canonical.treasury
                             ?: throw IllegalStateException("Missing canonical.treasury in quote response")
                     )
                 ),
-                serverFeeAmount = body.serverQuote?.feeAmount?.toBigIntegerOrNull(),
+                serverFeeAmount = body.serverQuote?.feeAmount,
                 displayPolicy = body.displayPolicy?.toDomain(),
-                smartFee = body.smartFee?.toDomain()
+                smartFee = body.smartFee?.toDomain(),
+                accepted = body.accepted,
+                quoteId = body.quoteId,
+                feeFundingSource = GaslessFeeFundingSource.fromApiValue(body.feeFundingSource),
+                gasCreditApplied = body.gasCreditApplied,
+                gasCredit = body.gasCredit,
+                totalFee = body.totalFee,
+                finalFee = body.finalFee
             )
         }
     }
 
-    suspend fun relay(payload: GaslessRelayPayload, idempotencyKey: String): ResultResponse<GaslessQueuedTx> {
+    suspend fun relay(
+        payload: GaslessRelayPayload,
+        idempotencyKey: String,
+        relayPrefix: String
+    ): ResultResponse<GaslessQueuedTx> {
         return safeApiCall {
             require(idempotencyKey.isNotBlank()) { "x-idempotency-key must not be blank" }
             require(payload.quoteToken.isNotBlank()) { "quoteToken must not be blank" }
 
             val request = GaslessRelayRequestDto(
-                chain = payload.chain.name,
+                chain = relayPrefix.uppercase(),
                 quoteToken = payload.quoteToken,
                 params = GaslessRelayParamsDto(
                     user = payload.params.user,
                     token = payload.params.token,
                     target = payload.params.target,
-                    amount = payload.params.amount.toString(),
-                    feeAmount = payload.params.feeAmount.toString(),
-                    nonce = payload.params.nonce.toString(),
+                    amount = payload.params.amount,
+                    feeAmount = payload.params.feeAmount,
+                    nonce = payload.params.nonce,
                     deadline = payload.params.deadline
                 ),
                 permitSignature = payload.permitSignature,
@@ -247,41 +265,32 @@ class GaslessApiGateway @Inject constructor(
 
 
             val response = gaslessApiService.relayGasless(
-                chain = payload.chain.apiPath,
+                chain = relayPrefix,
                 idempotencyKey = idempotencyKey,
                 request = request
             )
             val body = response.body()
             if (!response.isSuccessful || body == null) {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                throw GaslessApiException(
-                    statusCode = response.code(),
-                    responseBody = errorBody,
-                    message = "relay ${payload.chain.name} failed (${response.code()})"
-                )
+                throw gaslessApiError(response, "relay $relayPrefix failed (${response.code()})")
             }
 
             GaslessQueuedTx(
                 id = body.id ?: throw IllegalStateException("Missing tx id in relay response"),
-                stage = body.stage ?: body.status
+                stage = body.stage ?: body.status,
+                idempotent = body.idempotent == true
             )
         }
     }
 
     suspend fun getTxStatus(
-        chain: GaslessChain,
-        txId: String
+        txId: String,
+        relayPrefix: String
     ): ResultResponse<GaslessTxStatus> {
         return safeApiCall {
-            val response = gaslessApiService.getGaslessTxStatus(chain.apiPath, txId)
+            val response = gaslessApiService.getGaslessTxStatus(relayPrefix, txId)
             val body = response.body()
             if (!response.isSuccessful || body == null) {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                throw GaslessApiException(
-                    statusCode = response.code(),
-                    responseBody = errorBody,
-                    message = "tx status ${chain.name} failed (${response.code()})"
-                )
+                throw gaslessApiError(response, "tx status $relayPrefix failed (${response.code()})")
             }
 
             GaslessTxStatus(
@@ -300,11 +309,15 @@ class GaslessApiGateway @Inject constructor(
         }
     }
 
-    suspend fun sponsorTronApprove(request: TronSponsorApproveRequest): ResultResponse<TronSponsorApproveResult> {
+    suspend fun sponsorTronApprove(
+        request: TronSponsorApproveRequest,
+        relayPrefix: String
+    ): ResultResponse<TronSponsorApproveResult> {
         return safeApiCall {
             val response = gaslessApiService.sponsorTronApprove(
+                chain = relayPrefix,
                 request = TronSponsorApproveRequestDto(
-                    chain = GaslessChain.TRON.name,
+                    chain = relayPrefix.uppercase(),
                     params = TronSponsorApproveParamsDto(
                         user = request.userAddress,
                         token = request.tokenAddress
@@ -314,12 +327,7 @@ class GaslessApiGateway @Inject constructor(
             )
             val body = response.body()
             if (!response.isSuccessful || body == null) {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                throw GaslessApiException(
-                    statusCode = response.code(),
-                    responseBody = errorBody,
-                    message = "sponsor approve TRON failed (${response.code()})"
-                )
+                throw gaslessApiError(response, "sponsor approve TRON failed (${response.code()})")
             }
 
             TronSponsorApproveResult(
@@ -335,12 +343,15 @@ class GaslessApiGateway @Inject constructor(
         }
     }
 
-    suspend fun quoteTronApprove(chain: GaslessChain, request: TronApproveQuoteRequest): ResultResponse<TronApproveQuoteResult> {
+    suspend fun quoteTronApprove(
+        request: TronApproveQuoteRequest,
+        relayPrefix: String
+    ): ResultResponse<TronApproveQuoteResult> {
         return safeApiCall {
             val response = gaslessApiService.quoteTronApprove(
-                chain = chain.apiPath,
+                chain = relayPrefix,
                 request = TronApproveQuoteRequestDto(
-                    chain = GaslessChain.TRON.name,
+                    chain = relayPrefix.uppercase(),
                     params = TronSponsorApproveParamsDto(
                         user = request.userAddress,
                         token = request.tokenAddress
@@ -349,12 +360,7 @@ class GaslessApiGateway @Inject constructor(
             )
             val body = response.body()
             if (!response.isSuccessful || body == null) {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                throw GaslessApiException(
-                    statusCode = response.code(),
-                    responseBody = errorBody,
-                    message = "quote approve TRON failed (${response.code()})"
-                )
+                throw gaslessApiError(response, "quote approve TRON failed (${response.code()})")
             }
 
             val approveRequired = body.approveRequired ?: true
@@ -387,11 +393,15 @@ class GaslessApiGateway @Inject constructor(
         }
     }
 
-    suspend fun sponsorEvmApprove(request: EvmSponsorApproveRequest): ResultResponse<EvmSponsorApproveResult> {
+    suspend fun sponsorEvmApprove(
+        request: EvmSponsorApproveRequest,
+        relayPrefix: String
+    ): ResultResponse<EvmSponsorApproveResult> {
         return safeApiCall {
             val response = gaslessApiService.sponsorEvmApprove(
+                chain = relayPrefix,
                 request = EvmSponsorApproveRequestDto(
-                    chain = GaslessChain.EVM.name,
+                    chain = relayPrefix.uppercase(),
                     params = EvmSponsorApproveParamsDto(
                         user = request.userAddress,
                         token = request.tokenAddress
@@ -401,12 +411,7 @@ class GaslessApiGateway @Inject constructor(
             )
             val body = response.body()
             if (!response.isSuccessful || body == null) {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                throw GaslessApiException(
-                    statusCode = response.code(),
-                    responseBody = errorBody,
-                    message = "sponsor approve EVM failed (${response.code()})"
-                )
+                throw gaslessApiError(response, "sponsor approve EVM failed (${response.code()})")
             }
 
             EvmSponsorApproveResult(
@@ -415,6 +420,59 @@ class GaslessApiGateway @Inject constructor(
                 amount = body.amount?.toBigIntegerOrNull(),
                 reason = body.reason,
                 txHash = body.txHash,
+                sponsorDisplayPolicy = body.displayPolicy?.sponsorApprove?.toDomain()
+            )
+        }
+    }
+
+    suspend fun quoteEvmApprove(
+        request: EvmApproveQuoteRequest,
+        relayPrefix: String
+    ): ResultResponse<EvmApproveQuoteResult> {
+        return safeApiCall {
+            val response = gaslessApiService.quoteEvmApprove(
+                chain = relayPrefix,
+                request = EvmApproveQuoteRequestDto(
+                    chain = relayPrefix.uppercase(),
+                    params = EvmSponsorApproveParamsDto(
+                        user = request.userAddress,
+                        token = request.tokenAddress
+                    )
+                )
+            )
+            val body = response.body()
+            if (!response.isSuccessful || body == null) {
+                throw gaslessApiError(response, "quote approve EVM failed (${response.code()})")
+            }
+
+            val template = body.approveTxTemplate
+            EvmApproveQuoteResult(
+                approveRequired = body.approveRequired ?: true,
+                approvalAmount = body.approvalAmount?.toBigIntegerOrNull()
+                    ?: template?.approvalAmount?.toBigIntegerOrNull(),
+                approvalAmountMode = body.approvalAmountMode ?: template?.approvalAmountMode,
+                approveTxTemplate = template?.let {
+                    EvmApproveTxTemplate(
+                        to = it.to,
+                        spender = it.spender,
+                        data = it.data,
+                        approvalAmount = it.approvalAmount?.toBigIntegerOrNull(),
+                        approvalAmountMode = it.approvalAmountMode,
+                        gasLimit = it.gasLimit?.toBigIntegerOrNull(),
+                        gasPriceWei = it.gasPriceWei?.toBigIntegerOrNull(),
+                        maxFeePerGasWei = it.maxFeePerGasWei?.toBigIntegerOrNull(),
+                        maxPriorityFeePerGasWei = it.maxPriorityFeePerGasWei?.toBigIntegerOrNull(),
+                        valueWei = it.valueWei?.toBigIntegerOrNull()
+                    )
+                },
+                requiredAllowance = body.requiredAllowance?.toBigIntegerOrNull(),
+                estimatedApproveGasLimit = body.estimatedApproveGasLimit?.toBigIntegerOrNull(),
+                gasPriceWei = body.gasPriceWei?.toBigIntegerOrNull(),
+                maxFeePerGasWei = body.maxFeePerGasWei?.toBigIntegerOrNull(),
+                maxPriorityFeePerGasWei = body.maxPriorityFeePerGasWei?.toBigIntegerOrNull(),
+                requiredApproveWei = body.requiredApproveWei?.toBigIntegerOrNull() ?: BigInteger.ZERO,
+                requiredWithBufferWei = body.requiredWithBufferWei?.toBigIntegerOrNull(),
+                source = body.source,
                 sponsorDisplayPolicy = body.displayPolicy?.sponsorApprove?.toDomain()
             )
         }
@@ -445,20 +503,53 @@ class GaslessApiGateway @Inject constructor(
         return GaslessSmartFee(
             decision = decision,
             reasonFa = reasonFa,
-            feeAmount = feeAmount?.toBigIntegerOrNull(),
+            feeAmount = feeAmount,
             feeUsd = feeUsd,
             directUserCostUsd = directUserCostUsd,
             moreExpensiveThanDirect = moreExpensiveThanDirect
         )
     }
 
-    private fun String?.toBigIntOrThrow(fieldName: String): BigInteger {
-        return this?.toBigIntegerOrNull()
-            ?: throw IllegalStateException("Missing or invalid $fieldName in quote response")
+    private fun BigInteger?.orThrow(fieldName: String): BigInteger {
+        return this ?: throw IllegalStateException("Missing or invalid $fieldName in quote response")
     }
 
-    private fun normalizeTreasuryAddress(chain: GaslessChain, treasury: String): String {
-        if (chain != GaslessChain.TRON) return treasury
+    /**
+     * Maps a failed gasless [Response] to a typed [ApiException]. Parses the server's machine
+     * `error.code` (BM-33 `{error:{code,message}}` or top-level `{code,message}`) into the Phase 1
+     * [ApiError] taxonomy so callers branch on the code — never on the Persian `message`. HTTP status
+     * + `Retry-After` are used as fallbacks (e.g. 409 → RaceConditionLock/RequoteRequired, 429 → RateLimited).
+     */
+    private fun gaslessApiError(response: Response<*>, fallbackMessage: String): ApiException {
+        val httpStatus = response.code()
+        val retryAfter = response.headers()["Retry-After"]?.trim()?.toLongOrNull()
+        val (code, message) = parseGaslessError(response.errorBody()?.string())
+        return ApiException(
+            apiError = ApiError.from(code, httpStatus, retryAfter),
+            httpStatus = httpStatus,
+            reasonFa = message ?: fallbackMessage,
+            retryAfterSec = retryAfter
+        )
+    }
+
+    /** Pulls (`code`, `message`) from a gasless error body, tolerating both envelope shapes. */
+    private fun parseGaslessError(raw: String?): Pair<String?, String?> {
+        val body = raw?.takeIf { it.isNotBlank() } ?: return null to null
+        return try {
+            val root = JsonParser.parseString(body).asJsonObject
+            val error = root.takeIf { it.has("error") && it.get("error").isJsonObject }
+                ?.getAsJsonObject("error")
+            val code = (error?.get("code") ?: root.get("code"))?.takeUnless { it.isJsonNull }?.asString
+            val message = (error?.get("message") ?: root.get("message") ?: root.get("reasonFa"))
+                ?.takeUnless { it.isJsonNull }?.asString
+            code to message
+        } catch (e: Exception) {
+            null to null
+        }
+    }
+
+    private fun normalizeTreasuryAddress(networkType: NetworkType, treasury: String): String {
+        if (networkType != NetworkType.TVM) return treasury
         return runCatching { TronAddressConverter.evmToTron(treasury) }
             .getOrElse { treasury }
     }

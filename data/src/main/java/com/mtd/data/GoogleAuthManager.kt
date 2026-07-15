@@ -20,13 +20,10 @@ class GoogleAuthManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) : IAuthManager {
 
-    private val webClientId = "1046615759222-vl9okabqo2a4j8ji9eg496v3s1h38jn4.apps.googleusercontent.com"
-
     private val googleSignInClient: GoogleSignInClient by lazy {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .requestScopes(Scope(DriveScopes.DRIVE_APPDATA))
-            .requestServerAuthCode(webClientId)
             .build()
         GoogleSignIn.getClient(context, gso)
     }
@@ -39,11 +36,11 @@ class GoogleAuthManager @Inject constructor(
         return try {
             val task = GoogleSignIn.getSignedInAccountFromIntent(data)
             val account = task.await() // await() for suspend function
-            val authCode = account.serverAuthCode
-            if (authCode != null) {
-                ResultResponse.Success(authCode)
+            val accountName = account.email
+            if (accountName != null) {
+                ResultResponse.Success(accountName)
             } else {
-                ResultResponse.Error(Exception("Authorization code is null."))
+                ResultResponse.Error(Exception("Account email is null."))
             }
         } catch (e: ApiException) {
             ResultResponse.Error(Exception("Google Sign-In failed with code: ${e.statusCode}", e))

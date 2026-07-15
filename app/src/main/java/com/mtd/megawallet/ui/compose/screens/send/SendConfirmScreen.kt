@@ -16,8 +16,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -28,7 +30,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,16 +45,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PriorityHigh
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -63,7 +69,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -74,16 +80,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -105,8 +112,6 @@ import coil.compose.AsyncImage
 import com.mtd.common_ui.R
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.FeeOption
-import com.mtd.domain.model.GaslessDisplayPolicy
-import com.mtd.domain.model.GaslessSmartFee
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.gassless.FeeState
 import com.mtd.domain.model.gassless.FeeTrend
@@ -121,7 +126,6 @@ import com.mtd.megawallet.viewmodel.news.SendViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import java.util.Locale
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -130,17 +134,17 @@ fun SendConfirmScreen(
     viewModel: SendViewModel,
     onConfirm: (useGasless: Boolean, selectedOption: FeeOption?) -> Unit
 ) {
-    val asset by viewModel.selectedAsset.collectAsState()
-    val recipientAddress by viewModel.recipientAddress.collectAsState()
-    val amountText by viewModel.amountText.collectAsState()
-    val isUsdMode by viewModel.isUsdMode.collectAsState()
-    val networkType by viewModel.recipientNetworkType.collectAsState()
-    val walletName by viewModel.activeWalletName.collectAsState()
-    val gaslessAvailability by viewModel.gaslessAvailability.collectAsState()
-    val gaslessPreviewState by viewModel.gaslessPreviewState.collectAsState()
+    val asset by viewModel.selectedAsset.collectAsStateWithLifecycle()
+    val recipientAddress by viewModel.recipientAddress.collectAsStateWithLifecycle()
+    val amountText by viewModel.amountText.collectAsStateWithLifecycle()
+    val isUsdMode by viewModel.isUsdMode.collectAsStateWithLifecycle()
+    val networkType by viewModel.recipientNetworkType.collectAsStateWithLifecycle()
+    val walletName by viewModel.activeWalletName.collectAsStateWithLifecycle()
+    val gaslessAvailability by viewModel.gaslessAvailability.collectAsStateWithLifecycle()
+    val gaslessPreviewState by viewModel.gaslessPreviewState.collectAsStateWithLifecycle()
     
-    val feeState by viewModel.feeState.collectAsState()
-    val submitState by viewModel.submitState.collectAsState()
+    val feeState by viewModel.feeState.collectAsStateWithLifecycle()
+    val submitState by viewModel.submitState.collectAsStateWithLifecycle()
     
     if (asset == null) return
 
@@ -206,6 +210,8 @@ private fun InternalSendConfirmScreen(
     var avatarOffset by remember { mutableStateOf(Offset.Zero) }
     var buttonOffset by remember { mutableStateOf(Offset.Zero) }
     var screenCenter by remember { mutableStateOf(Offset.Zero) }
+
+    var selectedMode by remember { mutableStateOf(FeeMode.DIRECT) }
 
     val avatarAnimProgress by animateFloatAsState(
         targetValue = if (isProcessing) 1f else 0f,
@@ -321,7 +327,7 @@ private fun InternalSendConfirmScreen(
     }
 
     // --- Color Animation Logic ---
-    val feeTrend by viewModel.feeTrend.collectAsState()
+    val feeTrend by viewModel.feeTrend.collectAsStateWithLifecycle()
     
     val flashColor = remember(feeTrend) {
         when (feeTrend) {
@@ -351,7 +357,7 @@ private fun InternalSendConfirmScreen(
             .onGloballyPositioned { screenCenter = Offset(it.size.width / 2f, it.size.height / 2f) }
     ) {
         // --- Status Text for Submitting/Success ---
-        androidx.compose.animation.AnimatedVisibility(
+       AnimatedVisibility(
             visible = isProcessing,
             enter = fadeIn(tween(400)) + slideInVertically { 20 },
             exit = fadeOut(tween(300)),
@@ -527,8 +533,27 @@ private fun InternalSendConfirmScreen(
 
                 Spacer(Modifier.height(12.dp))
 
-                // Gasless banner
-                AnimatedVisibility(
+                // Tab Bar
+                FeeTabBar(
+                    selectedMode = selectedMode,
+                    onModeChange = { selectedMode = it },
+                    tabStates =  mapOf(
+                        FeeMode.DIRECT to TabState.READY,
+                        FeeMode.SMART to TabState.LOADING,
+                        FeeMode.CREDIT to TabState.DISABLED
+                    ),
+                    getTabFee = { mode ->
+                        when (mode) {
+                            FeeMode.DIRECT -> selectedFee?.feeAmountUsdDisplay ?: "..."
+                            FeeMode.SMART -> "ETH 1"
+                            FeeMode.CREDIT -> "ETH 1"
+                        }
+                    }
+                )
+
+
+
+               /* AnimatedVisibility(
                     visible = gaslessBannerVis && isGaslessEligible && !isProcessing,
                     enter = slideInVertically(spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) { it / 2 } + fadeIn(tween(200)),
                     exit = slideOutVertically { it / 2 } + fadeOut(tween(150))
@@ -542,7 +567,7 @@ private fun InternalSendConfirmScreen(
                         onToggle = { useGasless = !useGasless }
                     )
                     Spacer(Modifier.height(12.dp))
-                }
+                }*/
 
                 // Fee Section
                 StaggeredSection(visible = feeVisible, delayMs = 0) {
@@ -550,26 +575,42 @@ private fun InternalSendConfirmScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), thickness = 0.5.dp)
                         Spacer(Modifier.height(12.dp))
 
-                        if (feeOptions.isEmpty() && !useGasless && !isLoadingFees) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.PriorityHigh, null, tint = Color.Yellow, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("دریافت کارمزد با خطا مواجه شد", color = Color.Yellow, fontSize = 13.sp)
+
+                        AnimatedContent(
+                            targetState = selectedMode,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = tween(200)) + slideInVertically { 8 })
+                                    .togetherWith(fadeOut(animationSpec = tween(200)) + slideOutVertically { -8 })
+                            },
+                            label = "FeeContent"
+                        ) { mode ->
+                            when (mode) {
+                                FeeMode.DIRECT ->{
+                                    FeeSection(
+                                        feeOptions = feeOptions,
+                                        selectedIndex = selectedFeeIndex,
+                                        onIndexSelected = { selectedFeeIndex = it },
+                                        useGasless = useGasless,
+                                        gaslessPreviewState = gaslessPreviewState,
+                                        hasInsufficientBalance = hasInsufficientBalance && !isAmountTooSmall,
+                                        isAmountTooSmall = isAmountTooSmall,
+                                        isLoadingFees = isLoadingFees,
+                                        primaryColor = animatedPrimaryColor,
+                                        secondaryColor = animatedSecondaryColor
+                                    )
+                                }
+                                FeeMode.SMART ->{
+                                    SmartFeeSection(SmartFeeInfo("12","155","212144",""),true)
+                                }
+                                FeeMode.CREDIT -> {
+                                    CreditFeeSection(
+                                        info = CreditInfo("12","32423","254235",""),
+                                        isLoading = false
+                                    )
+                                }
                             }
-                        } else {
-                            FeeSection(
-                                feeOptions = feeOptions,
-                                selectedIndex = selectedFeeIndex,
-                                onIndexSelected = { selectedFeeIndex = it },
-                                useGasless = useGasless,
-                                gaslessPreviewState = gaslessPreviewState,
-                                hasInsufficientBalance = hasInsufficientBalance && !isAmountTooSmall,
-                                isAmountTooSmall = isAmountTooSmall,
-                                isLoadingFees = isLoadingFees,
-                                primaryColor = animatedPrimaryColor,
-                                secondaryColor = animatedSecondaryColor
-                            )
                         }
+
                     }
                 }
 
@@ -680,6 +721,463 @@ private fun ConfirmDetailRow(label: String, value: String? = null, valueLeft: (@
         }
     }
 }
+
+@Composable
+private fun FeeTabBar(
+    selectedMode: FeeMode,
+    onModeChange: (FeeMode) -> Unit,
+    tabStates: Map<FeeMode, TabState>,
+    getTabFee: (FeeMode) -> String
+) {
+    val tabs = listOf(
+        TabInfo(FeeMode.DIRECT, "مستقیم",  Icons.Default.Bolt),
+        TabInfo(FeeMode.SMART, "هوشمند",  Icons.Default.AutoAwesome),
+        TabInfo(FeeMode.CREDIT, "اعتباری",  Icons.Default.CreditCard)
+    )
+
+    Row(modifier = Modifier.fillMaxWidth()) {
+        tabs.forEach { tab ->
+            val state = tabStates[tab.mode] ?: TabState.READY
+            val isActive = selectedMode == tab.mode
+            val isDisabled = state == TabState.DISABLED
+            val isTabLoading = state == TabState.LOADING
+
+            FeeTab(
+                tab = tab,
+                isActive = isActive,
+                isDisabled = isDisabled,
+                isLoading = isTabLoading,
+                feeValue = if (isDisabled) null else getTabFee(tab.mode),
+                onClick = {
+                    if (!isDisabled) {
+                        onModeChange(tab.mode)
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+private data class TabInfo(
+    val mode: FeeMode,
+    val label: String,
+    val icon: ImageVector
+)
+enum class FeeMode {
+    DIRECT,
+    SMART,
+    CREDIT
+}
+
+enum class TabState {
+    READY,
+    LOADING,
+    DISABLED
+}
+
+data class SmartFeeInfo(
+    val amount: String,
+    val amountUsd: String,
+    val amountIrr: String,
+    val description: String
+)
+
+data class CreditInfo(
+    val available: String,
+    val availableIrr: String,
+    val fee: String,
+    val feeIrr: String
+)
+
+@Composable
+private fun FeeTab(
+    tab: TabInfo,
+    isActive: Boolean,
+    isDisabled: Boolean,
+    isLoading: Boolean,
+    feeValue: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val alphaAnim by animateFloatAsState(
+        targetValue = if (isDisabled) 0.35f else 1f,
+        animationSpec = tween(200),
+        label = "tabAlpha"
+    )
+
+    val labelColor by animateColorAsState(
+        targetValue = when {
+            isDisabled -> Color.White.copy(alpha = 0.25f)
+            isActive -> Color.White
+            else -> Color.White.copy(alpha = 0.4f)
+        },
+        animationSpec = tween(200),
+        label = "labelColor"
+    )
+
+    val feeColor by animateColorAsState(
+        targetValue = if (isActive) Color(0xFF818CF8) else Color.White.copy(alpha = 0.3f),
+        animationSpec = tween(200),
+        label = "feeColor"
+    )
+
+    Box(
+        modifier = modifier
+            .alpha(alphaAnim)
+            .clickable(
+                enabled = !isDisabled,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // Label row with icon/emoji
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (isDisabled) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+
+                Text(
+                    text = tab.label,
+                    color = labelColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            // Fee row with small icon
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Small icon or spinner
+                when {
+                    isLoading -> {
+                        TabSpinner(
+                            modifier = Modifier.size(10.dp),
+                            color = Color.White.copy(alpha = 0.5f)
+                        )
+                    }
+                    !isDisabled -> {
+                        SmallFeeIcon(
+                            mode = tab.mode,
+                            tint = feeColor,
+                            modifier = Modifier.size(10.dp)
+                        )
+                    }
+                }
+
+                // Fee value or status text
+                Text(
+                    text = when {
+                        isDisabled -> "غیرفعال"
+                        isLoading -> "دریافت..."
+                        else -> feeValue ?: "..."
+                    },
+                    color = if (isDisabled) Color.White.copy(alpha = 0.2f) else feeColor,
+                    fontSize = if (isDisabled || isLoading) 10.sp else 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            // Active indicator line
+            AnimatedVisibility(
+                visible = isActive && !isDisabled,
+                enter = fadeIn(tween(200)) + expandHorizontally(),
+                exit = fadeOut(tween(200)) + shrinkHorizontally()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .width(40.dp)
+                        .height(2.dp)
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(Color(0xFF818CF8))
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabSpinner(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "spinner")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    Box(modifier = modifier.rotate(rotation)) {
+        // Simple circle spinner using Canvas or Icon
+        Icon(
+            imageVector = Icons.Default.Refresh,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+private fun SmallFeeIcon(
+    mode: FeeMode,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    val icon = when (mode) {
+        FeeMode.DIRECT -> Icons.Default.Bolt
+        FeeMode.SMART -> Icons.Default.Schedule
+        FeeMode.CREDIT -> Icons.Default.CreditCard
+    }
+
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = tint,
+        modifier = modifier
+    )
+}
+
+
+// ============================================
+// Smart Fee Section
+// ============================================
+
+@Composable
+private fun SmartFeeSection(
+    fee: SmartFeeInfo,
+    isLoading: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        // Header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(text = "✨", fontSize = 18.sp)
+            Text(
+                text = "ارسال هوشمند",
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFF22C55E).copy(alpha = 0.2f))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "پیشنهادی",
+                    color = Color(0xFF4ADE80),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        AnimatedContent(
+            targetState = isLoading,
+            transitionSpec = {
+                fadeIn(tween(200)) togetherWith fadeOut(tween(200))
+            },
+            label = "smartLoading"
+        ) { loading ->
+            if (loading) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LoadingPlaceholder(width = 112.dp, height = 20.dp)
+                    LoadingPlaceholder(width = 80.dp, height = 16.dp)
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = fee.amount,
+                        color = Color(0xFFA78BFA),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = fee.amountUsd,
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = "≈ ${fee.amountIrr}",
+                        color = Color.White.copy(alpha = 0.4f),
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = fee.description,
+                        color = Color.White.copy(alpha = 0.4f),
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ============================================
+// Credit Fee Section
+// ============================================
+
+@Composable
+private fun CreditFeeSection(
+    info: CreditInfo,
+    isLoading: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        // Header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "پرداخت اعتباری",
+                color = Color.White,
+                fontSize = 15.sp,
+                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium)) ,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        AnimatedContent(
+            targetState = isLoading,
+            transitionSpec = {
+                fadeIn(tween(200)) togetherWith fadeOut(tween(200))
+            },
+            label = "creditLoading"
+        ) { loading ->
+            if (loading) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LoadingPlaceholder(width = 200.dp, height = 48.dp)
+                    LoadingPlaceholder(width = 200.dp, height = 48.dp)
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Available Credit
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "اعتبار باقی‌مانده",
+                            color = Color(0xFFFBBF24).copy(alpha = 0.8f),
+                            fontSize = 14.sp
+                        )
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = info.available,
+                                color = Color(0xFFFBBF24),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "≈ ${info.availableIrr}",
+                                color = Color.White.copy(alpha = 0.4f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    // Fee
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "هزینه تراکنش",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 14.sp
+                        )
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = info.fee,
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "≈ ${info.feeIrr}",
+                                color = Color.White.copy(alpha = 0.4f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================
+// Loading Placeholder
+// ============================================
+
+@Composable
+private fun LoadingPlaceholder(
+    width: androidx.compose.ui.unit.Dp,
+    height: androidx.compose.ui.unit.Dp
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.1f,
+        targetValue = 0.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .width(width)
+            .height(height)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color.White.copy(alpha = alpha))
+    )
+}
+
+
 
 @Composable
 private fun GaslessBanner(
@@ -898,37 +1396,7 @@ private fun FeeSection(
                                 overflow = TextOverflow.Ellipsis
                             )
                              
-                            if (gasless) {
-                                gaslessPreview?.gaslessPolicy?.displayUsd?.takeIf { it.isNotBlank() }?.let {
-                                    Text(
-                                        text = it,
-                                        color = secondaryColor.copy(alpha = 1f),
-                                        fontFamily = FontFamily(Font(R.font.inter_medium)),
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                gaslessPreview?.gaslessPolicy?.displayIrr?.takeIf { it.isNotBlank() }?.let {
-                                    Text(
-                                        text = "≈ $it",
-                                        color = secondaryColor.copy(alpha = 0.8f),
-                                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
-                                        fontSize = 12.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                Spacer(Modifier.height(4.dp))
-                                GaslessPolicyDetails(
-                                    gaslessPolicy = gaslessPreview?.gaslessPolicy,
-                                    sponsorPolicy = if (gaslessPreview?.needsApprove == true) gaslessPreview.sponsorPolicy else null,
-                                    smartFee = gaslessPreview?.smartFee,
-                                    fallbackMessage = policyMessage
-                                )
-                            } else if (option != null) {
+                          if (option != null) {
                                 // 2. USD Equivalent
                                 Text(
                                     text = option.feeAmountUsdDisplay,
@@ -1022,348 +1490,6 @@ private fun FeeSection(
     }
 }
 
-@Composable
-private fun GaslessPolicyDetails(
-    gaslessPolicy: GaslessDisplayPolicy?,
-    sponsorPolicy: GaslessDisplayPolicy?,
-    smartFee: GaslessSmartFee?,
-    fallbackMessage: String?
-) {
-    if (gaslessPolicy == null && sponsorPolicy == null && smartFee == null && fallbackMessage.isNullOrBlank()) return
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF6C63FF).copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bolt,
-                            contentDescription = null,
-                            tint = Color(0xFF8E84FF),
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = "جزئیات هزینه گس‌لس",
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
-                            fontSize = 12.sp
-                        )
-                        Text(
-                            text = "نمایش نحوه پرداخت هزینه برای تراکنش و Approve",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
-                            fontSize = 10.sp
-                        )
-                    }
-                }
-                PolicyBadge(
-                    text = buildString {
-                        if (gaslessPolicy != null) append("تراکنش")
-                        if (gaslessPolicy != null && sponsorPolicy != null) append(" + ")
-                        if (sponsorPolicy != null) append("Approve")
-                    },
-                    background = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                    content = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            gaslessPolicy?.let {
-                GaslessPolicyItem(
-                    title = "هزینه خود تراکنش",
-                    subtitle = "کارمزدی که برای اجرای گس‌لس محاسبه شده",
-                    policy = it
-                )
-            }
-
-            if (gaslessPolicy != null && sponsorPolicy != null) {
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f),
-                    thickness = 0.8.dp
-                )
-            }
-
-            sponsorPolicy?.let {
-                GaslessPolicyItem(
-                    title = "وضعیت Approve",
-                    subtitle = "نحوه پرداخت هزینه Approve قبل از ارسال",
-                    policy = it
-                )
-            }
-
-            smartFee?.let { fee ->
-                val smartFeeMeta = listOfNotNull(
-                    fee.feeUsd?.takeIf { it.isNotBlank() },
-                    fee.directUserCostUsd?.takeIf { it.isNotBlank() }?.let { "مسیر مستقیم: $it" }
-                )
-                if (gaslessPolicy != null || sponsorPolicy != null) {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                        thickness = 0.8.dp
-                    )
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "تصمیم هزینه",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
-                        fontSize = 11.sp
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        fee.decision?.takeIf { it.isNotBlank() }?.let {
-                            PolicyMetaChip(text = it)
-                        }
-                        if (fee.moreExpensiveThanDirect == true) {
-                            PolicyMetaChip(text = "گران‌تر از مسیر مستقیم")
-                        }
-                    }
-                    if (smartFeeMeta.isNotEmpty()) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            smartFeeMeta.forEach { item ->
-                                PolicyMetaChip(text = item)
-                            }
-                        }
-                    }
-                }
-            }
-
-            fallbackMessage?.takeIf { it.isNotBlank() }?.let {
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                    thickness = 0.8.dp
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
-                        fontSize = 10.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GaslessPolicyItem(
-    title: String,
-    subtitle: String,
-    policy: GaslessDisplayPolicy
-) {
-    val visual = remember(policy.mode) { policyVisualStyle(policy.mode) }
-    val amount = remember(policy) {
-        listOfNotNull(
-            policy.displayAmount?.takeIf { it.isNotBlank() && it != "0" },
-            policy.displayToken?.takeIf { token ->
-                token.isNotBlank() && !(policy.displayAmount ?: "").contains(token)
-            }
-        ).joinToString(" ").ifBlank {
-            when (policy.mode?.lowercase(Locale.US)) {
-                "gift" -> "هدیه"
-                else -> null
-            }
-        }
-    }
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = visual.container.copy(alpha = 0.12f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, visual.container.copy(alpha = 0.24f), RoundedCornerShape(16.dp))
-                .padding(horizontal = 12.dp, vertical = 11.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(visual.container.copy(alpha = 0.20f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = visual.icon,
-                            contentDescription = null,
-                            tint = visual.container,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = title,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = subtitle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
-                            fontSize = 10.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                PolicyBadge(
-                    text = visual.label,
-                    background = visual.container.copy(alpha = 0.16f),
-                    content = visual.container
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    amount?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontFamily = FontFamily(Font(R.font.inter_medium)),
-                            fontSize = 16.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    val meta = listOfNotNull(
-                        policy.displayUsd?.takeIf { it.isNotBlank() },
-                        policy.displayIrr?.takeIf { it.isNotBlank() }?.let { "≈ $it" }
-                    )
-                    if (meta.isNotEmpty()) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            meta.forEach { item ->
-                                PolicyMetaChip(text = item)
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.width(10.dp))
-
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "نحوه پرداخت",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
-                        fontSize = 9.sp
-                    )
-                    Text(
-                        text = when {
-                            policy.willDeductFromUser == false -> "پرداخت توسط سرویس"
-                            policy.deductSource.equals("token", ignoreCase = true) -> "کسر از خود توکن"
-                            policy.deductSource.equals("native", ignoreCase = true) -> "کارمزد شبکه"
-                            else -> "نامشخص"
-                        },
-                        color = visual.container,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
-                        fontSize = 10.sp
-                    )
-                }
-            }
-
-            policy.reasonFa?.takeIf { it.isNotBlank() }?.let {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.45f))
-                        .padding(horizontal = 9.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = visual.icon,
-                        contentDescription = null,
-                        tint = visual.container,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
-                        fontSize = 10.sp,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun PolicyMetaChip(text: String) {
@@ -1391,35 +1517,6 @@ private data class PolicyVisualStyle(
     val container: Color
 )
 
-private fun policyVisualStyle(mode: String?): PolicyVisualStyle {
-    return when (mode?.lowercase(Locale.US)) {
-        "gift" -> PolicyVisualStyle(
-            label = "هدیه",
-            icon = Icons.Default.Check,
-            container = Color(0xFF24C07A)
-        )
-        "debt" -> PolicyVisualStyle(
-            label = "بدهی",
-            icon = Icons.Default.Schedule,
-            container = Color(0xFFFFA726)
-        )
-        "disabled" -> PolicyVisualStyle(
-            label = "بدون اسپانسر",
-            icon = Icons.Default.Info,
-            container = Color(0xFFFF6B6B)
-        )
-        "user_pays" -> PolicyVisualStyle(
-            label = "کسر از کاربر",
-            icon = Icons.Default.Bolt,
-            container = Color(0xFF7C8BFF)
-        )
-        else -> PolicyVisualStyle(
-            label = "نامشخص",
-            icon = Icons.Default.PriorityHigh,
-            container = Color(0xFF8F96A3)
-        )
-    }
-}
 
 @Composable
 private fun PolicyBadge(
@@ -1850,7 +1947,7 @@ private fun StaggeredSection(visible: Boolean, delayMs: Int = 0, content: @Compo
 }
 
 @Composable
-private fun animateColorState(target: Color): androidx.compose.runtime.State<Color> = androidx.compose.animation.animateColorAsState(targetValue = target, animationSpec = tween(220), label = "cAnim")
+private fun animateColorState(target: Color): androidx.compose.runtime.State<Color> = animateColorAsState(targetValue = target, animationSpec = tween(220), label = "cAnim")
 
 
 

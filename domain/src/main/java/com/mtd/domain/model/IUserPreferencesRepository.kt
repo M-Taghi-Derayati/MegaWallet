@@ -5,6 +5,13 @@ interface IUserPreferencesRepository {
 
 
     /**
+     * KAN-9 / KAN-19 — transport mode for blockchain reads/writes (DIRECT RPC vs. backend PROXY).
+     * Persisted so the choice survives process death; defaults to [BlockchainConnectionMode.DIRECT].
+     */
+    suspend fun getConnectionMode(): BlockchainConnectionMode
+    suspend fun setConnectionMode(mode: BlockchainConnectionMode)
+
+    /**
      * وضعیت فعال بودن قفل اپ.
      */
     suspend fun isAppLockEnabled(): Boolean

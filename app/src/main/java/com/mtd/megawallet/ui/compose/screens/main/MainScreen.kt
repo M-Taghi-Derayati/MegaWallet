@@ -17,7 +17,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -53,10 +52,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,12 +79,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.icons.AnimatedApertureIcon
+import com.mtd.common_ui.theme.icons.AnimatedClockIcon
+import com.mtd.common_ui.theme.icons.AnimatedWalletIcon
+import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.CloudWalletItem
 import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.ImportData
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWalletScreen
 import com.mtd.megawallet.ui.compose.screens.createwallet.CreateWalletScreen
+import com.mtd.megawallet.ui.compose.screens.explore.ExploreScreen
 import com.mtd.megawallet.ui.compose.screens.history.TransactionHistoryScreen
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetailsBottomSheet
 import com.mtd.megawallet.ui.compose.screens.send.SendScreen
@@ -121,10 +127,12 @@ fun MainScreen(
     onHistoryClick: () -> Unit = {},
     onExploreClick: () -> Unit = {}
 ) {
-    val activeWallet by homeViewModel.activeWallet.collectAsState()
+    val activeWallet by homeViewModel.activeWallet.collectAsStateWithLifecycle()
 
-    val selectedAssetId by mainViewModel.selectedAssetId.collectAsState()
+    val selectedAssetId by mainViewModel.selectedAssetId.collectAsStateWithLifecycle()
 
+    // KAN-9 / KAN-19 — DIRECT/PROXY transport, toggled from the header search icon.
+    val connectionMode by mainViewModel.connectionMode.collectAsStateWithLifecycle()
 
     // مدیریت دکمه Back: اگر در صفحه جزئیات هستیم، به لیست برگرد
     BackHandler(enabled = selectedAssetId != null) {
@@ -137,14 +145,16 @@ fun MainScreen(
             ?: MaterialTheme.colorScheme.primary,
         onNavigateToWalletManagement = onNavigateToWalletManagement,
         onScanClick = onScanClick,
-        onSearchClick = onSearchClick,
+        // Tapping the magnifier flips the blockchain connection mode (PROXY ⇄ DIRECT).
+        onSearchClick = { mainViewModel.toggleConnectionMode() },
         onMoreOptionsClick = onMoreOptionsClick,
         onHistoryClick = onHistoryClick,
         onExploreClick = onExploreClick,
         onCurrencyToggle = { homeViewModel.toggleDisplayCurrency() },
         mainViewModel = mainViewModel,
         homeViewModel = homeViewModel,
-        selectedAssetId = selectedAssetId
+        selectedAssetId = selectedAssetId,
+        connectionMode = connectionMode
     )
 }
 
@@ -166,12 +176,18 @@ private fun MainDashboardContent(
     onExploreClick: () -> Unit,
     onCurrencyToggle: () -> Unit,
     selectedAssetId: String?,
+    connectionMode: BlockchainConnectionMode,
 ) {
-    val createWalletViewModel: CreateWalletViewModel = hiltViewModel()
-    val historyViewModel: TransactionHistoryViewModel = hiltViewModel()
     val density = LocalDensity.current
     var fullScreenRect by remember { mutableStateOf(Rect.Zero) }
     var fullHeightPx by remember { mutableStateOf(0) } // ذخیره ارتفاع کل صفحه
+
+    // History detail sheet state is hoisted here (rather than inside the History tab block) so the sheet
+    // can be rendered as a root-level, full-screen overlay further down. That is what lets it (1) cover
+    // the bottom navigation and (2) use the full screen height when expanded — both regressed while the
+    // sheet lived inside the Scaffold content, where innerPadding clipped it above the bottom bar.
+    val historyViewModel: TransactionHistoryViewModel = hiltViewModel()
+    val selectedHistoryTransaction by historyViewModel.selectedTransaction.collectAsStateWithLifecycle()
 
     // ✅✅✅ Rect.VectorConverter برای انیمیشن هماهنگ Rect ✅✅✅
     val rectConverter = remember {
@@ -206,21 +222,23 @@ private fun MainDashboardContent(
 
     var isHeaderExpanded by remember { mutableStateOf(false) }
     var isFabExpanded by remember { mutableStateOf(false) }
-    var showSendScreen by remember { mutableStateOf(false) }
-    var sendInitialAssetId by remember { mutableStateOf<String?>(null) }
-    var showReceiveScreen by remember { mutableStateOf(false) }
-    var showMultiWalletScreen by remember { mutableStateOf(false) }
-    
+    // TASK-15 — the full-screen overlays are navigation state, so they survive process death via
+    // rememberSaveable: a low-memory kill/restore lands back on the same screen instead of the
+    // dashboard. (Purely visual affordances like header/FAB expansion stay in plain remember.)
+    var showSendScreen by rememberSaveable { mutableStateOf(false) }
+    var sendInitialAssetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showReceiveScreen by rememberSaveable { mutableStateOf(false) }
+    var showMultiWalletScreen by rememberSaveable { mutableStateOf(false) }
+
     // حالات مدیریت ساخت و وارد کردن کیف پول
-    var showCreateWalletScreen by remember { mutableStateOf(false) }
-    var showImportWalletScreen by remember { mutableStateOf(false) }
+    var showCreateWalletScreen by rememberSaveable { mutableStateOf(false) }
+    var showImportWalletScreen by rememberSaveable { mutableStateOf(false) }
     var pendingImportData by remember { mutableStateOf<ImportData?>(null) }
+    var pendingCloudRestore by remember { mutableStateOf<CloudWalletItem?>(null) }
     
     // فلگ برای تشخیص اینکه آیا از MultiWallet وارد فلوی ساخت/ایمپورت شده‌ایم
     var isFromMultiWallet by remember { mutableStateOf(false) }
-    val selectedTab by mainViewModel.selectedTab.collectAsState()
-    val selectedHistoryTransaction by historyViewModel.selectedTransaction.collectAsState()
-    val homeUiState by homeViewModel.uiState.collectAsState()
+    val selectedTab by mainViewModel.selectedTab.collectAsStateWithLifecycle()
     val shouldShowMainFab = selectedTab == MainTab.WALLET &&
         selectedAssetId == null &&
         !showSendScreen &&
@@ -228,11 +246,6 @@ private fun MainDashboardContent(
         !showMultiWalletScreen &&
         !showCreateWalletScreen &&
         !showImportWalletScreen
-
-    LaunchedEffect(homeUiState) {
-        val success = homeUiState as? HomeUiState.Success ?: return@LaunchedEffect
-        historyViewModel.syncAssetPricesFromHomeAssets(success.assets)
-    }
 
     LaunchedEffect(shouldShowMainFab) {
         if (!shouldShowMainFab) {
@@ -372,11 +385,12 @@ private fun MainDashboardContent(
                         onScanClick = onScanClick,
                         onSearchClick = onSearchClick,
                         onMoreOptionsClick = onMoreOptionsClick,
-                        onCurrencyToggle = onCurrencyToggle
+                        onCurrencyToggle = onCurrencyToggle,
+                        connectionMode = connectionMode
                     )
                 },
                 bottomBar = {
-                    val hasPendingHistoryActivity by mainViewModel.hasPendingHistoryActivity.collectAsState()
+                    val hasPendingHistoryActivity by mainViewModel.hasPendingHistoryActivity.collectAsStateWithLifecycle()
                     MainBottomNavigation(
                         selectedTab = selectedTab,
                         showHistoryPendingIndicator = hasPendingHistoryActivity && selectedTab != MainTab.HISTORY,
@@ -412,64 +426,72 @@ private fun MainDashboardContent(
                 },
                 contentWindowInsets = WindowInsets.statusBars
             ) { innerPadding ->
-                val currentTab by mainViewModel.selectedTab.collectAsState()
+                Box(
+                    modifier = Modifier
+                        .padding(innerPadding)
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    if (selectedTab == MainTab.WALLET || selectedAssetId != null) {
+                        MainTabLayer(
+                            active = selectedTab == MainTab.WALLET,
+                            label = "WalletTabLayer"
+                        ) {
+                            MainScreenContent(
+                                padding = PaddingValues(0.dp),
+                                mainViewModel = mainViewModel,
+                                homeViewModel = homeViewModel,
+                                selectedAssetId = selectedAssetId,
+                                isTransitioning = selectedAssetId != null || selectedTab != MainTab.WALLET,
+                                isActive = selectedTab == MainTab.WALLET
+                            )
+                        }
+                    }
 
-                androidx.compose.animation.AnimatedContent(
-                    targetState = currentTab,
-                    transitionSpec = {
-                        (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.98f))
-                            .togetherWith(fadeOut(animationSpec = tween(300)))
-                    },
-                    label = "TabTransition"
-                ) { targetTab ->
-                    Box(modifier = Modifier.padding(innerPadding).fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                        when (targetTab) {
-                            MainTab.WALLET -> {
-                                MainScreenContent(
-                                    padding = PaddingValues(0.dp), // Padding already handled by parent Box
-                                    mainViewModel = mainViewModel,
-                                    homeViewModel = homeViewModel,
-                                    selectedAssetId = selectedAssetId,
-                                    isTransitioning = selectedAssetId != null
-                                )
-                            }
-                            MainTab.HISTORY -> {
-                                TransactionHistoryScreen(
-                                    viewModel = historyViewModel,
-                                    homeViewModel = homeViewModel,
-                                    showDetailsBottomSheet = false
-                                )
-                            }
-                            MainTab.EXPLORE -> {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text(
-                                        "Explore Screen Coming Soon",
-                                        color = MaterialTheme.colorScheme.onTertiary,
-                                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
-                                    )
-                                }
-                            }
+                    if (selectedTab == MainTab.HISTORY) {
+                        val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+
+                        LaunchedEffect(homeUiState) {
+                            val success = homeUiState as? HomeUiState.Success ?: return@LaunchedEffect
+                            historyViewModel.syncAssetPricesFromHomeAssets(success.assets)
+                        }
+
+                        MainTabLayer(
+                            active = true,
+                            label = "HistoryTabLayer"
+                        ) {
+                            TransactionHistoryScreen(
+                                viewModel = historyViewModel,
+                                homeViewModel = homeViewModel,
+                                showDetailsBottomSheet = false,
+                                contentEnabled = true
+                            )
+                        }
+                        // The details sheet itself is rendered as a root-level overlay (see below), not here,
+                        // so it can draw over the bottom navigation and expand to the full screen height.
+                    }
+
+                    if (selectedTab == MainTab.EXPLORE) {
+                        MainTabLayer(
+                            active = true,
+                            label = "ExploreTabLayer"
+                        ) {
+                            ExploreScreen()
                         }
                     }
                 }
             }
         }
 
-        // --- لایه ۲: محتوای مورف شونده (The Morphing Actor) ---
-        // ✅✅✅ استفاده از Modifier.offset و Modifier.size برای Layout واقعی ✅✅✅
 
         val cornerRadiusDp = with(density) { cornerRadius.value.toDp() }
-        //val isVisible = bounds.width > 0f && bounds.height > 0f
 
-        // --- لایه رویی: صفحه جزئیات (لایه شناور) ---
         val isDetailVisible = selectedAssetId != null
         val containerAlpha by animateFloatAsState(
             // به جای isAnimating، مستقیماً به selectedAssetId گوش بده
             targetValue = if (selectedAssetId != null) 1f else 0f,
             animationSpec = tween(
-                durationMillis = 150, // کل زمان انیمیشن fade
-                // مهم‌ترین بخش: انیمیشن fade با تاخیر شروع می‌شود
-                // این مقدار را می‌توانید تنظیم کنید تا به حس دلخواه برسید
+                durationMillis = 150,
                 delayMillis = if (selectedAssetId != null) 0 else 150
             ),
             label = "containerAlpha"
@@ -491,7 +513,7 @@ private fun MainDashboardContent(
                     .clip(RoundedCornerShape(cornerRadiusDp))
                     .background(MaterialTheme.colorScheme.background)
                     .clickable(enabled = isDetailVisible, onClick = {})
-                    .zIndex(1000f) // بالا نگه داشتن لایه شناور
+                    .zIndex(MainScreenConstants.ZLayer.ASSET_DETAIL) // بالا نگه داشتن لایه شناور
             ) {
                 // Opacity (آلفا) محتوا را جداگانه انیمیت می‌کنیم
 
@@ -516,7 +538,7 @@ private fun MainDashboardContent(
             visible = showSendScreen,
             enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
             exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
-            modifier = Modifier.zIndex(1800f)
+            modifier = Modifier.zIndex(MainScreenConstants.ZLayer.SEND)
         ) {
             SendScreen(
                 homeViewModel = homeViewModel,
@@ -529,19 +551,29 @@ private fun MainDashboardContent(
             )
         }
 
-        TransactionDetailsBottomSheet(
-            visible = selectedTab == MainTab.HISTORY && selectedHistoryTransaction != null,
-            transaction = selectedHistoryTransaction,
-            viewModel = historyViewModel,
-            onDismiss = { historyViewModel.selectTransaction(null) }
-        )
+        // --- لایه ۳.۵: History Transaction Details Sheet (root-level, full-screen overlay) ---
+        // Rendered here — outside the Scaffold — so its full-screen scrim covers the bottom navigation
+        // and its expanded height spans the whole screen (both regressed when it lived inside the
+        // Scaffold's innerPadding content).
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(MainScreenConstants.ZLayer.HISTORY_DETAIL_SHEET)
+        ) {
+            TransactionDetailsBottomSheet(
+                visible = selectedTab == MainTab.HISTORY && selectedHistoryTransaction != null,
+                transaction = selectedHistoryTransaction,
+                viewModel = historyViewModel,
+                onDismiss = { historyViewModel.selectTransaction(null) }
+            )
+        }
 
         // --- لایه ۴: Receive Screen Overlay ---
         androidx.compose.animation.AnimatedVisibility(
             visible = showReceiveScreen,
             enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
             exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
-            modifier = Modifier.zIndex(2000f)
+            modifier = Modifier.zIndex(MainScreenConstants.ZLayer.RECEIVE)
         ) {
             ReceiveScreen(onDismiss = { showReceiveScreen = false })
         }
@@ -553,7 +585,7 @@ private fun MainDashboardContent(
                     scaleIn(initialScale = 0.9f, animationSpec = tween(400)),
             exit = fadeOut(animationSpec = tween(300)) +
                    androidx.compose.animation.scaleOut(targetScale = 0.9f, animationSpec = tween(300)),
-            modifier = Modifier.zIndex(3000f)
+            modifier = Modifier.zIndex(MainScreenConstants.ZLayer.MULTI_WALLET)
         ) {
            MultiWalletScreen(
                 onNavigateBack = { showMultiWalletScreen = false },
@@ -581,7 +613,7 @@ private fun MainDashboardContent(
                     ),
             exit = fadeOut(animationSpec = tween(300)) +
                    slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300)),
-            modifier = Modifier.zIndex(4000f)
+            modifier = Modifier.zIndex(MainScreenConstants.ZLayer.ADD_EXISTING_WALLET)
         ) {
             AddExistingWalletScreen(
                 onBack = { 
@@ -594,7 +626,7 @@ private fun MainDashboardContent(
                     showCreateWalletScreen = true
                 },
                 onRestoreFromCloud = { walletItem ->
-                    createWalletViewModel.startRestoreFromCloud(walletItem)
+                    pendingCloudRestore = walletItem
                     showImportWalletScreen = false
                     showCreateWalletScreen = true
                 }
@@ -607,8 +639,17 @@ private fun MainDashboardContent(
             enter = fadeIn(animationSpec = tween(500)) +
                     scaleIn(initialScale = 0.8f, animationSpec = spring(0.8f)),
             exit = fadeOut(animationSpec = tween(400)) ,
-            modifier = Modifier.zIndex(5000f)
+            modifier = Modifier.zIndex(MainScreenConstants.ZLayer.CREATE_WALLET)
         ) {
+            val createWalletViewModel: CreateWalletViewModel = hiltViewModel()
+
+            LaunchedEffect(pendingCloudRestore) {
+                pendingCloudRestore?.let { walletItem ->
+                    createWalletViewModel.startRestoreFromCloud(walletItem)
+                    pendingCloudRestore = null
+                }
+            }
+
             CreateWalletScreen(
                 viewModel = createWalletViewModel,
                 importData = pendingImportData,
@@ -617,6 +658,7 @@ private fun MainDashboardContent(
                         pendingImportData = null
                         showImportWalletScreen = true
                     }
+                    pendingCloudRestore = null
                     showCreateWalletScreen = false
                     isFromMultiWallet = false
                 },
@@ -626,10 +668,12 @@ private fun MainDashboardContent(
                         showCreateWalletScreen = false
                         showMultiWalletScreen = false
                         isFromMultiWallet = false
+                        pendingCloudRestore = null
                         homeViewModel.refreshData()
                     } else {
                         // روال عادی: فقط صفحه ساخت را ببند
                         showCreateWalletScreen = false
+                        pendingCloudRestore = null
                         homeViewModel.refreshData()
                     }
                 }
@@ -639,20 +683,48 @@ private fun MainDashboardContent(
 }
 
 @Composable
+private fun MainTabLayer(
+    active: Boolean,
+    label: String,
+    content: @Composable () -> Unit
+) {
+    val alpha by animateFloatAsState(
+        targetValue = if (active) 1f else 0f,
+        animationSpec = tween(durationMillis = 120),
+        label = label
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(if (active) 1f else 0f)
+            .graphicsLayer {
+                this.alpha = alpha
+            }
+    ) {
+        content()
+    }
+}
+
+@Composable
 fun MainScreenContent(
     padding: PaddingValues,
     mainViewModel: MainScreenViewModel,
     homeViewModel: HomeViewModel,
     selectedAssetId: String?,
-    isTransitioning: Boolean = false
+    isTransitioning: Boolean = false,
+    isActive: Boolean = true
 ) {
     WalletScreens(
         modifier = Modifier.padding(padding),
         onAssetClick = { asset, bounds ->
-            mainViewModel.onAssetClicked(asset.id, bounds)
+            if (isActive) {
+                mainViewModel.onAssetClicked(asset.id, bounds)
+            }
         },
         viewModel = homeViewModel,
         userScrollEnabled = !isTransitioning,
+        captureItemBounds = isActive,
         listItemModifier = { assetId ->
             Modifier.graphicsLayer {
                 val isThisSelected = selectedAssetId == assetId
@@ -681,7 +753,8 @@ private fun MainHeader(
     onScanClick: () -> Unit,
     onSearchClick: () -> Unit,
     onMoreOptionsClick: () -> Unit,
-    onCurrencyToggle: () -> Unit
+    onCurrencyToggle: () -> Unit,
+    connectionMode: BlockchainConnectionMode
 ) {
     Surface(
         modifier = Modifier
@@ -750,15 +823,19 @@ private fun MainHeader(
                         modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
                     )
                 }
-                // آیکون سرچ
+                // آیکون سرچ — تغییر حالت اتصال (PROXY سبز / DIRECT خاکستری)
+                val searchTint = when (connectionMode) {
+                    BlockchainConnectionMode.PROXY -> Color(0xFF2E7D32) // green = relayer/proxy active
+                    BlockchainConnectionMode.DIRECT -> MaterialTheme.colorScheme.tertiary
+                }
                 IconButton(
                     onClick = onSearchClick,
                     modifier = Modifier.size(MainScreenConstants.HEADER_ICON_SIZE)
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_search),
-                        contentDescription = "Search",
-                        tint = MaterialTheme.colorScheme.tertiary,
+                        contentDescription = "Toggle connection mode (${connectionMode.name})",
+                        tint = searchTint,
                         modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
                     )
                 }
@@ -824,82 +901,54 @@ fun MainBottomNavigation(
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
-                // آیکون کاوشگری (راست)
-                BottomNavItem(
-                    filledIconRes = R.drawable.ic_discover_fill,
-                    outlinedIconRes = R.drawable.ic_discover,
-                    isSelected = selectedTab == MainTab.EXPLORE,
+                AnimatedApertureIcon(
+                    isFilled = selectedTab == MainTab.EXPLORE,
+                    iconSize = MainScreenConstants.BOTTOM_NAV_ICON_SIZE,
                     onClick = onExploreClick
                 )
-
-                // آیکون کیف پول (وسط)
-                BottomNavItem(
-                    filledIconRes = com.mtd.megawallet.R.drawable.ic_wallet_fill,
-                    outlinedIconRes = R.drawable.ic_wallet,
-                    isSelected = selectedTab == MainTab.WALLET,
+                AnimatedWalletIcon(
+                    isFilled = selectedTab == MainTab.WALLET,
+                    iconSize = MainScreenConstants.BOTTOM_NAV_ICON_SIZE,
                     onClick = onWalletClick
                 )
 
-                // آیکون سابقه (چپ)
-                BottomNavItem(
-                    filledIconRes = R.drawable.ic_history_fill,
-                    outlinedIconRes = R.drawable.ic_history,
-                    isSelected = selectedTab == MainTab.HISTORY,
-                    showPendingIndicator = showHistoryPendingIndicator,
-                    onClick = onHistoryClick
-                )
+
+
+                Box(
+                    modifier = Modifier
+                        .size(MainScreenConstants.BOTTOM_NAV_ITEM_SIZE)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { onHistoryClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (showHistoryPendingIndicator) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(MainScreenConstants.BOTTOM_NAV_ICON_SIZE-3.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.secondary,
+                            trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = (-7).dp, y = 7.dp)
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondary)
+                        )
+                    }
+                    AnimatedClockIcon(
+                        isFilled = selectedTab == MainTab.HISTORY,
+                        iconSize = MainScreenConstants.BOTTOM_NAV_ICON_SIZE,
+                        onClick = onHistoryClick
+                    )
+                }
             }
         }
     }
 }
-
-@Composable
-fun BottomNavItem(
-    filledIconRes: Int,
-    outlinedIconRes: Int,
-    isSelected: Boolean,
-    showPendingIndicator: Boolean = false,
-    onClick: () -> Unit
-) {
-
-    Box(
-        modifier = Modifier
-            .size(MainScreenConstants.BOTTOM_NAV_ITEM_SIZE)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        if (showPendingIndicator) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(MainScreenConstants.BOTTOM_NAV_ICON_SIZE-3.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.secondary,
-                trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f)
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = (-7).dp, y = 7.dp)
-                    .size(9.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondary)
-            )
-        }
-
-        Icon(
-            painter = painterResource(
-                id = if (isSelected) filledIconRes else outlinedIconRes
-            ),
-            contentDescription = null,
-            modifier = Modifier.size(MainScreenConstants.BOTTOM_NAV_ICON_SIZE),
-            tint = Color.Unspecified
-        )
-    }
-}
-
-
 
 @Composable
 fun MorphingFabMenu(
@@ -977,7 +1026,7 @@ fun MorphingFabMenu(
             Box(
                 modifier = Modifier
                     .padding(
-                        start =30.dp,
+                        start = 30.dp,
                     )
                     .align(Alignment.BottomStart)
                     .size(width, height)
@@ -995,7 +1044,7 @@ fun MorphingFabMenu(
                         contentDescription = null,
                         modifier = Modifier
                             .size(MainScreenConstants.FAB_ADD_ICON_SIZE)
-                            .graphicsLayer { alpha = if (isExpanded) 0f else (1f-(contentAlpha)) },
+                            .graphicsLayer { alpha = if (isExpanded) 0f else (1f - (contentAlpha)) },
                         tint = Color.White
                     )
 
@@ -1005,7 +1054,7 @@ fun MorphingFabMenu(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .align (Alignment.BottomEnd)
+                            .align(Alignment.BottomEnd)
                             .padding(MainScreenConstants.FAB_CONTENT_PADDING)
                             .graphicsLayer { alpha = contentAlpha },
                         verticalArrangement = Arrangement.spacedBy(MainScreenConstants.FAB_ITEM_SPACING,
@@ -1106,7 +1155,7 @@ fun FabPreview(){
 
 //        MainBottomNavigation(MainTab.WALLET,{},{},{})
 
-        MainHeader("تست",Color.Red,{},{},{},{},{})
+        MainHeader("تست",Color.Red,{},{},{},{},{}, BlockchainConnectionMode.DIRECT)
     }
 }
 

@@ -22,6 +22,8 @@ enum class NetworkName {
     TRON,
     BASE,
     BASESEPOLIA,
+    ARBITRUM,
+    ARBSEPOLIA,
     SHASTA,
     SOLANA,
     SOLDEVNET,

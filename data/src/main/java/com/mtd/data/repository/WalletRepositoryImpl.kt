@@ -10,15 +10,20 @@ import com.mtd.core.network.tron.TronUtils.Base58.hexToBase58
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.data.datasource.ChainDataSourceFactory
+import com.mtd.data.dto.HistoryAddressDto
 import com.mtd.data.utils.safeApiCall
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.Asset
+import com.mtd.domain.model.HistoryAddress
+import com.mtd.domain.model.HistoryPage
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.Wallet
+import com.mtd.domain.model.error.ApiError
+import com.mtd.domain.model.error.ApiException
 import org.web3j.utils.Numeric
 import javax.inject.Inject
 
@@ -28,7 +33,7 @@ class WalletRepositoryImpl @Inject constructor(
     private val activeWalletManager: ActiveWalletManager,
     private val blockchainRegistry: BlockchainRegistry,
     private val gson: Gson,
-     var dataSourceFactory: ChainDataSourceFactory
+    val dataSourceFactory: dagger.Lazy<ChainDataSourceFactory>
 ) : IWalletRepository {
     private companion object {
         const val WALLETS_METADATA_KEY = "wallets_metadata_list"
@@ -95,9 +100,9 @@ class WalletRepositoryImpl @Inject constructor(
             saveWalletsMetadata(listOf(WalletStorageMetadata(id, name, color, isMnemonic)))
             secureStorage.putEncrypted(ACTIVE_WALLET_ID_KEY, id)
 
-            // Clear legacy keys
-            secureStorage.putEncrypted(LEGACY_MNEMONIC_KEY, "")
-            secureStorage.putEncrypted(LEGACY_PRIVATE_KEY, "")
+            // KAN-18: erase legacy keys completely (no residual encrypted blanks).
+            secureStorage.remove(LEGACY_MNEMONIC_KEY)
+            secureStorage.remove(LEGACY_PRIVATE_KEY)
         }
     }
 
@@ -352,8 +357,10 @@ class WalletRepositoryImpl @Inject constructor(
             metadata.remove(itemToRemove)
             saveWalletsMetadata(metadata)
 
-            // Clear secret
-            secureStorage.putEncrypted(getSecretKey(walletId), "")
+            // KAN-18: completely erase the wallet secret from secure_prefs (no blank ciphertext
+            // residue) and immediately drop any in-memory derived keys for this wallet.
+            secureStorage.remove(getSecretKey(walletId))
+            activeWalletManager.clearCacheForWallet(walletId)
 
             // If it was active, switch to another wallet
             val currentActive = secureStorage.getDecrypted(ACTIVE_WALLET_ID_KEY)
@@ -362,7 +369,7 @@ class WalletRepositoryImpl @Inject constructor(
                 if (nextActive != null) {
                     switchActiveWallet(nextActive)
                 } else {
-                    secureStorage.putEncrypted(ACTIVE_WALLET_ID_KEY, "")
+                    secureStorage.remove(ACTIVE_WALLET_ID_KEY)
                     activeWalletManager.lockWallet()
                 }
             }
@@ -432,8 +439,16 @@ class WalletRepositoryImpl @Inject constructor(
             val metadata = getWalletsMetadata().toMutableList()
             metadata.removeAll { it.id == activeId }
             saveWalletsMetadata(metadata)
-            secureStorage.putEncrypted(getSecretKey(activeId), "")
-            secureStorage.putEncrypted(ACTIVE_WALLET_ID_KEY, metadata.firstOrNull()?.id ?: "")
+            // KAN-18: erase rather than blank, and clear the in-memory cache for the removed wallet.
+            secureStorage.remove(getSecretKey(activeId))
+            activeWalletManager.clearCacheForWallet(activeId)
+            val nextActive = metadata.firstOrNull()?.id
+            if (nextActive != null) {
+                secureStorage.putEncrypted(ACTIVE_WALLET_ID_KEY, nextActive)
+            } else {
+                secureStorage.remove(ACTIVE_WALLET_ID_KEY)
+                activeWalletManager.lockWallet()
+            }
         }
 
         override suspend fun sendTransaction(
@@ -451,7 +466,7 @@ class WalletRepositoryImpl @Inject constructor(
                         16
                     )
                         ?: throw IllegalStateException("Wallet is locked or key not found for this chain.")
-                val dataSource = dataSourceFactory.create(chainId)
+                val dataSource = dataSourceFactory.get().create(chainId)
                 val result = dataSource.sendTransaction(params, privateKey)
                 return@safeApiCall when (result) {
                     is ResultResponse.Success -> result.data
@@ -467,7 +482,7 @@ class WalletRepositoryImpl @Inject constructor(
                 val chainId = blockchainRegistry.getNetworkByName(networkName)
                 val userAddress = activeWalletManager.getAddressForNetwork(chainId?.chainId!!)
                     ?: throw IllegalStateException("Active wallet or address not found for network.")
-                val dataSource = dataSourceFactory.create(chainId.chainId!!)
+                val dataSource = dataSourceFactory.get().create(chainId.chainId!!)
                 val result = dataSource.getBalanceAssets(userAddress)
                 if (result is ResultResponse.Success) result.data else throw Exception("Failed to fetch assets")
             }
@@ -479,9 +494,38 @@ class WalletRepositoryImpl @Inject constructor(
         ): ResultResponse<List<TransactionRecord>> {
             return safeApiCall {
                 val chainId = blockchainRegistry.getNetworkByName(networkName)
-                val dataSource = dataSourceFactory.create(chainId?.chainId!!)
+                val dataSource = dataSourceFactory.get().create(chainId?.chainId!!)
                 val result = dataSource.getTransactionHistory(userAddress)
                 if (result is ResultResponse.Success) result.data else throw Exception("Failed to fetch history")
+            }
+        }
+
+        override suspend fun getUnifiedHistory(
+            addresses: List<HistoryAddress>,
+            cursor: String?,
+            limit: Int?
+        ): ResultResponse<HistoryPage> {
+            if (addresses.isEmpty()) {
+                return ResultResponse.Success(HistoryPage(emptyList(), nextCursor = null, hasMore = false))
+            }
+            return safeApiCall {
+                // PROXY is the source of truth — do NOT pre-filter on local config/bundle state. The
+                // carrier only exists to build the data source (whose transport matches the active
+                // mode); ProxyChainDataSource.getHistory ignores its own network and posts every
+                // (networkId,address) pair. Fall back to ANY registered network so a locally-unknown
+                // networkId still reaches the server, which authoritatively answers 404/UNSUPPORTED.
+                val carrier = addresses.firstNotNullOfOrNull { blockchainRegistry.getNetworkById(it.networkId) }
+                    ?: blockchainRegistry.getAllNetworks().firstOrNull()
+                    ?: throw ApiException(
+                        ApiError.NetworkNotFound,
+                        reasonFa = "No registered networks available to route the history request"
+                    )
+                val dataSource = dataSourceFactory.get().create(carrier)
+                val dtoAddresses = addresses.map { HistoryAddressDto(it.networkId, it.address) }
+                when (val result = dataSource.getHistory(dtoAddresses, cursor, limit)) {
+                    is ResultResponse.Success -> result.data
+                    is ResultResponse.Error -> throw result.exception
+                }
             }
         }
 
@@ -492,7 +536,7 @@ class WalletRepositoryImpl @Inject constructor(
             return safeApiCall {
                 val chainId = blockchainRegistry.getNetworkByName(networkName)
                     ?: throw IllegalStateException("Network not found")
-                val dataSource = dataSourceFactory.create(chainId.chainId!!)
+                val dataSource = dataSourceFactory.get().create(chainId.chainId!!)
                 when (val result = dataSource.getTransactionFeeDetails(txId)) {
                     is ResultResponse.Success -> result.data.toDomainModel()
                     is ResultResponse.Error -> throw result.exception
@@ -520,7 +564,7 @@ class WalletRepositoryImpl @Inject constructor(
                 try {
                     val chainConfig = blockchainRegistry.getNetworkByName(networkName)
                         ?: return@withContext ResultResponse.Error(Exception("Network not found"))
-                    val dataSource = dataSourceFactory.create(chainConfig.chainId!!)
+                    val dataSource = dataSourceFactory.get().create(chainConfig.chainId!!)
 
                     // Map<WalletId, Address>
                     val walletAddresses = mutableMapOf<String, String>()

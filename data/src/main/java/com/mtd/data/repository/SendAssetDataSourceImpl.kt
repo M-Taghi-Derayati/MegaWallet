@@ -11,10 +11,11 @@ import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.send.SendFeeQuote
 import java.math.BigDecimal
+import java.math.BigInteger
 import javax.inject.Inject
 
 class SendAssetDataSourceImpl @Inject constructor(
-    private val dataSourceFactory: ChainDataSourceFactory,
+    private val dataSourceFactory: dagger.Lazy<ChainDataSourceFactory>,
     private val blockchainRegistry: BlockchainRegistry
 ) : ISendAssetDataSource {
 
@@ -29,7 +30,7 @@ class SendAssetDataSourceImpl @Inject constructor(
             val senderAddress = wallet.keys.find { it.networkName == network.name }?.address
                 ?: return ResultResponse.Success(null)
 
-            when (val result = dataSourceFactory.create(network).getBalanceAssets(senderAddress)) {
+            when (val result = dataSourceFactory.get().create(network).getBalanceAssets(senderAddress)) {
                 is ResultResponse.Success -> {
                     val target = result.data.find {
                         if (asset.isNativeToken) {
@@ -65,7 +66,8 @@ class SendAssetDataSourceImpl @Inject constructor(
     override suspend fun estimateFees(
         wallet: Wallet,
         asset: AssetItem,
-        recipientAddress: String
+        recipientAddress: String,
+        amount: BigInteger
     ): ResultResponse<SendFeeQuote> {
         return try {
             val network = blockchainRegistry.getNetworkById(asset.networkId)
@@ -82,10 +84,11 @@ class SendAssetDataSourceImpl @Inject constructor(
             )
 
             when (
-                val result = dataSourceFactory.create(network).getFeeOptions(
+                val result = dataSourceFactory.get().create(network).getFeeOptions(
                     fromAddress = senderAddress,
                     toAddress = recipientAddress,
-                    asset = domainAsset
+                    asset = domainAsset,
+                    amount = amount
                 )
             ) {
                 is ResultResponse.Success -> ResultResponse.Success(

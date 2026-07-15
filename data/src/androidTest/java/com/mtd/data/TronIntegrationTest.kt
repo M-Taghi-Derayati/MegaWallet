@@ -84,7 +84,7 @@ class TronIntegrationTest {
             secureStorage = secureStorage,
             blockchainRegistry = blockchainRegistry,
             gson = gson,
-            dataSourceFactory = dataSourceFactory
+            dataSourceFactory = dagger.Lazy { dataSourceFactory }
         )
 
         // وارد کردن کیف پول و استخراج آدرس ترون
@@ -104,7 +104,7 @@ class TronIntegrationTest {
         println("--- 1. Testing Bitcoin Balance ---")
         userTronAddress
         // چون getAssets برای بیت‌کوین پیاده‌سازی نشده، مستقیماً getBalance از DataSource را تست می‌کنیم
-        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.create(728126428)
+        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.get().create(728126428)
 //        val result = dataSource.getBalancesForMultipleAddresses(listOf(userTronAddress))
         val result = dataSource.getFeeOptions("TTxKNiut92mkmURVvS7GB1o6Zjso6jrUnB","TNf1CXrskRfH72FheqszAY8TQ7qxdhrPeD", Asset(
             name = "",

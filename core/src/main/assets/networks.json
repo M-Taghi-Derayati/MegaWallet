@@ -24,7 +24,10 @@
     "networkType": "EVM",
     "chainId": 11155111,
     "derivationPath": "m/44'/60'/0'/0/0",
-    "rpcUrlsEvm": ["https://sepolia.drpc.org","https://rpc.sepolia.org","https://ethereum-sepolia-rpc.publicnode.com"],
+    "rpcUrlsEvm": [
+      "https://sepolia.drpc.org",
+      "https://rpc.sepolia.org",
+      "https://ethereum-sepolia-rpc.publicnode.com"],
     "explorers": ["https://eth-sepolia.blockscout.com/"],
     "webSocketUrl": "wss://sepolia.drpc.org",
     "currencySymbol": "ETH",
@@ -36,6 +39,142 @@
     "regex": "/^0x[a-fA-F0-9]{40}$/",
     "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
     "faName": "سپولیا"
+  },
+  {
+    "id": "bsc_testnet",
+    "name": "BSCTESTNET",
+    "networkType": "EVM",
+    "chainId": 97,
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrlsEvm": [
+      "https://bsc-testnet-rpc.publicnode.com",
+      "https://data-seed-prebsc-1-s1.binance.org:8545",
+      "https://bsc-testnet.drpc.org"
+    ],
+    "webSocketUrl": "wss://bsc-testnet.drpc.org",
+    "explorers": ["https://bsc-testnet-explorer-api.nodereal.io/"],
+    "decimals": 18,
+    "currencySymbol": "tBNB",
+    "isTestnet": true,
+    "addressPrefix": "0x",
+    "supportsGasless": true,
+    "regex": "/^0x[a-fA-F0-9]{40}$/",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png",
+    "color": "#F3BA2F",
+    "faName": "تست ‌نت بایننس"
+  },
+  {
+    "id": "bsc_mainnet",
+    "name": "BSC",
+    "networkType": "EVM",
+    "chainId": 56,
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrlsEvm": [
+      "https://bsc-rpc.publicnode.com/",
+      "https://public-bsc-mainnet.fastnode.io/",
+      "https://public-bsc.nownodes.io/"
+    ],
+    "webSocketUrl": "wss://bsc-ws-node.binance.org",
+    "explorers": ["https://bsc-explorer-api.nodereal.io/"],
+    "decimals": 18,
+    "currencySymbol": "BNB",
+    "addressPrefix": "0x",
+    "supportsGasless": true,
+    "isTestnet": false,
+    "regex": "/^0x[a-fA-F0-9]{40}$/",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png",
+    "color": "#F3BA2F",
+    "faName": "بایننس اسمارت چین"
+  },
+  {
+    "id": "base_sepolia",
+    "name": "BASESEPOLIA",
+    "networkType": "EVM",
+    "chainId": 84532,
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrlsEvm": [
+      "https://base-sepolia.publicnode.com",
+      "https://sepolia.base.org",
+      "https://base-sepolia-rpc.publicnode.com"
+    ],
+    "webSocketUrl": "wss://base-sepolia-rpc.publicnode.com",
+    "explorers": ["https://base-sepolia.blockscout.com/"],
+    "decimals": 18,
+    "currencySymbol": "ETH",
+    "isTestnet": true,
+    "addressPrefix": "0x",
+    "supportsGasless": true,
+    "regex": "/^0x[a-fA-F0-9]{40}$/",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/27717.png",
+    "color": "#0052FF",
+    "faName": "بیس سپولیا"
+  },
+  {
+    "id": "base_mainnet",
+    "name": "BASE",
+    "networkType": "EVM",
+    "chainId": 8453,
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrlsEvm": [
+      "https://base-rpc.publicnode.com",
+      "https://base.drpc.org"
+    ],
+    "webSocketUrl": "wss://base.publicnode.com",
+    "explorers": ["https://base.blockscout.com/"],
+    "decimals": 18,
+    "currencySymbol": "ETH",
+    "addressPrefix": "0x",
+    "supportsGasless": true,
+    "isTestnet": false,
+    "regex": "/^0x[a-fA-F0-9]{40}$/",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/27717.png",
+    "color": "#0052FF",
+    "faName": "بیس"
+  },
+  {
+    "id": "arb_sepolia",
+    "name": "ARBSEPOLIA",
+    "networkType": "EVM",
+    "chainId": 421614,
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrlsEvm": [
+      "https://arbitrum-sepolia.publicnode.com",
+      "https://sepolia.arbiscan.io",
+      "https://arbitrum-sepolia-rpc.publicnode.com"
+    ],
+    "webSocketUrl": "wss://arbitrum-sepolia-rpc.publicnode.com",
+    "explorers": ["https://arbitrum-sepolia.blockscout.com/"],
+    "decimals": 18,
+    "currencySymbol": "ETH",
+    "isTestnet": true,
+    "addressPrefix": "0x",
+    "supportsGasless": true,
+    "regex": "/^0x[a-fA-F0-9]{40}$/",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/27717.png",
+    "color": "#05163D",
+    "faName": "اربیتروم سپولیا"
+  },
+  {
+    "id": "arb_mainnet",
+    "name": "ARBITRUM",
+    "networkType": "EVM",
+    "chainId": 42161,
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "rpcUrlsEvm": [
+      "https://arbitrum-one-rpc.publicnode.com",
+      "https://arbitrum.drpc.org"
+    ],
+    "webSocketUrl": "wss://arbitrum.publicnode.com",
+    "explorers": ["https://arbitrum.blockscout.com/"],
+    "decimals": 18,
+    "currencySymbol": "ETH",
+    "addressPrefix": "0x",
+    "supportsGasless": true,
+    "isTestnet": false,
+    "regex": "/^0x[a-fA-F0-9]{40}$/",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/27717.png",
+    "color": "#05163D",
+    "faName": "بیس"
   },
   {
     "id": "tron_mainnet",
@@ -304,96 +443,6 @@
       "color": "#345D9D",
       "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/2.png",
       "faName": "تست‌ نت لایت ‌کوین"
-    },
-  {
-    "id": "bsc_testnet",
-    "name": "BSCTESTNET",
-    "networkType": "EVM",
-    "chainId": 97,
-    "derivationPath": "m/44'/60'/0'/0/0",
-    "rpcUrlsEvm": [
-      "https://bsc-testnet-rpc.publicnode.com",
-      "https://data-seed-prebsc-1-s1.binance.org:8545",
-      "https://bsc-testnet.drpc.org"
-    ],
-    "webSocketUrl": "wss://bsc-testnet.drpc.org",
-    "explorers": ["https://bsc-testnet-explorer-api.nodereal.io/"],
-    "decimals": 18,
-    "currencySymbol": "tBNB",
-    "isTestnet": true,
-    "addressPrefix": "0x",
-    "supportsGasless": true,
-    "regex": "/^0x[a-fA-F0-9]{40}$/",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png",
-    "color": "#F3BA2F",
-    "faName": "تست ‌نت بایننس"
-  },
-  {
-    "id": "bsc_mainnet",
-    "name": "BSC",
-    "networkType": "EVM",
-    "chainId": 56,
-    "derivationPath": "m/44'/60'/0'/0/0",
-    "rpcUrlsEvm": [
-      "https://bsc-rpc.publicnode.com/",
-      "https://public-bsc-mainnet.fastnode.io/",
-      "https://public-bsc.nownodes.io/"
-    ],
-    "webSocketUrl": "wss://bsc-ws-node.binance.org",
-    "explorers": ["https://bsc-explorer-api.nodereal.io/"],
-    "decimals": 18,
-    "currencySymbol": "BNB",
-    "addressPrefix": "0x",
-    "supportsGasless": true,
-    "isTestnet": false,
-    "regex": "/^0x[a-fA-F0-9]{40}$/",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png",
-    "color": "#F3BA2F",
-    "faName": "بایننس اسمارت چین"
-  },
-  {
-    "id": "base_sepolia",
-    "name": "BASESEPOLIA",
-    "networkType": "EVM",
-    "chainId": 84532,
-    "derivationPath": "m/44'/60'/0'/0/0",
-    "rpcUrlsEvm": [
-      "https://sepolia.base.org",
-      "https://base-sepolia.publicnode.com",
-      "https://base-sepolia-rpc.publicnode.com"
-    ],
-    "webSocketUrl": "wss://base-sepolia-rpc.publicnode.com",
-    "explorers": ["https://base-sepolia.blockscout.com/"],
-    "decimals": 18,
-    "currencySymbol": "ETH",
-    "isTestnet": true,
-    "addressPrefix": "0x",
-    "supportsGasless": true,
-    "regex": "/^0x[a-fA-F0-9]{40}$/",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/27717.png",
-    "color": "#0052FF",
-    "faName": "بیس سپولیا"
-  },
-  {
-    "id": "base_mainnet",
-    "name": "BASE",
-    "networkType": "EVM",
-    "chainId": 8453,
-    "derivationPath": "m/44'/60'/0'/0/0",
-    "rpcUrlsEvm": [
-      "https://base-rpc.publicnode.com",
-      "https://base.drpc.org"
-    ],
-    "webSocketUrl": "wss://base.publicnode.com",
-    "explorers": ["https://base.blockscout.com/"],
-    "decimals": 18,
-    "currencySymbol": "ETH",
-    "addressPrefix": "0x",
-    "supportsGasless": true,
-    "isTestnet": false,
-    "regex": "/^0x[a-fA-F0-9]{40}$/",
-    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/27717.png",
-    "color": "#0052FF",
-    "faName": "بیس"
-  }
+    }
+
 ]

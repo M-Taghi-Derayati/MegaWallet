@@ -83,8 +83,9 @@ class CacheManager @Inject constructor(
     ) = withContext(Dispatchers.IO) {
         try {
             Timber.d("💾 CacheManager.put: key=$key, ttl=${ttl}ms")
-            
-            // 1. Put in memory cache
+
+            // 1. Put in memory cache (bounding its size first so it can't grow unbounded)
+            if (!memoryCache.containsKey(key)) evictIfOverCapacity()
             @Suppress("UNCHECKED_CAST")
             memoryCache[key] = CacheEntry(value as Any, System.currentTimeMillis() + ttl)
             Timber.d("✅ Added to memory cache: $key")
@@ -123,8 +124,25 @@ class CacheManager @Inject constructor(
     suspend fun clearExpired() = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         memoryCache.entries.removeAll { it.value.expiresAt < now }
-        
+
         // Disk cache cleanup می‌تواند در background انجام شود
+    }
+
+    /**
+     * TASK-20 — keep the in-memory cache bounded. First drop anything already expired; if that isn't
+     * enough, evict the soonest-to-expire entries (approximate LRU) until there is room. Safe to evict
+     * live entries: the cache is best-effort, so a miss just re-fetches.
+     */
+    private fun evictIfOverCapacity() {
+        if (memoryCache.size < MAX_MEMORY_ENTRIES) return
+
+        val now = System.currentTimeMillis()
+        memoryCache.entries.removeAll { it.value.expiresAt < now }
+
+        while (memoryCache.size >= MAX_MEMORY_ENTRIES) {
+            val soonestToExpire = memoryCache.entries.minByOrNull { it.value.expiresAt } ?: break
+            memoryCache.remove(soonestToExpire.key)
+        }
     }
 
     /**
@@ -143,7 +161,11 @@ class CacheManager @Inject constructor(
 
    companion object {
         private const val DEFAULT_TTL = 5 * 60 * 1000L // 5 minutes
-         const val ASSETS_TTL = 5 *24* 3600 * 1000000L // 5 Days
+        // TASK-20: `ASSETS_TTL` lives on IAppCacheStore (single source of truth); the duplicate that
+        // used to sit here (with the ×1_000_000 bug) was removed.
+        // Upper bound on in-memory entries so the cache can't grow without limit; oldest-expiring
+        // entries are evicted first when the cap is reached (a cache miss just triggers a re-fetch).
+        private const val MAX_MEMORY_ENTRIES = 256
     }
 
     /**

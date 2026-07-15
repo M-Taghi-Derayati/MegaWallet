@@ -4,27 +4,25 @@ import com.google.gson.annotations.SerializedName
 import java.math.BigDecimal
 
 data class HistoricalOhlcResponse(
-    @SerializedName("Data") val data: List<OhlcCandle>? = null,
-    @SerializedName("Response") val response: String? = null)
+    @SerializedName("data") val data: List<OhlcCandle>? = null)
 
 data class OhlcCandle(
-    @SerializedName("TIMESTAMP") val timestamp: Long? = null,
-    @SerializedName("QUOTE") val quote: String? = null,
-    @SerializedName("OPEN") val open: Double? = null,
-    @SerializedName("CLOSE") val close: Double? = null
+    @SerializedName("priceUsd") val priceUsd: String? = null,
+    @SerializedName("time") val time: Long? = null,
+
 )
 
 data class AssetPriceResponse(
-    @SerializedName("Data")
-    val data: Map<String, AssetPriceDataDto>
+    @SerializedName("data")
+    val data: List< AssetPriceDataDto>
 )
 
 data class AssetPriceDataDto(
-    @SerializedName("BASE")
-    val assetId: String? = null,
-    @SerializedName("PRICE")
+    @SerializedName("symbol")
+    val assetId: String,
+    @SerializedName("priceUsd")
     val priceUsd: BigDecimal,
-    @SerializedName("MOVING_24_HOUR_CHANGE_PERCENTAGE")
+    @SerializedName("changePercent24Hr")
     val priceChanges24h: BigDecimal
 )
 

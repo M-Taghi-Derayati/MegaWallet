@@ -19,6 +19,8 @@ import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.domain.model.assets.AssetConfig
 import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkName.ARBITRUM
+import com.mtd.domain.model.core.NetworkName.ARBSEPOLIA
 import com.mtd.domain.model.core.NetworkName.BASE
 import com.mtd.domain.model.core.NetworkName.BASESEPOLIA
 import com.mtd.domain.model.core.NetworkName.BSC
@@ -54,7 +56,6 @@ import timber.log.Timber
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicInteger
 
 class EvmDataSource(
     private val network: BlockchainNetwork,
@@ -67,12 +68,10 @@ class EvmDataSource(
         private const val RPC_FAILOVER_TIMEOUT_MS = 15_000L
     }
 
-    private val currentRpcIndex = AtomicInteger(0)
-    private var currentWeb3j: Web3j? = null
-
-
     object Web3jFactory {
-        private val cache = mutableMapOf<String, Web3j>()
+        // TASK-20: ConcurrentHashMap (was a plain mutableMapOf) — data sources are hit from concurrent
+        // coroutines, so a non-thread-safe map here could corrupt/throw on parallel getOrCreate.
+        private val cache = java.util.concurrent.ConcurrentHashMap<String, Web3j>()
 
         fun getOrCreate(rpcUrl: String, okHttpClient: OkHttpClient): Web3j {
             return cache.getOrPut(rpcUrl) {
@@ -81,17 +80,6 @@ class EvmDataSource(
         }
     }
 
-
-    @Synchronized
-    private fun getOrUpdateWeb3j(): Web3j {
-        if (currentWeb3j == null) {
-            val index = currentRpcIndex.get() % network.RpcUrlsEvm.size
-            val rpcUrl = network.RpcUrlsEvm[index]
-            Timber.i("Initializing Web3j with RPC: $rpcUrl")
-            currentWeb3j = Web3j.build(HttpService(rpcUrl, okHttpClient, false))
-        }
-        return currentWeb3j!!
-    }
 
     private suspend fun <T> executeWithFailover(block: suspend (Web3j) -> T): T {
         var lastException: Exception? = null
@@ -121,7 +109,7 @@ class EvmDataSource(
         for (explorer in network.explorers) {
             try {
                 val result = when (network.name) {
-                    ETHEREUM, SEPOLIA, BASE, BASESEPOLIA, POLTESTNET -> fetchEVMTransactions(explorer, address)
+                    ETHEREUM, SEPOLIA,ARBITRUM, ARBSEPOLIA, BASE, BASESEPOLIA, POLTESTNET -> fetchEVMTransactions(explorer, address)
                     BSC, BSCTESTNET -> fetchBscScanTransactions(explorer, address)
                     else -> null
                 }
@@ -412,14 +400,30 @@ class EvmDataSource(
         return executeWithFailover { web3j -> web3j.ethGasPrice().sendAsync().await().gasPrice }
     }
 
-    private suspend fun estimateGasLimit(from: String, to: String, data: String? = null): BigInteger {
+    private suspend fun estimateGasLimit(
+        from: String,
+        to: String,
+        value: BigInteger,
+        data: String? = null,
+        fallbackGasLimit: BigInteger = BigInteger("150000")
+    ): BigInteger {
+        if (from.isBlank() || to.isBlank()) return fallbackGasLimit
+
         return executeWithFailover { web3j ->
-            val transaction = Transaction.createEthCallTransaction(from, to, data ?: "")
+            val transaction = Transaction(
+                from,
+                null, // nonce
+                null, // gasPrice
+                null, // gasLimit
+                to,
+                value,
+                data
+            )
             try {
                 val estimate = web3j.ethEstimateGas(transaction).sendAsync().await()
-                if (estimate.hasError()) BigInteger("150000") 
+                if (estimate.hasError()) fallbackGasLimit
                 else (estimate.amountUsed.toBigDecimal() * BigDecimal("1.2")).toBigInteger()
-            } catch (e: Exception) { BigInteger("150000") }
+            } catch (e: Exception) { fallbackGasLimit }
         }
     }
 
@@ -433,16 +437,33 @@ class EvmDataSource(
         }
     }
 
-    override suspend fun getFeeOptions(fromAddress: String?, toAddress: String?, asset: Asset?): ResultResponse<List<FeeData>> {
+    override suspend fun getFeeOptions(
+        fromAddress: String?,
+        toAddress: String?,
+        asset: Asset?,
+        amount: BigInteger?
+    ): ResultResponse<List<FeeData>> {
         return try {
             val networkGasPrice = getGasPrice()
             val networkPriorityFee = getPriorityFee()
+            val transferAmount = amount?.takeIf { it > BigInteger.ZERO } ?: BigInteger.ONE
+            val recipientAddress = toAddress ?: ""
 
             val gasLimit: BigInteger = if (asset?.contractAddress == null) {
-                BigInteger.valueOf(21_000L)
+                estimateGasLimit(
+                    from = fromAddress ?: "",
+                    to = recipientAddress,
+                    value = transferAmount,
+                    fallbackGasLimit = BigInteger.valueOf(21_000L)
+                )
             } else {
-                val function = Function("transfer", listOf(Address(toAddress), Uint256(BigInteger.ONE)), emptyList())
-                estimateGasLimit(fromAddress ?: "", asset.contractAddress!!, FunctionEncoder.encode(function))
+                val function = Function("transfer", listOf(Address(recipientAddress), Uint256(transferAmount)), emptyList())
+                estimateGasLimit(
+                    from = fromAddress ?: "",
+                    to = asset.contractAddress!!,
+                    value = BigInteger.ZERO,
+                    data = FunctionEncoder.encode(function)
+                )
             }
             // ضرایب منطقی برای لایه ۲ (باعث می‌شود قیمت خیلی فضایی نشود اما تایید تراکنش تضمین شود)
             val normalMaxFee = networkGasPrice.multiply(BigInteger.valueOf(120)).divide(BigInteger.valueOf(100))
@@ -456,10 +477,12 @@ class EvmDataSource(
 
 // محاسبه هزینه L1 با ضریب اطمینان ۱۰ درصدی برای پوشش نوسانات لحظه‌ای
             val rawL1Fee = if (isL2StackOptimism()) {
+                val txTarget = asset?.contractAddress ?: recipientAddress
+                val txValue = if (asset?.contractAddress == null) transferAmount else BigInteger.ZERO
                 val txData = if (asset?.contractAddress == null) "" else {
-                    FunctionEncoder.encode(Function("transfer", listOf(Address(toAddress ?: "0x0000000000000000000000000000000000000000"), Uint256(BigInteger.ONE)), emptyList()))
+                    FunctionEncoder.encode(Function("transfer", listOf(Address(recipientAddress), Uint256(transferAmount)), emptyList()))
                 }
-                getL1DataFee(toAddress ?: "0x0000000000000000000000000000000000000000", BigInteger.ONE, txData)
+                getL1DataFee(txTarget, txValue, txData)
             } else {
                 BigInteger.ZERO
             }
@@ -502,8 +525,6 @@ class EvmDataSource(
         }
     }
 
-    override fun getWeb3jInstance(): Web3j = getOrUpdateWeb3j()
-
     private fun isL2StackOptimism(): Boolean {
         return network.name == BASE || network.name == BASESEPOLIA
     }
@@ -523,7 +544,7 @@ class EvmDataSource(
                 val encodedTx = TransactionEncoder.encode(dummyRawTx)
 
                 val function = Function(
-                    "getL1Fee",
+                    "getL1CalldataGas",
                     listOf(DynamicBytes(encodedTx)),
                     listOf(object : TypeReference<Uint256>() {})
                 )
@@ -539,9 +560,9 @@ class EvmDataSource(
                     BigInteger.ZERO
                 } else {
                     try {
-                        val hexResult = response.result
-                        if (hexResult != null && hexResult.startsWith("0x")) {
-                            BigInteger(hexResult.substring(2), 16)
+                        val hexResult = response.result?.removePrefix("0x")
+                        if (!hexResult.isNullOrBlank()) {
+                            hexResult.toBigIntegerOrNull(16) ?: BigInteger.ZERO
                         } else {
                             BigInteger.ZERO
                         }

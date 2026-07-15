@@ -2,6 +2,7 @@ package com.mtd.domain.interfaceRepository
 
 import com.mtd.domain.model.EvmSponsorApproveResult
 import com.mtd.domain.model.EvmSponsorMode
+import com.mtd.domain.model.EvmApproveQuoteResult
 import com.mtd.domain.model.GaslessDisplayPreview
 import com.mtd.domain.model.GaslessEligibilityResult
 import com.mtd.domain.model.GaslessFinalResult
@@ -57,6 +58,10 @@ interface IUnifiedTransferCoordinator {
     suspend fun quoteTronApproveRequirement(
         session: UnifiedGaslessSession
     ): ResultResponse<TronApproveQuoteResult>
+
+    suspend fun quoteEvmApproveRequirement(
+        session: UnifiedGaslessSession
+    ): ResultResponse<EvmApproveQuoteResult>
 
     suspend fun requestEvmSponsorForApprove(
         session: UnifiedGaslessSession,

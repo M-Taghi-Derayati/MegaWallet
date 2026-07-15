@@ -23,7 +23,7 @@ class AssetDetailViewModel @Inject constructor(
     private val _asset = MutableStateFlow<AssetItem?>(null)
     val asset = _asset.asStateFlow()
 
-    private val _chartData = MutableStateFlow<List<Pair<Long, Double>>>(emptyList())
+    private val _chartData = MutableStateFlow<List<Pair<Long, String>>>(emptyList())
     val chartData = _chartData.asStateFlow()
 
     private val _isLoadingChart = MutableStateFlow(false)
@@ -50,21 +50,21 @@ class AssetDetailViewModel @Inject constructor(
 
     fun setAsset(assetItem: AssetItem) {
         _asset.value = assetItem
-        loadChartData(assetItem.symbol.lowercase())
+        loadChartData(assetItem.name.lowercase())
     }
 
     fun onTimeFrameSelected(days: String) {
         if (_selectedTimeFrame.value == days) return
         _selectedTimeFrame.value = days
-        val baseSymbol = _asset.value?.symbol?.lowercase() ?: return
+        val baseSymbol = _asset.value?.name?.lowercase() ?: return
 
         loadChartData(baseSymbol, days)
     }
 
-    private fun loadChartData(baseSymbol: String, days: String = _selectedTimeFrame.value) {
+    private fun loadChartData(coinName: String, days: String = _selectedTimeFrame.value) {
         launchSafe {
             _isLoadingChart.value = true
-            _chartData.value = loadAssetChartPointsUseCase(baseSymbol, days)
+            _chartData.value = loadAssetChartPointsUseCase(coinName, days)
             _isLoadingChart.value = false
         }
     }

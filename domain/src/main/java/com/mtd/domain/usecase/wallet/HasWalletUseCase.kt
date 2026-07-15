@@ -4,9 +4,9 @@ import com.mtd.domain.interfaceRepository.IWalletRepository
 import javax.inject.Inject
 
 class HasWalletUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(): Boolean {
-        return walletRepository.hasWallet()
+        return walletRepository.get().hasWallet()
     }
 }

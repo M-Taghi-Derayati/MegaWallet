@@ -12,79 +12,79 @@ import com.mtd.domain.model.core.Wallet
 import javax.inject.Inject
 
 class GetAllWalletsUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
-    suspend operator fun invoke(): ResultResponse<List<Wallet>> = walletRepository.getAllWallets()
+    suspend operator fun invoke(): ResultResponse<List<Wallet>> = walletRepository.get().getAllWallets()
 }
 
 class LoadExistingWalletUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(): ResultResponse<Wallet?> {
-        return walletRepository.loadExistingWallet()
+        return walletRepository.get().loadExistingWallet()
     }
 }
 
 class GetBalancesForMultipleWalletsUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(
         networkName: NetworkName,
         walletIds: List<String>
     ): ResultResponse<Map<String, List<Asset>>> {
-        return walletRepository.getBalancesForMultipleWallets(networkName, walletIds)
+        return walletRepository.get().getBalancesForMultipleWallets(networkName, walletIds)
     }
 }
 
 class SwitchActiveWalletUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(walletId: String): ResultResponse<Unit> {
-        return walletRepository.switchActiveWallet(walletId)
+        return walletRepository.get().switchActiveWallet(walletId)
     }
 }
 
 class DeleteWalletUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(walletId: String): ResultResponse<Unit> {
-        return walletRepository.deleteWallet(walletId)
+        return walletRepository.get().deleteWallet(walletId)
     }
 }
 
 class UpdateWalletBackupStatusUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(
         walletId: String,
         manual: Boolean? = null,
         cloud: Boolean? = null
     ): ResultResponse<Unit> {
-        return walletRepository.updateBackupStatus(walletId, manual, cloud)
+        return walletRepository.get().updateBackupStatus(walletId, manual, cloud)
     }
 }
 
 class UpdateWalletNameUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(walletId: String, newName: String): ResultResponse<Unit> {
-        return walletRepository.updateWalletName(walletId, newName)
+        return walletRepository.get().updateWalletName(walletId, newName)
     }
 }
 
 class UpdateWalletColorUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(walletId: String, newColor: Int): ResultResponse<Unit> {
-        return walletRepository.updateWalletColor(walletId, newColor)
+        return walletRepository.get().updateWalletColor(walletId, newColor)
     }
 }
 
 class GetWalletMnemonicUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(walletId: String): String? {
-        return when (val result = walletRepository.getMnemonic(walletId)) {
+        return when (val result = walletRepository.get().getMnemonic(walletId)) {
             is ResultResponse.Success -> result.data
             is ResultResponse.Error -> null
         }
@@ -104,7 +104,7 @@ class HasCloudBackupUseCase @Inject constructor(
 }
 
 class CreateOrImportWalletUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(
         name: String,
@@ -114,7 +114,7 @@ class CreateOrImportWalletUseCase @Inject constructor(
         isCloudRestoreFlow: Boolean = false
     ): ResultResponse<Wallet> {
         return when (importData) {
-            is ImportData.Mnemonic -> walletRepository.importWalletFromMnemonic(
+            is ImportData.Mnemonic -> walletRepository.get().importWalletFromMnemonic(
                 mnemonic = importData.words.joinToString(" "),
                 name = name,
                 color = color,
@@ -122,7 +122,7 @@ class CreateOrImportWalletUseCase @Inject constructor(
                 isManualBackedUp = !isCloudRestoreFlow,
                 isCloudBackedUp = isCloudRestoreFlow
             )
-            is ImportData.PrivateKey -> walletRepository.importWalletFromPrivateKey(
+            is ImportData.PrivateKey -> walletRepository.get().importWalletFromPrivateKey(
                 privateKey = importData.key,
                 name = name,
                 color = color,
@@ -130,7 +130,7 @@ class CreateOrImportWalletUseCase @Inject constructor(
                 isManualBackedUp = !isCloudRestoreFlow,
                 isCloudBackedUp = isCloudRestoreFlow
             )
-            null -> walletRepository.createNewWallet(
+            null -> walletRepository.get().createNewWallet(
                 name = name,
                 color = color
             )
@@ -201,18 +201,18 @@ class DeleteCloudBackupUseCase @Inject constructor(
 }
 
 class BackupWalletToCloudUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository,
+    private val walletRepository: dagger.Lazy<IWalletRepository>,
     private val backupCloudWalletMetadataUseCase: BackupCloudWalletMetadataUseCase
 ) {
     suspend operator fun invoke(walletId: String, password: String): ResultResponse<Unit> {
-        val wallet = when (val walletsResult = walletRepository.getAllWallets()) {
+        val wallet = when (val walletsResult = walletRepository.get().getAllWallets()) {
             is ResultResponse.Success -> walletsResult.data.firstOrNull { it.id == walletId }
                 ?: return ResultResponse.Error(IllegalStateException("Wallet not found"))
 
             is ResultResponse.Error -> return ResultResponse.Error(walletsResult.exception)
         }
 
-        val secret = when (val secretResult = walletRepository.getMnemonic(walletId)) {
+        val secret = when (val secretResult = walletRepository.get().getMnemonic(walletId)) {
             is ResultResponse.Success -> secretResult.data
                 ?: return ResultResponse.Error(IllegalStateException("Wallet secret not found"))
 

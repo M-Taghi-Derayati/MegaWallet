@@ -1,11 +1,11 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
     namespace = "com.mtd.common_ui"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
 
@@ -27,8 +27,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 }
 
@@ -39,11 +41,21 @@ dependencies {
 
     api(libs.bundles.coil)
     api(libs.qrgen)
-    api(libs.rxbinding)
     api(libs.slidetoact)
     api(libs.splash)
-    implementation(libs.material)
+    // این خطوط را به dependencies ماژول common_ui اضافه کن:
+    val composeBom = platform(libs.compose.bom)
+    implementation(composeBom)
 
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+
+    implementation(libs.compose.foundation)
+
+// ابزار پیش‌نمایش در حالت دیباگ برای این ماژول هم لازم است
+    debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

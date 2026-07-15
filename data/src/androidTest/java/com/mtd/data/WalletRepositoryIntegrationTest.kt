@@ -69,7 +69,7 @@ class WalletRepositoryIntegrationTest {
         keyManager = KeyManager(blockchainRegistry)
 
         // نمونه واقعی از Repository را با وابستگی‌های واقعی می‌سازیم
-        walletRepository = WalletRepositoryImpl(keyManager, secureStorage,activeWalletManager,blockchainRegistry,gson,chainDataSourceFactory)
+        walletRepository = WalletRepositoryImpl(keyManager, secureStorage,activeWalletManager,blockchainRegistry,gson,dagger.Lazy{chainDataSourceFactory})
 
         // قبل از هر تست، مطمئن می‌شویم که هیچ کیف پولی از تست قبلی باقی نمانده
         runTest { walletRepository.deleteWallet() }

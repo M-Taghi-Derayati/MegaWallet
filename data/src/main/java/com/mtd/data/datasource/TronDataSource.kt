@@ -60,26 +60,15 @@ class TronDataSource(
     }
 
     object Web3jFactory {
-        private val cache = mutableMapOf<String, Web3j>()
+        // TASK-20: ConcurrentHashMap (was a plain mutableMapOf) — data sources are hit from concurrent
+        // coroutines, so a non-thread-safe map here could corrupt/throw on parallel getOrCreate.
+        private val cache = java.util.concurrent.ConcurrentHashMap<String, Web3j>()
 
         fun getOrCreate(rpcUrl: String, okHttpClient: OkHttpClient): Web3j {
             return cache.getOrPut(rpcUrl) {
                 Web3j.build(HttpService(rpcUrl, okHttpClient, false))
             }
         }
-    }
-
-    private var currentWeb3j: Web3j? = null
-
-    @Synchronized
-    private fun getOrUpdateWeb3j(): Web3j {
-        if (currentWeb3j == null) {
-            val rpcUrl = network.RpcUrls.firstOrNull()
-                ?: throw IllegalStateException("No RPC configured for ${network.id}")
-            Timber.i("Initializing TRON Web3j with RPC: $rpcUrl")
-            currentWeb3j = Web3jFactory.getOrCreate(rpcUrl, okHttpClient)
-        }
-        return currentWeb3j!!
     }
 
     private suspend fun <T> executeWithFailover(block: suspend (Web3j) -> T): T {
@@ -314,7 +303,8 @@ class TronDataSource(
     override suspend fun getFeeOptions(
         fromAddress: String?,
         toAddress: String?,
-        asset: Asset?
+        asset: Asset?,
+        amount: BigInteger?
     ): ResultResponse<List<FeeData>> {
         return try {
             if (fromAddress == null || toAddress == null) throw Exception("Addresses required")
@@ -548,10 +538,6 @@ class TronDataSource(
                 }
             }
         }
-    }
-
-    override fun getWeb3jInstance(): Web3j {
-        return getOrUpdateWeb3j()
     }
 
     private fun encodeTransferParams(toAddress: String, amount: BigInteger): String {

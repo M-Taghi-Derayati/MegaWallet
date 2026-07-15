@@ -1,6 +1,5 @@
 package com.mtd.data.datasource
 
-import com.fasterxml.jackson.databind.JsonNode
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.data.datasource.IChainDataSource.FeeData
 import com.mtd.data.dto.PushTxRequest
@@ -37,13 +36,13 @@ import org.bitcoinj.crypto.TransactionSignature
 import org.bitcoinj.script.Script.parse
 import org.bitcoinj.script.ScriptBuilder
 import org.bitcoinj.script.ScriptBuilder.createOutputScript
-import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.Request
 import org.web3j.protocol.core.Response
 import org.web3j.protocol.http.HttpService
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import timber.log.Timber
+import tools.jackson.databind.JsonNode
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
@@ -165,7 +164,7 @@ class BitcoinDataSource(
     private fun jsonNodeToValue(node: JsonNode): Any? {
         return when {
             node.isNull -> null
-            node.isObject -> node.fields().asSequence().associate { (key, value) ->
+            node.isObject -> node.properties().associate { (key, value) ->
                 key to jsonNodeToValue(value)
             }
             node.isArray -> node.map { child -> jsonNodeToValue(child) }
@@ -359,7 +358,8 @@ class BitcoinDataSource(
     override suspend fun getFeeOptions(
         fromAddress: String?,
         toAddress: String?,
-        asset: Asset?
+        asset: Asset?,
+        amount: BigInteger?
     ): ResultResponse<List<FeeData>> {
         return withContext(Dispatchers.IO) {
             runCatching {
@@ -377,10 +377,6 @@ class BitcoinDataSource(
                 onFailure = { ResultResponse.Error(it) }
             )
         }
-    }
-
-    override fun getWeb3jInstance(): Web3j {
-        throw UnsupportedOperationException("Web3j is not available for UTXO data source")
     }
 
     override suspend fun getBalanceAssets(address: String): ResultResponse<List<Asset>> {

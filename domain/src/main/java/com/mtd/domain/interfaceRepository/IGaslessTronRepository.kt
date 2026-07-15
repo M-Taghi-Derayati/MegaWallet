@@ -17,18 +17,22 @@ import com.mtd.domain.model.TronSponsorApproveResult
 import java.math.BigInteger
 
 interface IGaslessTronRepository {
+    // Phase 3 (routing convergence): relayer calls carry the data-driven `relayPrefix`
+    // (defaults to the TVM family path "tron"; coordinator resolves it from networkId).
     suspend fun prepare(
         userAddress: String,
-        startNonce: BigInteger? = null
+        startNonce: BigInteger? = null,
+        relayPrefix: String = "tron"
     ): ResultResponse<GaslessPrepareData>
 
-    suspend fun quote(request: GaslessQuoteRequest): ResultResponse<GaslessQuoteData>
+    suspend fun quote(request: GaslessQuoteRequest, relayPrefix: String = "tron"): ResultResponse<GaslessQuoteData>
     suspend fun submitRelay(
         payload: GaslessRelayPayload,
-        idempotencyKey: String
+        idempotencyKey: String,
+        relayPrefix: String = "tron"
     ): ResultResponse<GaslessQueuedTx>
 
-    suspend fun getTxStatus(txId: String): ResultResponse<GaslessTxStatus>
+    suspend fun getTxStatus(txId: String, relayPrefix: String = "tron"): ResultResponse<GaslessTxStatus>
 
     suspend fun getAllowance(
         networkId: String,
@@ -42,15 +46,22 @@ interface IGaslessTronRepository {
         relayerContractAddress: String
     ): ResultResponse<String>
 
-    suspend fun getSupportedTokens(): ResultResponse<List<GaslessSupportedToken>>
+    suspend fun getSupportedTokens(relayPrefix: String = "tron"): ResultResponse<List<GaslessSupportedToken>>
 
     suspend fun checkEligibility(
         service: GaslessServiceType,
         userAddress: String,
-        tokenAddress: String
+        tokenAddress: String,
+        relayPrefix: String = "tron"
     ): ResultResponse<GaslessEligibilityResult>
 
-    suspend fun quoteApprove(request: TronApproveQuoteRequest): ResultResponse<TronApproveQuoteResult>
+    suspend fun quoteApprove(
+        request: TronApproveQuoteRequest,
+        relayPrefix: String = "tron"
+    ): ResultResponse<TronApproveQuoteResult>
 
-    suspend fun sponsorApprove(request: TronSponsorApproveRequest): ResultResponse<TronSponsorApproveResult>
+    suspend fun sponsorApprove(
+        request: TronSponsorApproveRequest,
+        relayPrefix: String = "tron"
+    ): ResultResponse<TronSponsorApproveResult>
 }

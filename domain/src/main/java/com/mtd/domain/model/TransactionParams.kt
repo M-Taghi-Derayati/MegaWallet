@@ -10,14 +10,17 @@ sealed class TransactionParams {
         val amount: BigInteger,
         val data: String? = null,
         val gasPrice: BigInteger,
-        val gasLimit: BigInteger
+        val gasLimit: BigInteger,
+        val assetId: String? = null,
+        val feeLevel: String? = null
     ) : TransactionParams()
 
     data class Utxo(
         val chainId: Long,
         val toAddress: String,
         val amountInSatoshi: Long,
-        val feeRateInSatsPerByte: Long
+        val feeRateInSatsPerByte: Long,
+        val assetId: String? = null
     ) : TransactionParams()
 
     data class Tvm(
@@ -27,6 +30,9 @@ sealed class TransactionParams {
         val contractAddress: String? = null, // If null, it's native TRX. If set, it's TRC20.
         val feeLimit: Long = 10000000, // Default 10 TRX
         val contractFunction: String? = null,
-        val contractParameter: String? = null
+        val contractParameter: String? = null,
+        val assetId: String? = null,
+
+        val feeLevel: String? = null
     ) : TransactionParams()
 }

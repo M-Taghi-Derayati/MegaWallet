@@ -53,7 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +81,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.Green
+import com.mtd.domain.model.ResultResponse
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudBackupPasswordScreen
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudPasswordMode
@@ -90,7 +92,6 @@ import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletCard
 import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletManagementMenuContent
 import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletPersonalizationContent
 import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletRecoveryMethodsContent
-import com.mtd.megawallet.ui.compose.theme.Green
 import com.mtd.megawallet.viewmodel.news.AppLockViewModel
 import com.mtd.megawallet.viewmodel.news.MultiWalletViewModel
 import kotlinx.coroutines.delay
@@ -121,9 +122,9 @@ fun MultiWalletScreen(
     viewModel: MultiWalletViewModel = hiltViewModel()
 ) {
     val appLockViewModel: AppLockViewModel = hiltViewModel()
-    val appLockUiState by appLockViewModel.uiState.collectAsState()
-    val wallets by viewModel.wallets.collectAsState()
-    val activeWalletId by viewModel.activeWalletId.collectAsState()
+    val appLockUiState by appLockViewModel.uiState.collectAsStateWithLifecycle()
+    val wallets by viewModel.wallets.collectAsStateWithLifecycle()
+    val activeWalletId by viewModel.activeWalletId.collectAsStateWithLifecycle()
 
     var showAddWalletSheet by remember { mutableStateOf(false) }
     var showSecretPromptSheet by remember { mutableStateOf(false) }
@@ -158,13 +159,13 @@ fun MultiWalletScreen(
         scope.launch {
             isCloudBackupLoading = true
             when (val signInResult = viewModel.handleCloudGoogleSignInResult(result.data)) {
-                is com.mtd.domain.model.ResultResponse.Success -> {
+                is ResultResponse.Success -> {
                     isCloudRecoveryMode = signInResult.data
                     cloudPasswordError = null
                     backupFlowStep = BackupFlowStep.CloudPassword
                 }
 
-                is com.mtd.domain.model.ResultResponse.Error -> {
+                is ResultResponse.Error -> {
                     isCloudRecoveryMode = true
                     cloudPasswordError = "اتصال به گوگل درایو برقرار نشد. دوباره تلاش کنید."
                     backupFlowStep = BackupFlowStep.CloudPassword

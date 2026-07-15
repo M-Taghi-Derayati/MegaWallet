@@ -75,7 +75,7 @@ class DogecoinIntegrationTest {
             secureStorage = secureStorage,
             blockchainRegistry = blockchainRegistry,
             gson = gson,
-            dataSourceFactory = dataSourceFactory
+            dataSourceFactory = dagger.Lazy{dataSourceFactory}
         )
 
         runTest {
@@ -95,7 +95,7 @@ class DogecoinIntegrationTest {
     @Test
     fun test1_GetDogecoinBalance_shouldReturnCorrectBalance() = runTest {
         println("--- 1. Testing Dogecoin Balance ---")
-        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.create(3)
+        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.get().create(3)
         val result = dataSource.getBalance(userDogecoinAddress)
 
         assertTrue("Fetching DOGE balance should be successful, result=$result", result is ResultResponse.Success)
@@ -124,7 +124,7 @@ class DogecoinIntegrationTest {
     @Test
     fun test3_EstimateDogecoinFee_shouldReturnFeeOptions() = runTest {
         println("--- 3. Testing Dogecoin Fee Estimation ---")
-        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.create(3)
+        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.get().create(3)
         val result = dataSource.getFeeOptions()
 
         assertTrue("Fee options should be fetched successfully. Result: $result", result is ResultResponse.Success)

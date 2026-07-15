@@ -8,7 +8,7 @@ sealed class TransactionRecord {
     abstract val timestamp: Long // Used as 'Completed' or main time
     abstract val submittedAt: Long? // For Stepper UI
     abstract val pendingDurationSeconds: Long? // For Stepper UI
-    abstract val fee: BigInteger
+    abstract val fee: BigInteger?
     abstract val status: TransactionStatus
     abstract val networkName: NetworkName?
     abstract val fromAddress: String?
@@ -45,7 +45,7 @@ data class TronTransaction(
     override val timestamp: Long,
     override val submittedAt: Long? = null,
     override val pendingDurationSeconds: Long? = null,
-    override val fee: BigInteger, // Often 0 if energy is used, or TRX burned
+    override val fee: BigInteger?, // Often 0 if energy is used, or TRX burned
     override val status: TransactionStatus,
     override val networkName: NetworkName? = null,
     override val fromAddress: String,

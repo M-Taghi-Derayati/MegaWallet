@@ -126,6 +126,8 @@ fun PasscodeKeypadSheet(
     cancelLabel: String = "بازگشت",
     onExitApp: () -> Unit
 ) {
+    // TASK-02/TD-36 — block screen capture of passcode entry (recording = lock bypass).
+    com.mtd.megawallet.ui.compose.components.SecureFlagEffect(active = visible)
     var digits by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(errorMessage, remainingLockoutSeconds, visible) {

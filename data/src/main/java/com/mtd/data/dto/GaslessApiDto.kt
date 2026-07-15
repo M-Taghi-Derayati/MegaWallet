@@ -1,10 +1,12 @@
 package com.mtd.data.dto
 
 import com.google.gson.annotations.SerializedName
+import java.math.BigInteger
 
 data class GaslessPrepareResponseDto(
     @SerializedName("user") val user: String?,
-    @SerializedName("nonce") val nonce: String?,
+    // Raw nonce — decoded from a JSON string via BigIntegerStringAdapter (Phase 1).
+    @SerializedName("nonce") val nonce: BigInteger?,
     @SerializedName("deadline") val deadline: Long?,
     @SerializedName("chainId") val chainId: Long?,
     @SerializedName("relayerContract") val relayerContract: String?,
@@ -70,35 +72,39 @@ data class GaslessQuoteParamsDto(
     @SerializedName("user") val user: String,
     @SerializedName("token") val token: String,
     @SerializedName("target") val target: String,
-    @SerializedName("amount") val amount: String
+    // Raw base-unit amount — encoded as a JSON string via BigIntegerStringAdapter.
+    @SerializedName("amount") val amount: BigInteger
 )
 
 data class GaslessQuoteRequestDto(
     @SerializedName("chain") val chain: String,
     @SerializedName("prepareToken") val prepareToken: String,
     @SerializedName("params") val params: GaslessQuoteParamsDto,
-    @SerializedName("clientFeeAmount") val clientFeeAmount: String? = null
+    // "GAS_CREDIT" | "WALLET" | "SPONSOR" — who covers the relayer fee.
+    @SerializedName("feeFundingSource") val feeFundingSource: String? = null,
+    @SerializedName("clientFeeAmount") val clientFeeAmount: BigInteger? = null
 )
 
 data class GaslessCanonicalParamsDto(
     @SerializedName("user") val user: String?,
     @SerializedName("token") val token: String?,
     @SerializedName("target") val target: String?,
-    @SerializedName("amount") val amount: String?,
-    @SerializedName("feeAmount") val feeAmount: String?,
-    @SerializedName("nonce") val nonce: String?,
+    // Raw base-unit values — decoded from JSON strings via BigIntegerStringAdapter (Phase 1).
+    @SerializedName("amount") val amount: BigInteger?,
+    @SerializedName("feeAmount") val feeAmount: BigInteger?,
+    @SerializedName("nonce") val nonce: BigInteger?,
     @SerializedName("deadline") val deadline: Long?,
     @SerializedName("treasury") val treasury: String?
 )
 
 data class GaslessServerQuoteDto(
-    @SerializedName("feeAmount") val feeAmount: String?
+    @SerializedName("feeAmount") val feeAmount: BigInteger?
 )
 
 data class GaslessSmartFeeDto(
     @SerializedName("decision") val decision: String?,
     @SerializedName("reasonFa") val reasonFa: String?,
-    @SerializedName("feeAmount") val feeAmount: String?,
+    @SerializedName("feeAmount") val feeAmount: BigInteger?,
     @SerializedName("feeUsd") val feeUsd: String?,
     @SerializedName("directUserCostUsd") val directUserCostUsd: String?,
     @SerializedName("moreExpensiveThanDirect") val moreExpensiveThanDirect: Boolean?
@@ -109,16 +115,27 @@ data class GaslessQuoteResponseDto(
     @SerializedName("canonicalParams") val canonicalParams: GaslessCanonicalParamsDto?,
     @SerializedName("serverQuote") val serverQuote: GaslessServerQuoteDto?,
     @SerializedName("displayPolicy") val displayPolicy: GaslessDisplayPolicyDto?,
-    @SerializedName("smartFee") val smartFee: GaslessSmartFeeDto?
+    @SerializedName("smartFee") val smartFee: GaslessSmartFeeDto?,
+    // New fee-funding fields (latest backend contract). All nullable for backward compatibility.
+    @SerializedName("accepted") val accepted: Boolean? = null,
+    @SerializedName("quoteId") val quoteId: String? = null,
+    // "GAS_CREDIT" | "WALLET" | "SPONSOR" — who actually covers the relayer fee for this quote.
+    @SerializedName("feeFundingSource") val feeFundingSource: String? = null,
+    @SerializedName("gasCreditApplied") val gasCreditApplied: Boolean? = null,
+    // Raw base-unit values — decoded from JSON strings via BigIntegerStringAdapter (Phase 1).
+    @SerializedName("gasCredit") val gasCredit: BigInteger? = null,
+    @SerializedName("totalFee") val totalFee: BigInteger? = null,
+    @SerializedName("finalFee") val finalFee: BigInteger? = null
 )
 
 data class GaslessRelayParamsDto(
     @SerializedName("user") val user: String,
     @SerializedName("token") val token: String,
     @SerializedName("target") val target: String,
-    @SerializedName("amount") val amount: String,
-    @SerializedName("feeAmount") val feeAmount: String,
-    @SerializedName("nonce") val nonce: String,
+    // Raw base-unit values — encoded as JSON strings via BigIntegerStringAdapter.
+    @SerializedName("amount") val amount: BigInteger,
+    @SerializedName("feeAmount") val feeAmount: BigInteger,
+    @SerializedName("nonce") val nonce: BigInteger,
     @SerializedName("deadline") val deadline: Long
 )
 
@@ -134,7 +151,9 @@ data class GaslessRelayRequestDto(
 data class GaslessRelayResponseDto(
     @SerializedName("status") val status: String?,
     @SerializedName("id") val id: String?,
-    @SerializedName("stage") val stage: String?
+    @SerializedName("stage") val stage: String?,
+    // true when the relayer replayed a prior submission for the same x-idempotency-key (no new tx).
+    @SerializedName("idempotent") val idempotent: Boolean? = null
 )
 
 data class GaslessTxStatusDto(
@@ -211,11 +230,47 @@ data class EvmSponsorApproveRequestDto(
     @SerializedName("mode") val mode: String
 )
 
+data class EvmApproveQuoteRequestDto(
+    @SerializedName("chain") val chain: String,
+    @SerializedName("params") val params: EvmSponsorApproveParamsDto
+)
+
+data class EvmApproveTxTemplateDto(
+    @SerializedName("to") val to: String?,
+    @SerializedName("spender") val spender: String?,
+    @SerializedName("data") val data: String?,
+    @SerializedName("approvalAmount") val approvalAmount: String?,
+    @SerializedName("approvalAmountMode") val approvalAmountMode: String?,
+    @SerializedName("gasLimit") val gasLimit: String?,
+    @SerializedName("gasPriceWei") val gasPriceWei: String?,
+    @SerializedName("maxFeePerGasWei") val maxFeePerGasWei: String?,
+    @SerializedName("maxPriorityFeePerGasWei") val maxPriorityFeePerGasWei: String?,
+    @SerializedName("valueWei") val valueWei: String?
+)
+
+data class EvmApproveQuoteResponseDto(
+    @SerializedName("chain") val chain: String?,
+    @SerializedName("approveRequired") val approveRequired: Boolean?,
+    @SerializedName("approvalAmount") val approvalAmount: String?,
+    @SerializedName("approvalAmountMode") val approvalAmountMode: String?,
+    @SerializedName("approveTxTemplate") val approveTxTemplate: EvmApproveTxTemplateDto?,
+    @SerializedName("requiredAllowance") val requiredAllowance: String?,
+    @SerializedName("estimatedApproveGasLimit") val estimatedApproveGasLimit: String?,
+    @SerializedName("gasPriceWei") val gasPriceWei: String?,
+    @SerializedName("maxFeePerGasWei") val maxFeePerGasWei: String?,
+    @SerializedName("maxPriorityFeePerGasWei") val maxPriorityFeePerGasWei: String?,
+    @SerializedName("requiredApproveWei") val requiredApproveWei: String?,
+    @SerializedName("requiredWithBufferWei") val requiredWithBufferWei: String?,
+    @SerializedName("source") val source: String?,
+    @SerializedName("displayPolicy") val displayPolicy: GaslessDisplayPolicyDto?
+)
+
 data class EvmSponsorApproveResponseDto(
     @SerializedName("funded") val funded: Boolean?,
     @SerializedName("mode") val mode: String?,
     @SerializedName(value = "amount", alternate = ["sponsorAmountWei", "sponsorAmountEth"]) val amount: String?,
     @SerializedName("reason") val reason: String?,
     @SerializedName("txHash") val txHash: String?,
+    @SerializedName("approveTxTemplate") val approveTxTemplate: EvmApproveTxTemplateDto?,
     @SerializedName("displayPolicy") val displayPolicy: GaslessDisplayPolicyDto?
 )

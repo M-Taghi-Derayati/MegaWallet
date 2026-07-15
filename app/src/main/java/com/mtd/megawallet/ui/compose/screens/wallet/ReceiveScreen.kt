@@ -34,7 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -74,8 +74,8 @@ fun ReceiveScreen(
     onDismiss: () -> Unit,
     viewModel: ReceiveViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val selectedAddress by viewModel.selectedAddress.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedAddress by viewModel.selectedAddress.collectAsStateWithLifecycle()
     val clipboardManager = LocalClipboard.current
 
     // Handle system back button

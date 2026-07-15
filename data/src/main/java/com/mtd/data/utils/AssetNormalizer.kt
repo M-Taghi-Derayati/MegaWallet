@@ -60,7 +60,9 @@ object AssetNormalizer {
             NetworkName.SEPOLIA,
             NetworkName.ETHEREUM,
             NetworkName.BASE,
-            NetworkName.BASESEPOLIA
+            NetworkName.BASESEPOLIA,
+            NetworkName.ARBITRUM,
+            NetworkName.ARBSEPOLIA
         )
         return evmNetworks.contains(network)
     }

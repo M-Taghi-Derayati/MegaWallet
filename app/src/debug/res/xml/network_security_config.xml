@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    DEBUG-ONLY network security config (build-type resource overlay).
+
+    Replaces the strict main config in debug builds only. Permits cleartext to the local dev
+    relayer / emulator loopback hosts, and trusts user-installed CAs so a debugging proxy can
+    intercept traffic during development. NONE of this applies to release builds.
+
+    Keep the cleartext domain list scoped to real dev hosts. When the relayer moves to TLS
+    (TASK-11), the dev entries here can be removed too.
+-->
+<network-security-config>
+    <!-- Debug still defaults to HTTPS-only; cleartext is opened per-domain below. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Cleartext allowed in debug only: the relayer's raw origin (no TLS, debug-only per the
+         server guide) + emulator/loopback for a locally-run server. The default endpoint is the
+         HTTPS domain (TASK-31); these are for pointing debug at the raw origin/local when needed. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">103.112.69.154</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+</network-security-config>

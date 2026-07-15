@@ -79,6 +79,9 @@ fun SecretRevealOverlay(
     onBackupConfirmed: () -> Unit = {},
     onClose: () -> Unit
 ) {
+    // TASK-02/TD-36 — block screenshots while the seed/private key is on screen.
+    com.mtd.megawallet.ui.compose.components.SecureFlagEffect(active = visible)
+
     val clipboardManager: ClipboardManager = LocalClipboardManager.current
 
     AnimatedVisibility(

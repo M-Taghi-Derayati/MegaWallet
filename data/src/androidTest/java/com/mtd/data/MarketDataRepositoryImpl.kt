@@ -8,8 +8,10 @@ import com.mtd.data.di.NetworkConnectionInterceptor
 import com.mtd.data.di.NetworkModule.httpLoggingInterceptorProvider
 import com.mtd.data.di.NetworkModule.provideGson
 import com.mtd.data.di.NetworkModule.provideOkHttpClient
+import com.mtd.data.datasource.RelayerPriceDataSource
 import com.mtd.data.repository.MarketDataRepositoryImpl
 import com.mtd.data.service.CoinDetailApiService
+import com.mtd.data.service.RelayerPriceApiService
 import com.mtd.data.service.USDTApiService
 import com.mtd.domain.model.ResultResponse
 import kotlinx.coroutines.test.runTest
@@ -44,9 +46,13 @@ class MarketDataRepositoryIntegrationTest {
 
         val coinGeckoApi = retrofit.create(CoinDetailApiService::class.java)
         val coinGeckoUSDTApi = retrofit.create(USDTApiService::class.java)
+        // Relayer base here is CoinGecko (not a real relayer), so the primary price call fails and the
+        // repo falls back to CoinDesk — preserving this test's original CoinDesk-path assertions.
+        val relayerPriceDataSource =
+            RelayerPriceDataSource(retrofit.create(RelayerPriceApiService::class.java))
 
         // ساخت ریپازیتوری با سرویس API واقعی
-        marketDataRepository = MarketDataRepositoryImpl(coinGeckoApi,coinGeckoUSDTApi)
+        marketDataRepository = MarketDataRepositoryImpl(coinGeckoApi, coinGeckoUSDTApi, relayerPriceDataSource)
     }
 
 

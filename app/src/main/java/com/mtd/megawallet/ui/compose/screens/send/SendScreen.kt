@@ -53,7 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -103,10 +103,6 @@ import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-private enum class SendTab {
-    TOKENS,
-    COLLECTIBLES
-}
 
 @Composable
 fun SendScreen(
@@ -118,13 +114,13 @@ fun SendScreen(
     onAssetSelected: (AssetItem, String) -> Unit = { _, _ -> },
     sendViewModel: SendViewModel = hiltViewModel()
 ) {
-    val uiState by homeViewModel.uiState.collectAsState()
-    val recipientText by sendViewModel.recipientAddress.collectAsState()
-    val selectedAsset by sendViewModel.selectedAsset.collectAsState()
-    val amountText by sendViewModel.amountText.collectAsState()
-    val isUsdMode by sendViewModel.isUsdMode.collectAsState()
-    val showConfirmScreen by sendViewModel.showConfirmScreen.collectAsState()
-    val recipientNetworkType by sendViewModel.recipientNetworkType.collectAsState()
+    val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+    val recipientText by sendViewModel.recipientAddress.collectAsStateWithLifecycle()
+    val selectedAsset by sendViewModel.selectedAsset.collectAsStateWithLifecycle()
+    val amountText by sendViewModel.amountText.collectAsStateWithLifecycle()
+    val isUsdMode by sendViewModel.isUsdMode.collectAsStateWithLifecycle()
+    val showConfirmScreen by sendViewModel.showConfirmScreen.collectAsStateWithLifecycle()
+    val recipientNetworkType by sendViewModel.recipientNetworkType.collectAsStateWithLifecycle()
     
     val clipboardManager = LocalClipboard.current
     var chooseBalanceAsset by remember { mutableStateOf<AssetItem?>(null) }
@@ -183,18 +179,6 @@ fun SendScreen(
 
     BackHandler { handleBack() }
 
- /*   AnimatedContent(
-        targetState = showConfirmScreen,
-        transitionSpec = {
-            if (targetState) {
-                (slideInVertically(spring(0.85f, 400f)) { it } + fadeIn(tween(250)))
-                    .togetherWith(scaleOut(tween(200), 0.96f) + fadeOut(tween(200)))
-            } else {
-                (scaleIn(tween(200), 0.96f) + fadeIn(tween(250)))
-                    .togetherWith(slideOutVertically(tween(300)) { it } + fadeOut(tween(200)))
-            }
-        }
-    ) { isConfirm ->}*/
 
     if (showConfirmScreen) {
         SendConfirmScreen(

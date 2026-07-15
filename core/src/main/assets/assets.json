@@ -21,7 +21,7 @@
   },
   {
     "id": "DOGE-DOGE_TESTNET",
-    "name": "Dogecoin Testnet",
+    "name": "Dogecoin",
     "symbol": "DOGE",
     "decimals": 8,
     "networkId": "doge_testnet",
@@ -41,7 +41,7 @@
   },
   {
     "id": "LTC-LITECOIN_TESTNET",
-    "name": "Litecoin Testnet",
+    "name": "Litecoin",
     "symbol": "LTC",
     "decimals": 8,
     "networkId": "litecoin_testnet",
@@ -61,7 +61,7 @@
   },
   {
     "id": "ETH-SEPOLIA",
-    "name": "Sepolia Ether",
+    "name": "ETHEREUM",
     "symbol": "ETH",
     "decimals": 18,
     "networkId": "sepolia",
@@ -101,7 +101,7 @@
   },
   {
     "id": "USDT-SEPOLIA",
-    "name": "Tether USD",
+    "name": "Tether",
     "symbol": "USDT",
     "decimals": 6,
     "networkId": "sepolia",
@@ -111,7 +111,7 @@
   },
   {
     "id": "USDT-ETHEREUM",
-    "name": "Tether USD",
+    "name": "Tether",
     "symbol": "USDT",
     "decimals": 6,
     "networkId": "ethereum_mainnet",
@@ -121,7 +121,7 @@
   },
   {
     "id": "BNB-BSC_TESTNET",
-    "name": "Binance Coin",
+    "name": "Binance-Coin",
     "symbol": "BNB",
     "decimals": 18,
     "networkId": "bsc_testnet",
@@ -131,7 +131,7 @@
   },
   {
     "id": "BNB-BSC",
-    "name": "Binance Coin",
+    "name": "Binance-Coin",
     "symbol": "BNB",
     "decimals": 18,
     "networkId": "bsc_mainnet",
@@ -140,8 +140,78 @@
     "faName": "بایننس کوین"
   },
   {
+    "id": "ARB-ARB",
+    "name": "ARBITRUM",
+    "symbol": "ARB",
+    "decimals": 18,
+    "networkId": "arb_mainnet",
+    "contractAddress": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/11841.png",
+    "faName": "اربیتروم"
+  },
+  {
+    "id": "ETH-ARB",
+    "name": "ETHEREUM",
+    "symbol": "ETH",
+    "decimals": 18,
+    "networkId": "arb_mainnet",
+    "contractAddress": null,
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    "faName": "اتریوم"
+  },
+  {
+    "id": "USDT-ARB",
+    "name": "Tether",
+    "symbol": "USDT",
+    "decimals": 6,
+    "networkId": "arb_mainnet",
+    "contractAddress": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+    "iconUrl": "https://assets.coingecko.com/coins/images/325/standard/Tether.png",
+    "faName": "تتر"
+  },
+  {
+    "id": "USDC-ARB",
+    "name": "USD-Coin",
+    "symbol": "USDC",
+    "decimals": 6,
+    "networkId": "arb_mainnet",
+    "contractAddress": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    "faName": "یو اس دی سی"
+  },
+  {
+    "id": "ETH-ARBSEPOLIA",
+    "name": "ETHEREUM",
+    "symbol": "ETH",
+    "decimals": 18,
+    "networkId": "arb_sepolia",
+    "contractAddress": null,
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    "faName": "اتریوم"
+  },
+  {
+    "id": "USDT-ARBSEPOLIA",
+    "name": "Tether",
+    "symbol": "USDT",
+    "decimals": 6,
+    "networkId": "arb_sepolia",
+    "contractAddress": "0xEf54C221Fc94517877F0F40eCd71E0A3866D66C2",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    "faName": "تتر"
+  },
+  {
+    "id": "USDC-ARBSEPOLIA",
+    "name": "USD-Coin",
+    "symbol": "USDC",
+    "decimals": 6,
+    "networkId": "arb_sepolia",
+    "contractAddress": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+    "iconUrl": "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    "faName": "یو اس دی سی"
+  },
+  {
     "id": "USDT-BSC_TESTNET",
-    "name": "Tether USD",
+    "name": "Tether",
     "symbol": "USDT",
     "decimals": 18,
     "networkId": "bsc_testnet",
@@ -151,7 +221,7 @@
   },
   {
     "id": "USDT-BSC",
-    "name": "Tether USD",
+    "name": "Tether",
     "symbol": "USDT",
     "decimals": 18,
     "networkId": "bsc_mainnet",
@@ -161,7 +231,7 @@
   },
   {
     "id": "USDC-BASE",
-    "name": "USDC",
+    "name": "USD-Coin",
     "symbol": "USDC",
     "decimals": 18,
     "networkId": "base_mainnet",
@@ -191,7 +261,7 @@
   },
   {
     "id": "USDT-TRON_SHASTA",
-    "name": "Tether USD",
+    "name": "Tether",
     "symbol": "USDT",
     "decimals": 6,
     "networkId": "shasta_testnet",
@@ -201,7 +271,7 @@
   },
   {
     "id": "USDT-TRON",
-    "name": "Tether USD",
+    "name": "Tether",
     "symbol": "USDT",
     "decimals": 6,
     "networkId": "tron_mainnet",
@@ -211,7 +281,7 @@
   },
   {
     "id": "POL-POLYGON_TESTNET",
-    "name": "Polygon Ecosystem Token",
+    "name": "Polygon-Ecosystem-Token",
     "symbol": "POL",
     "decimals": 10,
     "networkId": "polygon_testnet",

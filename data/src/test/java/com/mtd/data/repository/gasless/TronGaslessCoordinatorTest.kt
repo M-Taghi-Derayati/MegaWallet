@@ -9,7 +9,6 @@ import com.mtd.core.utils.TypedDataSigner
 import com.mtd.domain.interfaceRepository.IGaslessTronRepository
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.GaslessCanonicalParams
-import com.mtd.domain.model.GaslessChain
 import com.mtd.domain.model.GaslessCoordinatorState
 import com.mtd.domain.model.GaslessPrepareData
 import com.mtd.domain.model.GaslessQueuedTx
@@ -22,6 +21,8 @@ import com.mtd.domain.model.TronGaslessSession
 import com.mtd.domain.model.TronGaslessTransferRequest
 import com.mtd.domain.model.TronSponsorApproveResult
 import com.mtd.domain.model.TronSponsorMode
+import com.mtd.domain.model.error.ApiError
+import com.mtd.domain.model.error.ApiException
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -46,6 +47,7 @@ class TronGaslessCoordinatorTest {
     private lateinit var walletRepository: IWalletRepository
     private lateinit var keyManager: KeyManager
     private lateinit var blockchainRegistry: BlockchainRegistry
+    private lateinit var routeResolver: com.mtd.domain.interfaceRepository.IGaslessRouteResolver
     private lateinit var coordinator: TronGaslessCoordinator
 
     @Before
@@ -54,7 +56,10 @@ class TronGaslessCoordinatorTest {
         walletRepository = mockk(relaxed = true)
         keyManager = mockk(relaxed = true)
         blockchainRegistry = mockk(relaxed = true)
-        coordinator = TronGaslessCoordinator(repository, walletRepository, keyManager, blockchainRegistry)
+        // Relaxed → resolve() returns null → coordinator falls back to the TVM family path
+        // ("tron"), i.e. identical routing to the pre-Phase-3 behavior under test.
+        routeResolver = mockk(relaxed = true)
+        coordinator = TronGaslessCoordinator(repository, walletRepository, keyManager, blockchainRegistry, routeResolver)
     }
 
     @After
@@ -84,6 +89,7 @@ class TronGaslessCoordinatorTest {
                 networkId = "shasta_testnet",
                 tokenAddress = "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
                 targetAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                assetId = "USDT-TRON",
                 amount = BigInteger("100"),
                 feeAmount = BigInteger("1")
             )
@@ -102,11 +108,13 @@ class TronGaslessCoordinatorTest {
                 networkId = "shasta_testnet",
                 tokenAddress = "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
                 targetAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                assetId = "USDT-TRON",
                 amount = BigInteger("100")
             ),
             networkName = NetworkName.SHASTA,
             userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             chainId = 2494104990L,
+            assetId = "USDT-TRON",
             relayerContract = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             treasuryAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             nonce = BigInteger.ONE,
@@ -172,6 +180,7 @@ class TronGaslessCoordinatorTest {
                 networkId = "shasta_testnet",
                 tokenAddress = "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
                 targetAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                assetId = "USDT-TRON",
                 amount = BigInteger("100"),
                 feeAmount = BigInteger("1"),
                 deadlineEpochSeconds = 1_900_000_000L
@@ -179,6 +188,7 @@ class TronGaslessCoordinatorTest {
             networkName = NetworkName.SHASTA,
             userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             chainId = 2494104990L,
+            assetId = "USDT-TRON",
             relayerContract = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             treasuryAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             nonce = BigInteger.ONE,
@@ -191,8 +201,87 @@ class TronGaslessCoordinatorTest {
 
         assertTrue(result is ResultResponse.Success)
         assertEquals("0xtronSig", payloadSlot.captured.signature)
-        assertEquals(GaslessChain.TRON, payloadSlot.captured.chain)
+        assertEquals(NetworkType.TVM, payloadSlot.captured.networkType)
         assertEquals(GaslessCoordinatorState.QUEUED, coordinator.state.value)
+    }
+
+    @Test
+    fun `signAndSubmit re-runs prepare and quote once on RequoteRequired then succeeds`() = runTest {
+        assumeWeb3jCredentialsAvailable()
+        val credentials = Credentials.create("4f3edf983ac636a65a842ce7c78d9aa706d3b113bce036f9e6f9446f06f2f8f4")
+        every { keyManager.getCredentialsForChain(2494104990L) } returns credentials
+
+        mockkObject(TypedDataSigner)
+        every {
+            TypedDataSigner.signTypedDataHex(any(), any(), any(), any(), any())
+        } returns "0xtronSig"
+
+        // Re-prepare dependencies (bounded requote re-runs prepareSession on RequoteRequired).
+        every { blockchainRegistry.getNetworkById("shasta_testnet") } returns tronNetwork()
+        coEvery { walletRepository.getActiveAddressForNetwork("shasta_testnet") } returns "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp"
+        coEvery { repository.prepare(any(), any()) } returns ResultResponse.Success(
+            GaslessPrepareData(
+                userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                nonce = BigInteger("9"),
+                deadline = 1_900_000_000L,
+                chainId = 2494104990L,
+                relayerContract = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                treasuryAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                prepareToken = "prepare_token_tron_2"
+            )
+        )
+        coEvery { repository.getAllowance(any(), any(), any(), any()) } returns ResultResponse.Success(BigInteger("1000"))
+
+        coEvery { repository.quote(any()) } returnsMany listOf(
+            ResultResponse.Error(ApiException(ApiError.RequoteRequired, httpStatus = 409)),
+            ResultResponse.Success(
+                GaslessQuoteData(
+                    quoteToken = "quote_token_tron_2",
+                    canonicalParams = GaslessCanonicalParams(
+                        user = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                        token = "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
+                        target = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                        amount = BigInteger("100"),
+                        feeAmount = BigInteger("1"),
+                        nonce = BigInteger("9"),
+                        deadline = 1_900_000_000L,
+                        treasury = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp"
+                    )
+                )
+            )
+        )
+        coEvery { repository.submitRelay(any(), any()) } returns ResultResponse.Success(
+            GaslessQueuedTx(id = "queue_tron_2", stage = "QUEUED")
+        )
+
+        val session = TronGaslessSession(
+            request = TronGaslessTransferRequest(
+                networkId = "shasta_testnet",
+                tokenAddress = "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
+                targetAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                assetId = "USDT-TRON",
+                amount = BigInteger("100"),
+                feeAmount = BigInteger("1"),
+                deadlineEpochSeconds = 1_900_000_000L
+            ),
+            networkName = NetworkName.SHASTA,
+            userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+            chainId = 2494104990L,
+            assetId = "USDT-TRON",
+            relayerContract = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+            treasuryAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+            nonce = BigInteger.ONE,
+            allowance = BigInteger("1000"),
+            prepareToken = "prepare_token_tron_1",
+            idempotencyKey = "idem_tron_1"
+        )
+
+        val result = coordinator.signAndSubmit(session)
+
+        assertTrue(result is ResultResponse.Success)
+        assertEquals(GaslessCoordinatorState.QUEUED, coordinator.state.value)
+        coVerify(exactly = 2) { repository.quote(any()) }
+        coVerify(exactly = 1) { repository.prepare(any(), any()) }
     }
 
     @Test
@@ -208,6 +297,7 @@ class TronGaslessCoordinatorTest {
 
         val result = coordinator.pollUntilFinal(
             txId = "queue_tron_1",
+            networkId = "tron_mainnet",
             pollIntervalMs = 1L,
             timeoutMs = 20L
         )
@@ -225,11 +315,13 @@ class TronGaslessCoordinatorTest {
                 networkId = "shasta_testnet",
                 tokenAddress = "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
                 targetAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                assetId = "USDT-TRON",
                 amount = BigInteger("100")
             ),
             networkName = NetworkName.SHASTA,
             userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             chainId = 2494104990L,
+            assetId = "USDT-TRON",
             relayerContract = "TVjsyZ7fYF3qLF6BQgPmTEZy1xrNNyVAAA",
             treasuryAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             nonce = BigInteger.ONE,
@@ -275,11 +367,13 @@ class TronGaslessCoordinatorTest {
                 networkId = "shasta_testnet",
                 tokenAddress = "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
                 targetAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
+                assetId = "USDT-TRON",
                 amount = BigInteger("100")
             ),
             networkName = NetworkName.SHASTA,
             userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             chainId = 2494104990L,
+            assetId = "USDT-TRON",
             relayerContract = "TVjsyZ7fYF3qLF6BQgPmTEZy1xrNNyVAAA",
             treasuryAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             nonce = BigInteger.ONE,

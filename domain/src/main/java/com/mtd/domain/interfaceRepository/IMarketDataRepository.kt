@@ -10,7 +10,7 @@ interface IMarketDataRepository {
      * @param assetIds لیستی از شناسه‌های ارز (مطابق با API CoinGecko).
      * @return یک Result که حاوی لیستی از قیمت‌های دارایی است.
      */
-    suspend fun getLatestPrices(assetIds: List<String>): ResultResponse<List<AssetPriceDto>>
+    suspend fun getLatestPrices(assetIds: Pair<List<String>,List<String>>): ResultResponse<List<AssetPriceDto>>
 
     /**
      * دریافت نرخ تبدیل تتر به تومان.
@@ -22,5 +22,5 @@ interface IMarketDataRepository {
      * @param coinId نماد پایه دارایی (مثلاً "BTC")
      * @param days تعداد روزهای تاریخچه (مثلاً "1", "7", "30")
      */
-    suspend fun getHistoricalPrices(coinId: String, days: String): ResultResponse<List<Pair<Long, Double>>>
+    suspend fun getHistoricalPrices(coinName: String, days: String): ResultResponse<List<Pair<Long, String>>>
 }

@@ -6,6 +6,7 @@ import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.send.SendFeeQuote
 import java.math.BigDecimal
+import java.math.BigInteger
 import javax.inject.Inject
 
 class RefreshSelectedAssetBalanceUseCase @Inject constructor(
@@ -26,8 +27,9 @@ class EstimateSendFeesUseCase @Inject constructor(
     suspend operator fun invoke(
         wallet: Wallet,
         asset: AssetItem,
-        recipientAddress: String
+        recipientAddress: String,
+        amount: BigInteger
     ): ResultResponse<SendFeeQuote> {
-        return sendAssetDataSource.estimateFees(wallet, asset, recipientAddress)
+        return sendAssetDataSource.estimateFees(wallet, asset, recipientAddress, amount)
     }
 }

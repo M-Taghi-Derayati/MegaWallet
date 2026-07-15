@@ -75,7 +75,7 @@ class AssetFetchingIntegrationTest {
             activeWalletManager,
             blockchainRegistry,
             gson,
-            dataSourceFactory // استفاده از فکتوری
+            dagger.Lazy{dataSourceFactory}  // استفاده از فکتوری
         )
 
         // قبل از تست، کیف پول را با Mnemonic تستی خودمان وارد می‌کنیم تا در SecureStorage ذخیره شود

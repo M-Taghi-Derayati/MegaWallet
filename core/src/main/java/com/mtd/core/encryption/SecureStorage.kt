@@ -25,6 +25,14 @@ class SecureStorage @Inject constructor(
         return AESGCMCipher.decrypt(encrypted, key)
     }
 
+    /**
+     * KAN-18: completely erase a key from `secure_prefs`. Unlike blanking with an empty-string
+     * ciphertext, this leaves zero residue for the deleted wallet secret / metadata.
+     */
+    fun remove(keyName: String) {
+        prefs.edit { remove(keyName) }
+    }
+
 
     fun putCustomRpc(chainId: Long, rpcUrl: String) {
         putEncrypted("custom_rpc_$chainId", rpcUrl)

@@ -41,7 +41,7 @@ import com.mtd.domain.model.TransactionStatus
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
 import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
-import com.mtd.megawallet.ui.compose.theme.Green
+import com.mtd.common_ui.theme.Green
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 
 @Composable

@@ -4,33 +4,38 @@ import com.mtd.data.dto.AssetPriceResponse
 import com.mtd.data.dto.HistoricalOhlcResponse
 import retrofit2.Response
 import retrofit2.http.GET
+import retrofit2.http.Headers
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface CoinDetailApiService {
-    @GET("spot/v1/latest/tick")
+    @Headers(
+        "Origin: https://pro.coincap.io",
+        "Referer: https://pro.coincap.io/",
+        "Accept: application/json",
+        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    )
+    @GET("v3/assets")
     suspend fun getPrices(
-        @Query("market") ids: String="binance",
-        @Query("instruments") vsCurrencies: String, // "bitcoin,ethereum"
-        @Query("apply_mapping") mapping: Boolean = true,
-        @Query("groups") groups: String = "MAPPING,VALUE,MOVING_24_HOUR"
+        @Query("search") search: String?=null,
+        @Query("ids") ids: String?=null,
     ): Response<AssetPriceResponse>
 
-    @GET("spot/v1/historical/hours")
-    suspend fun getHistoricalHours(
-        @Query("market") market: String = "binance",
-        @Query("instrument") instrument: String,
-        @Query("limit") limit: Int = 24,
-        @Query("apply_mapping") applyMapping: Boolean = true,
-        @Query("groups") groups: String = "MAPPING,OHLC"
+
+    @Headers(
+        "Origin: https://pro.coincap.io",
+        "Referer: https://pro.coincap.io/",
+        "Accept: application/json",
+        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    )
+    @GET("v3/assets/{slug}/history")
+    suspend fun getHistorical(
+       @Path ("slug")coin : String,
+       @Query("start") start: Long,
+       @Query("end") end: Long,
+       @Query("interval") interval: String="d1",
     ): Response<HistoricalOhlcResponse>
 
-    @GET("spot/v1/historical/days")
-    suspend fun getHistoricalDays(
-        @Query("market") market: String = "binance",
-        @Query("instrument") instrument: String,
-        @Query("limit") limit: Int = 365,
-        @Query("apply_mapping") applyMapping: Boolean = true,
-        @Query("groups") groups: String = "MAPPING,OHLC"
-    ): Response<HistoricalOhlcResponse>
+
 }
 

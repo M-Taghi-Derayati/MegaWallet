@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,12 +42,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,10 +65,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import coil.imageLoader
 import com.mtd.common_ui.R
 import com.mtd.domain.model.HistoryNetworkOption
 import com.mtd.domain.model.HistoryRow
-import com.mtd.domain.model.HomeUiState
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetailsBottomSheet
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryEmptyState
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryItem
@@ -74,6 +76,7 @@ import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHisto
 import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.megawallet.viewmodel.news.HomeViewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -82,13 +85,18 @@ fun TransactionHistoryScreen(
     userAddress: String? = null,
     viewModel: TransactionHistoryViewModel = hiltViewModel(),
     homeViewModel: HomeViewModel = hiltViewModel(),
-    showDetailsBottomSheet: Boolean = true
+    showDetailsBottomSheet: Boolean = true,
+    contentEnabled: Boolean = true
 ) {
-    val transactions by viewModel.transactions.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val selectedTransaction by viewModel.selectedTransaction.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val networkOptions by viewModel.networkOptions.collectAsState()
+    val transactions by viewModel.transactions.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val selectedTransaction by viewModel.selectedTransaction.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val networkOptions by viewModel.networkOptions.collectAsStateWithLifecycle()
+    val hasMore by viewModel.hasMore.collectAsStateWithLifecycle()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
+    val showStaleWarning by viewModel.showStaleWarning.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
     var showNetworkSheet by remember { mutableStateOf(false) }
     val selectedNetworkOption = remember(networkOptions) {
         networkOptions.firstOrNull { it.isSelected } ?: networkOptions.firstOrNull()
@@ -114,11 +122,20 @@ fun TransactionHistoryScreen(
         }
     }
 
-        val homeUiState by homeViewModel.uiState.collectAsState()
-        LaunchedEffect(homeUiState) {
-            val success = homeUiState as? HomeUiState.Success ?: return@LaunchedEffect
-            viewModel.syncAssetPricesFromHomeAssets(success.assets)
+
+    LaunchedEffect(listState, contentEnabled, hasMore) {
+        snapshotFlow {
+            val layoutInfo = listState.layoutInfo
+            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible to layoutInfo.totalItemsCount
         }
+            .distinctUntilChanged()
+            .collect { (lastVisible, total) ->
+                if (contentEnabled && hasMore && total > 0 && lastVisible >= total - 3) {
+                    viewModel.loadMore()
+                }
+            }
+    }
 
     Box(
         modifier = Modifier
@@ -127,10 +144,15 @@ fun TransactionHistoryScreen(
     ) {
         PullToRefreshBox(
             isRefreshing = isLoading,
-            onRefresh = { viewModel.refreshSelectedNetwork(networkName, userAddress) },
+            onRefresh = {
+                if (contentEnabled) {
+                    viewModel.refreshSelectedNetwork(networkName, userAddress)
+                }
+            },
             modifier = Modifier.fillMaxSize()
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -138,8 +160,15 @@ fun TransactionHistoryScreen(
                 item(key = "history_network_input") {
                     HistoryNetworkInputSection(
                         option = selectedNetworkOption,
+                        enabled = contentEnabled,
                         onClick = { showNetworkSheet = true }
                     )
+                }
+
+                if (showStaleWarning) {
+                    item(key = "history_stale_warning") {
+                        HistoryStaleSourcesBanner()
+                    }
                 }
 
                 when {
@@ -210,9 +239,30 @@ fun TransactionHistoryScreen(
                                         TransactionHistoryItem(
                                             transaction = row.item,
                                             viewModel = viewModel,
-                                            onClick = { viewModel.selectTransaction(row.item) }
+                                            onClick = {
+                                                if (contentEnabled) {
+                                                    viewModel.selectTransaction(row.item)
+                                                }
+                                            }
                                         )
                                     }
+                                }
+                            }
+                        }
+
+                        if (isLoadingMore) {
+                            item(key = "history_load_more") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.tertiary
+                                    )
                                 }
                             }
                         }
@@ -243,8 +293,36 @@ fun TransactionHistoryScreen(
 }
 
 @Composable
+private fun HistoryStaleSourcesBanner() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.10f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "برخی شبکه‌ها به‌روز نشدند؛ ممکن است تاریخچه ناقص باشد.",
+            color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+            fontSize = 13.sp
+        )
+    }
+}
+
+@Composable
 private fun HistoryNetworkInputSection(
     option: HistoryNetworkOption?,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
     if (option == null) return
@@ -254,7 +332,7 @@ private fun HistoryNetworkInputSection(
             .fillMaxWidth()
             .padding(horizontal = 18.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface
     ) {
@@ -361,7 +439,7 @@ private fun ChooseHistoryNetworkBottomSheet(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 24.dp, vertical = 1.dp)
+                    .padding(horizontal = 24.dp, vertical = 5.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(28.dp))
                     .background(if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background)
@@ -480,8 +558,8 @@ private fun HistoryNetworkIcon(
     option: HistoryNetworkOption,
     size: Int
 ) {
-    val context = LocalContext.current
-    val imageLoader = remember { coil.ImageLoader(context) }
+    // C1 (KAN-NEW-05): use the app-wide singleton ImageLoader instead of a per-row instance.
+    val imageLoader = LocalContext.current.imageLoader
     val localIcon = remember(option.networkId, option.isAllNetworks) {
         if (option.isAllNetworks) R.drawable.ic_wallet else getNetworkIconResId(option.networkId)
     }

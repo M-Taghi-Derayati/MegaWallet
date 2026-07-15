@@ -38,6 +38,17 @@ class ActiveWalletManager @Inject constructor(
         _activeWalletId.value = null
     }
 
+    /**
+     * KAN-18: drop any in-memory derived keys belonging to [walletId]. Derived keys are only ever
+     * cached for the currently-active wallet, so this is a no-op unless the deleted wallet is the
+     * active one — in which case it locks (clears the [KeyManager] credential cache + state).
+     */
+    fun clearCacheForWallet(walletId: String) {
+        if (_activeWalletId.value == walletId) {
+            lockWallet()
+        }
+    }
+
     fun getAddressForNetwork(chainId: Long): String? {
         return _activeWallet.value?.keys?.find { it.chainId == chainId }?.address
     }

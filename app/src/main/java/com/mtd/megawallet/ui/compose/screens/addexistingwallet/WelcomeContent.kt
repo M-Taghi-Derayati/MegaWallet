@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
 import com.mtd.domain.model.DriveBackupState
 import com.mtd.megawallet.ui.compose.components.WalletOptionItem
-import com.mtd.megawallet.ui.compose.theme.Green
+import com.mtd.common_ui.theme.Green
 
 /**
  * Welcome content for adding existing wallet screen.

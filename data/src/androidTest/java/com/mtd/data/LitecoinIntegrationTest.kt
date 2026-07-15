@@ -75,7 +75,7 @@ class LitecoinIntegrationTest {
             secureStorage = secureStorage,
             blockchainRegistry = blockchainRegistry,
             gson = gson,
-            dataSourceFactory = dataSourceFactory
+            dataSourceFactory = dagger.Lazy{dataSourceFactory}
         )
 
         runTest {
@@ -95,7 +95,7 @@ class LitecoinIntegrationTest {
     @Test
     fun test1_GetLitecoinBalance_shouldReturnCorrectBalance() = runTest {
         println("--- 1. Testing Litecoin Balance ---")
-        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.create(-2)
+        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.get().create(-2)
         val result = dataSource.getBalance(userLitecoinAddress)
 
         assertTrue("Fetching LTC balance should be successful, result=$result", result is ResultResponse.Success)
@@ -124,7 +124,7 @@ class LitecoinIntegrationTest {
     @Test
     fun test3_EstimateLitecoinFee_shouldReturnFeeOptions() = runTest {
         println("--- 3. Testing Litecoin Fee Estimation ---")
-        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.create(-2)
+        val dataSource = (walletRepository as WalletRepositoryImpl).dataSourceFactory.get().create(-2)
         val result = dataSource.getFeeOptions()
 
         assertTrue("Fee options should be fetched successfully. Result: $result", result is ResultResponse.Success)

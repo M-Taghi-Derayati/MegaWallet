@@ -24,32 +24,32 @@ data class WalletAddressBookEntry(
 )
 
 class GetTransactionHistoryUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(
         networkName: NetworkName,
         userAddress: String
     ): ResultResponse<List<TransactionRecord>> {
-        return walletRepository.getTransactionHistory(networkName, userAddress)
+        return walletRepository.get().getTransactionHistory(networkName, userAddress)
     }
 }
 
 class GetTransactionFeeDetailsUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(
         networkName: NetworkName,
         txId: String
     ): ResultResponse<TransactionFeeDetails> {
-        return walletRepository.getTransactionFeeDetails(networkName, txId)
+        return walletRepository.get().getTransactionFeeDetails(networkName, txId)
     }
 }
 
 class GetWalletAddressBookUseCase @Inject constructor(
-    private val walletRepository: IWalletRepository
+    private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(): ResultResponse<List<WalletAddressBookEntry>> {
-        return when (val result = walletRepository.getAllWallets()) {
+        return when (val result = walletRepository.get().getAllWallets()) {
             is ResultResponse.Success -> ResultResponse.Success(
                 result.data.flatMap { wallet ->
                     wallet.keys.map { key ->
@@ -74,21 +74,46 @@ class NormalizeTransactionHistoryUseCase @Inject constructor(
     operator fun invoke(
         items: List<TransactionRecord>,
         userAddress: String? = null
+    ): List<TransactionRecord> = dedupeAndSort(reconcileAndFilter(items, userAddress))
+
+    /**
+     * TASK-10 — incremental merge for pagination. [existingNormalized] is assumed already
+     * reconciled + filtered + deduped + sorted (i.e. a previous [invoke] result), so only [newItems]
+     * is reconciled/filtered here; the union is then re-deduped and re-sorted.
+     *
+     * Produces the same output as re-normalizing the full concatenation — existing entries win on a
+     * duplicate identity (they precede the new page) and tie ordering is preserved by the stable sort —
+     * but without re-running the per-item catalog lookups over the whole accumulated list on every page
+     * (kills the O(pages²) growth). Assumes a single [userAddress] across the paginated sequence, which
+     * holds: appends carry the list's fixed address, and a new address forces a fresh (non-merge) load.
+     */
+    fun merge(
+        existingNormalized: List<TransactionRecord>,
+        newItems: List<TransactionRecord>,
+        userAddress: String? = null
+    ): List<TransactionRecord> =
+        dedupeAndSort(existingNormalized + reconcileAndFilter(newItems, userAddress))
+
+    private fun reconcileAndFilter(
+        items: List<TransactionRecord>,
+        userAddress: String?
     ): List<TransactionRecord> {
         val reconciled = userAddress
             ?.takeIf { it.isNotBlank() }
             ?.let { address -> items.map { reconcileTransactionDirection(it, address) } }
             ?: items
 
-        return reconciled
-            .filter { isTransactionSupported(it) }
+        return reconciled.filter { isTransactionSupported(it) }
+    }
+
+    private fun dedupeAndSort(records: List<TransactionRecord>): List<TransactionRecord> =
+        records
             .distinctBy { transactionIdentity(it) }
             .sortedWith(
                 compareByDescending<TransactionRecord> { it.status == TransactionStatus.PENDING }
                     .thenByDescending { it.submittedAt ?: it.timestamp }
                     .thenByDescending { it.timestamp }
             )
-    }
 
     private fun isTransactionSupported(transaction: TransactionRecord): Boolean {
         if (transaction.amount <= BigInteger.ZERO) {

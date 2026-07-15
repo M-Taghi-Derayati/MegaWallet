@@ -47,6 +47,9 @@ fun ManualBackupVerifier(
     mnemonic: String,
     onBackupConfirmed: () -> Unit,
 ) {
+    // TASK-02/TD-36 — block screenshots while recovery words are on screen.
+    com.mtd.megawallet.ui.compose.components.SecureFlagEffect()
+
     val words = mnemonic.split(" ").filter { it.isNotEmpty() }
     val scope = rememberCoroutineScope()
     

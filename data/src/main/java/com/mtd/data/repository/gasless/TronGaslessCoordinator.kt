@@ -1,14 +1,14 @@
 package com.mtd.data.repository.gasless
 
 import com.mtd.core.keymanager.KeyManager
-import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.TronAbiEncoder
 import com.mtd.core.utils.TronAddressConverter
 import com.mtd.core.utils.TypedDataSigner
+import com.mtd.data.utils.ExponentialBackoff
+import com.mtd.domain.interfaceRepository.IGaslessRouteResolver
 import com.mtd.domain.interfaceRepository.IGaslessTronRepository
 import com.mtd.domain.interfaceRepository.IWalletRepository
-import com.mtd.domain.model.GaslessChain
 import com.mtd.domain.model.GaslessCoordinatorState
 import com.mtd.domain.model.GaslessEligibilityResult
 import com.mtd.domain.model.GaslessQueuedTx
@@ -28,10 +28,12 @@ import com.mtd.domain.model.TronGaslessTransferRequest
 import com.mtd.domain.model.TronSponsorApproveRequest
 import com.mtd.domain.model.TronSponsorApproveResult
 import com.mtd.domain.model.TronSponsorMode
+import com.mtd.domain.model.core.NetworkType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,31 +43,42 @@ class TronGaslessCoordinator @Inject constructor(
     private val gaslessRepository: IGaslessTronRepository,
     private val walletRepository: IWalletRepository,
     private val keyManager: KeyManager,
-    private val blockchainRegistry: BlockchainRegistry
+    private val blockchainRegistry: BlockchainRegistry,
+    private val routeResolver: IGaslessRouteResolver
 ) {
 
     companion object {
         private const val DEFAULT_DEADLINE_SECONDS: Long = 20 * 60
         private const val DOMAIN_NAME = "MegaRelayerTron"
         private const val DOMAIN_VERSION = "1.0.0"
+        // TVM-family fallback path used only when capability has no route (offline);
+        // preserves today's behavior (TRON→/api/tron) exactly.
+        private const val FAMILY_RELAY_PREFIX = "tron"
     }
 
     private val _state = MutableStateFlow(GaslessCoordinatorState.INIT)
     val state: StateFlow<GaslessCoordinatorState> = _state.asStateFlow()
 
-    suspend fun getSupportedTokens(): ResultResponse<List<GaslessSupportedToken>> {
-        return gaslessRepository.getSupportedTokens()
+    // Phase 3: data-driven routing. relayPrefix comes from networkId via capability;
+    // falls back to the TVM family path when no route is known (no behavior change).
+    private suspend fun relayPrefixFor(networkId: String): String =
+        routeResolver.resolve(networkId)?.relayPrefix ?: FAMILY_RELAY_PREFIX
+
+    suspend fun getSupportedTokens(networkId: String): ResultResponse<List<GaslessSupportedToken>> {
+        return gaslessRepository.getSupportedTokens(relayPrefixFor(networkId))
     }
 
     suspend fun checkEligibility(
         service: GaslessServiceType,
         userAddress: String,
-        tokenAddress: String
+        tokenAddress: String,
+        networkId: String
     ): ResultResponse<GaslessEligibilityResult> {
         return gaslessRepository.checkEligibility(
             service = service,
             userAddress = userAddress,
-            tokenAddress = tokenAddress
+            tokenAddress = tokenAddress,
+            relayPrefix = relayPrefixFor(networkId)
         )
     }
 
@@ -77,8 +90,10 @@ class TronGaslessCoordinator @Inject constructor(
                 token = session.request.tokenAddress,
                 target = session.request.targetAddress,
                 amount = session.request.amount,
+                feeFundingSource = session.request.feeFundingSource,
                 clientFeeAmount = session.request.feeAmount
-            )
+            ),
+            relayPrefix = relayPrefixFor(session.request.networkId)
         )
     }
 
@@ -95,7 +110,9 @@ class TronGaslessCoordinator @Inject constructor(
             val userAddress = walletRepository.getActiveAddressForNetwork(request.networkId)
                 ?: throw IllegalStateException("Active wallet address not found for ${request.networkId}")
 
-            val prepareData = when (val response = gaslessRepository.prepare(userAddress)) {
+            val prepareData = when (
+                val response = gaslessRepository.prepare(userAddress, relayPrefix = relayPrefixFor(request.networkId))
+            ) {
                 is ResultResponse.Success -> response.data
                 is ResultResponse.Error -> throw response.exception
             }
@@ -137,6 +154,7 @@ class TronGaslessCoordinator @Inject constructor(
                 relayerContract = prepareData.relayerContract,
                 treasuryAddress = treasury,
                 nonce = prepareData.nonce,
+                assetId = request.assetId,
                 allowance = allowance,
                 prepareToken = prepareData.prepareToken,
                 idempotencyKey = UUID.randomUUID().toString()
@@ -166,6 +184,7 @@ class TronGaslessCoordinator @Inject constructor(
             networkName = session.networkName,
             toAddress = session.relayerContract,
             amount = approveAmount,
+            assetId = session.assetId,
             contractAddress = session.request.tokenAddress,
             feeLimit = feeLimit,
             contractFunction = "approve(address,uint256)",
@@ -184,7 +203,8 @@ class TronGaslessCoordinator @Inject constructor(
                 TronApproveQuoteRequest(
                     userAddress = session.userAddress,
                     tokenAddress = session.request.tokenAddress
-                )
+                ),
+                relayPrefix = relayPrefixFor(session.request.networkId)
             )
         } catch (e: Exception) {
             ResultResponse.Error(e)
@@ -235,10 +255,12 @@ class TronGaslessCoordinator @Inject constructor(
                     userAddress = session.userAddress,
                     tokenAddress = session.request.tokenAddress,
                     mode = mode
-                )
+                ),
+                relayPrefix = relayPrefixFor(session.request.networkId)
             )
             when (response) {
                 is ResultResponse.Success -> {
+                    Timber.i("[TronGasless] sponsor-approve mode=$mode funded=${response.data.funded} reason=${response.data.reason}")
                     _state.value = if (response.data.funded) {
                         GaslessCoordinatorState.AWAITING_APPROVE_CONFIRMATION
                     } else {
@@ -247,6 +269,7 @@ class TronGaslessCoordinator @Inject constructor(
                     response
                 }
                 is ResultResponse.Error -> {
+                    Timber.w(response.exception, "[TronGasless] sponsor-approve failed mode=$mode")
                     _state.value = GaslessCoordinatorState.NEEDS_APPROVE
                     response
                 }
@@ -257,7 +280,20 @@ class TronGaslessCoordinator @Inject constructor(
         }
     }
 
-    suspend fun signAndSubmit(session: TronGaslessSession): ResultResponse<GaslessQueuedTx> {
+    /**
+     * Sign and relay the gasless transfer, with a bounded requote: a single 409 RequoteRequired
+     * re-runs prepare + quote with a fresh session (new prepareToken / nonce / idempotency key) and
+     * retries once. All other typed errors propagate verbatim — no silent WALLET fallback.
+     */
+    suspend fun signAndSubmit(session: TronGaslessSession): ResultResponse<GaslessQueuedTx> =
+        withBoundedRequote(
+            initialSession = session,
+            label = "TronGasless",
+            reprepare = { prepareSession(it.request) },
+            attempt = { attemptSignAndSubmit(it) }
+        )
+
+    private suspend fun attemptSignAndSubmit(session: TronGaslessSession): ResultResponse<GaslessQueuedTx> {
         return try {
             if (session.needsApprove) {
                 throw IllegalStateException("Insufficient allowance. Approve flow must be completed first.")
@@ -267,6 +303,9 @@ class TronGaslessCoordinator @Inject constructor(
             val credentials = keyManager.getCredentialsForChain(session.chainId)
                 ?: throw IllegalStateException("Wallet is locked. Credentials unavailable for chain ${session.chainId}")
 
+            // Resolve routing once so quote + relay (and the later poll) hit the SAME relayer.
+            val relayPrefix = relayPrefixFor(session.request.networkId)
+
             val quote = when (
                 val response = gaslessRepository.quote(
                     GaslessQuoteRequest(
@@ -275,12 +314,19 @@ class TronGaslessCoordinator @Inject constructor(
                         token = session.request.tokenAddress,
                         target = session.request.targetAddress,
                         amount = session.request.amount,
+                        feeFundingSource = session.request.feeFundingSource,
                         clientFeeAmount = session.request.feeAmount
-                    )
+                    ),
+                    relayPrefix = relayPrefix
                 )
             ) {
                 is ResultResponse.Success -> response.data
-                is ResultResponse.Error -> throw response.exception
+                // Strict: surface the typed ApiError (e.g. InsufficientGasCredit / RaceConditionLock)
+                // to the caller. NEVER silently re-quote with feeFundingSource=WALLET as a fallback.
+                is ResultResponse.Error -> {
+                    _state.value = GaslessCoordinatorState.FAILED
+                    return response
+                }
             }
             val canonical = quote.canonicalParams
             val deadline = canonical.deadline
@@ -312,7 +358,7 @@ class TronGaslessCoordinator @Inject constructor(
 
             _state.value = GaslessCoordinatorState.SUBMITTING_RELAY
             val relayPayload = GaslessRelayPayload(
-                chain = GaslessChain.TRON,
+                networkType = NetworkType.TVM,
                 quoteToken = quote.quoteToken,
                 params = GaslessRelayParams(
                     user = session.userAddress,
@@ -329,14 +375,19 @@ class TronGaslessCoordinator @Inject constructor(
             when (
                 val response = gaslessRepository.submitRelay(
                     payload = relayPayload,
-                    idempotencyKey = session.idempotencyKey
+                    idempotencyKey = session.idempotencyKey,
+                    relayPrefix = relayPrefix
                 )
             ) {
                 is ResultResponse.Success -> {
                     _state.value = GaslessCoordinatorState.QUEUED
                     response
                 }
-                is ResultResponse.Error -> throw response.exception
+                // Strict: propagate the typed ApiError from /relay verbatim — no auto-fallback.
+                is ResultResponse.Error -> {
+                    _state.value = GaslessCoordinatorState.FAILED
+                    return response
+                }
             }
         } catch (e: Exception) {
             _state.value = GaslessCoordinatorState.FAILED
@@ -346,14 +397,22 @@ class TronGaslessCoordinator @Inject constructor(
 
     suspend fun pollUntilFinal(
         txId: String,
+        networkId: String,
         pollIntervalMs: Long = 4_000L,
-        timeoutMs: Long = 5 * 60_000L
+        timeoutMs: Long = 5 * 60_000L,
+        maxPollIntervalMs: Long = 30_000L
     ): ResultResponse<GaslessTxStatus> {
+        val relayPrefix = relayPrefixFor(networkId)
         val startedAt = System.currentTimeMillis()
+        val base = pollIntervalMs.coerceAtLeast(1L)
+        val backoff = ExponentialBackoff(
+            baseDelayMs = base,
+            maxDelayMs = maxPollIntervalMs.coerceAtLeast(base)
+        )
         _state.value = GaslessCoordinatorState.PROCESSING
 
         while (System.currentTimeMillis() - startedAt < timeoutMs) {
-            when (val response = gaslessRepository.getTxStatus(txId)) {
+            when (val response = gaslessRepository.getTxStatus(txId, relayPrefix)) {
                 is ResultResponse.Success -> {
                     val status = response.data
                     when {
@@ -386,7 +445,7 @@ class TronGaslessCoordinator @Inject constructor(
                     return response
                 }
             }
-            delay(pollIntervalMs)
+            delay(backoff.nextDelayMs())
         }
 
         _state.value = GaslessCoordinatorState.FAILED

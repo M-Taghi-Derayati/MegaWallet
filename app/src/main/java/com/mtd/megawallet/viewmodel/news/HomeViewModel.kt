@@ -1,8 +1,6 @@
 package com.mtd.megawallet.viewmodel.news
 
-import com.mtd.domain.model.assets.AssetConfig
 import com.mtd.core.manager.ErrorManager
-import com.mtd.domain.model.core.NetworkType
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.core.utils.formatWithSeparator
 import com.mtd.domain.interfaceRepository.IAppCacheStore
@@ -11,15 +9,16 @@ import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.model.AppEvent
-import com.mtd.domain.model.assets.AssetPriceDto
-import com.mtd.domain.model.ResultResponse
-import com.mtd.domain.model.core.Wallet
-import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.CachedAssetBalance
 import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.HomeUiState.DisplayCurrency
 import com.mtd.domain.model.NetworkShare
+import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.assets.AssetConfig
+import com.mtd.domain.model.assets.AssetPriceDto
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.usecase.asset.GetLatestAssetPricesUseCase
 import com.mtd.domain.usecase.asset.GetUsdToIrrRateUseCase
 import com.mtd.domain.usecase.network.GetNetworkTypeByIdUseCase
@@ -29,6 +28,7 @@ import com.mtd.domain.usecase.wallet.GetBalancesForMultipleWalletsUseCase
 import com.mtd.domain.usecase.wallet.HasWalletUseCase
 import com.mtd.domain.usecase.wallet.LoadExistingWalletUseCase
 import com.mtd.domain.usecase.wallet.ObserveActiveWalletUseCase
+import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -287,9 +287,12 @@ class HomeViewModel @Inject constructor(
             }
 
             val allAssets = assetCatalog.getAllAssetConfigs()
-            val allCoinIds = allAssets.map { it.symbol }.distinct()
+            val symbols = allAssets.map { it.symbol }.distinct()
+            val ids = allAssets.map { it.id }.distinct()
 
-            val result = getLatestAssetPricesUseCase(allCoinIds)
+            val resultPair: Pair<List<String>, List<String>> = Pair(symbols, ids)
+
+            val result = getLatestAssetPricesUseCase(resultPair)
             if (result is ResultResponse.Success) {
                 val pricesMap = result.data.associateBy { it.assetId }
 

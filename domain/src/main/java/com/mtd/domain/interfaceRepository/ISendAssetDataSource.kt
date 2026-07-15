@@ -5,6 +5,7 @@ import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.send.SendFeeQuote
 import java.math.BigDecimal
+import java.math.BigInteger
 
 interface ISendAssetDataSource {
     suspend fun refreshAssetBalance(
@@ -16,6 +17,7 @@ interface ISendAssetDataSource {
     suspend fun estimateFees(
         wallet: Wallet,
         asset: AssetItem,
-        recipientAddress: String
+        recipientAddress: String,
+        amount: BigInteger
     ): ResultResponse<SendFeeQuote>
 }

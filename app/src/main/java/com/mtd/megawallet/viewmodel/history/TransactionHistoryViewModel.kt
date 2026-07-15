@@ -13,7 +13,9 @@ import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.BitcoinTransaction
 import com.mtd.domain.model.EvmTransaction
 import com.mtd.domain.model.HISTORY_ALL_NETWORKS_OPTION_ID
+import com.mtd.domain.model.HistoryAddress
 import com.mtd.domain.model.HistoryNetworkOption
+import com.mtd.domain.model.HistoryPage
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionRecord
@@ -22,10 +24,13 @@ import com.mtd.domain.model.TronTransaction
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.WalletKey
+import com.mtd.domain.model.error.ApiError
+import com.mtd.domain.model.error.ApiException
 import com.mtd.domain.usecase.history.BuildHistoryNetworkOptionsUseCase
 import com.mtd.domain.usecase.history.BuildPendingHistoryTransactionUseCase
 import com.mtd.domain.usecase.history.GetTransactionFeeDetailsUseCase
 import com.mtd.domain.usecase.history.GetTransactionHistoryUseCase
+import com.mtd.domain.usecase.history.GetUnifiedHistoryPageUseCase
 import com.mtd.domain.usecase.history.GetWalletAddressBookUseCase
 import com.mtd.domain.usecase.history.NormalizeTransactionHistoryUseCase
 import com.mtd.domain.usecase.wallet.GetActiveWalletIdUseCase
@@ -42,6 +47,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import timber.log.Timber
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.text.SimpleDateFormat
@@ -54,8 +60,10 @@ private data class WalletAddressReference(
     val color: Int
 )
 
-private const val HISTORY_CACHE_SCHEMA_VERSION = 2
+private const val HISTORY_CACHE_SCHEMA_VERSION = 3
 private const val HISTORY_NETWORK_STALE_MS = 10 * 60 * 1000L
+private const val HISTORY_PAGE_LIMIT = 20
+private const val MAX_HISTORY_PAIRS = 25
 
 @HiltViewModel
 class TransactionHistoryViewModel @Inject constructor(
@@ -64,6 +72,7 @@ class TransactionHistoryViewModel @Inject constructor(
     private val appEventBus: IAppEventBus,
     private val cacheStore: IAppCacheStore,
     private val getTransactionHistoryUseCase: GetTransactionHistoryUseCase,
+    private val getUnifiedHistoryPageUseCase: GetUnifiedHistoryPageUseCase,
     private val getTransactionFeeDetailsUseCase: GetTransactionFeeDetailsUseCase,
     private val buildHistoryNetworkOptionsUseCase: BuildHistoryNetworkOptionsUseCase,
     private val buildPendingHistoryTransactionUseCase: BuildPendingHistoryTransactionUseCase,
@@ -97,6 +106,21 @@ class TransactionHistoryViewModel @Inject constructor(
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage = _errorMessage.asStateFlow()
+
+    // Unified-history cursor pagination state (§1.7). Only meaningful while [unifiedActive].
+    private val _hasMore = MutableStateFlow(false)
+    val hasMore = _hasMore.asStateFlow()
+
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore = _isLoadingMore.asStateFlow()
+
+    /** True when the current page's response carried `staleSources` ⇒ list may be incomplete. */
+    private val _showStaleWarning = MutableStateFlow(false)
+    val showStaleWarning = _showStaleWarning.asStateFlow()
+
+    private var nextCursor: String? = null
+    private var currentPairs: List<HistoryAddress> = emptyList()
+    private var unifiedActive: Boolean = false
 
     private var lastLoadedKey: String? = null
     private var currentNetworkNameStr: String? = null
@@ -169,67 +193,212 @@ class TransactionHistoryViewModel @Inject constructor(
 
         lastLoadedKey = requestKey
 
-        if (normalizedNetwork == null || normalizedAddress == null) {
-            selectAllNetworks()
-            loadAllHistory(forceRefresh)
-            return
-        }
+        val isAll = normalizedNetwork == null || normalizedAddress == null
+        if (isAll) selectAllNetworks()
 
         launchSafe {
-            val refreshingId = optionIdFor(normalizedNetwork, normalizedAddress)
-            setNetworkRefreshing(refreshingId, true)
+            // The network filter changed ⇒ any previous cursor is for a different request set.
+            nextCursor = null
+            _hasMore.value = false
+            _isLoadingMore.value = false
+            _showStaleWarning.value = false
             _isLoading.value = true
             _transactions.value = emptyList()
             _errorMessage.value = null
             _selectedTransaction.value = null
 
+            // Build the (networkId,address) pair-set + matching refreshing markers.
+            val wallet = if (isAll) getActiveWalletUseCase() else null
+            val allKeys = wallet?.keys
+                ?.distinctBy { key -> key.networkName.name to key.address.lowercase(Locale.US) }
+                .orEmpty()
+            val pairs = if (isAll) {
+                buildHistoryPairs(allKeys)
+            } else {
+                buildSinglePair(normalizedNetwork, normalizedAddress)
+            }
+            currentPairs = pairs
+
+            val refreshingIds = if (isAll) {
+                allKeys.map { optionId(it.networkName.name, it.address) } + HISTORY_ALL_NETWORKS_OPTION_ID
+            } else {
+                listOfNotNull(optionIdFor(normalizedNetwork, normalizedAddress))
+            }
+            setNetworksRefreshing(refreshingIds, true)
+
             try {
                 refreshWalletAddressBook()
 
-                // Check Cache
                 val walletId = getActiveWalletIdUseCase() ?: "unknown"
                 val cacheKey = getHistoryCacheKey(walletId, normalizedNetwork, normalizedAddress)
-                
+
+                // Page-1 cache only (cursor pages are never cached).
                 if (!forceRefresh) {
                     val cached = cacheStore.get(cacheKey, Array<TransactionRecord>::class.java)
                     if (cached != null && cached.isNotEmpty()) {
-                        val history = normalizeTransactionHistoryUseCase(cached.toList(), normalizedAddress)
-                        _transactions.value = history
-                        markNetworkUpdated(refreshingId)
-                        _isLoading.value = false
-                        // Optional: Still fetch in background if cache is old? 
-                        // For now, let's just return if cache found.
-                        return@launchSafe 
+                        _transactions.value = normalizeTransactionHistoryUseCase(cached.toList(), normalizedAddress)
+                        markNetworksUpdated(refreshingIds)
+                        return@launchSafe
                     }
                 }
 
-                val networkName = NetworkName.entries.find {
-                    it.name.equals(normalizedNetwork, ignoreCase = true)
+                // Try the unified proxy page first (§1.7); fall back on PROXY-unsupported (DIRECT mode).
+                val unified = if (pairs.isNotEmpty()) {
+                    getUnifiedHistoryPageUseCase(pairs, cursor = null, limit = HISTORY_PAGE_LIMIT)
+                } else {
+                    null
                 }
 
-                if (networkName == null) {
-                    _transactions.value = emptyList()
-                    _errorMessage.value = "Network not found"
-                    return@launchSafe
-                }
-
-                when (val result = getTransactionHistoryUseCase(networkName, normalizedAddress)) {
+                when (unified) {
                     is ResultResponse.Success -> {
-                        val history = normalizeTransactionHistoryUseCase(result.data, normalizedAddress)
-                        _transactions.value = history
-                        markNetworkUpdated(refreshingId)
-                        // Save to Cache
-                        cacheStore.put(cacheKey, history.toTypedArray())
+                        unifiedActive = true
+                        applyUnifiedPage(unified.data, normalizedAddress, append = false)
+                        markNetworksUpdated(refreshingIds)
+                        cacheStore.put(cacheKey, _transactions.value.toTypedArray())
                     }
 
                     is ResultResponse.Error -> {
-                        _transactions.value = emptyList()
-                        _errorMessage.value = result.exception.message ?: "Failed to load transaction history"
+                        unifiedActive = false
+                        val apiError = (unified.exception as? ApiException)?.apiError
+                        if (apiError == ApiError.UnsupportedOperation) {
+                            loadLegacy(isAll, normalizedNetwork, normalizedAddress, cacheKey, refreshingIds)
+                        } else {
+                            _transactions.value = emptyList()
+                            _errorMessage.value = (unified.exception as? ApiException)?.reasonFa
+                                ?: unified.exception.message
+                                ?: "Failed to load transaction history"
+                        }
+                    }
+
+                    null -> {
+                        // No resolvable proxy pairs — use per-network aggregation.
+                        unifiedActive = false
+                        loadLegacy(isAll, normalizedNetwork, normalizedAddress, cacheKey, refreshingIds)
                     }
                 }
             } finally {
                 _isLoading.value = false
-                setNetworkRefreshing(refreshingId, false)
+                setNetworksRefreshing(refreshingIds, false)
+            }
+        }
+    }
+
+    /** Loads the next cursor page (§1.7) for the active unified request. No-op in DIRECT/legacy mode. */
+    fun loadMore() {
+        if (!unifiedActive || !_hasMore.value || _isLoadingMore.value) return
+        val cursor = nextCursor ?: return
+        val pairs = currentPairs
+        if (pairs.isEmpty()) return
+
+        launchSafe {
+            _isLoadingMore.value = true
+            try {
+                when (val result = getUnifiedHistoryPageUseCase(pairs, cursor = cursor, limit = HISTORY_PAGE_LIMIT)) {
+                    is ResultResponse.Success -> applyUnifiedPage(result.data, currentUserAddress, append = true)
+                    is ResultResponse.Error -> {
+                        // Stop paginating; keep what we have and hint that the list may be incomplete.
+                        _hasMore.value = false
+                        _showStaleWarning.value = true
+                    }
+                }
+            } finally {
+                _isLoadingMore.value = false
+            }
+        }
+    }
+
+    private fun applyUnifiedPage(page: HistoryPage, address: String?, append: Boolean) {
+        nextCursor = page.nextCursor
+        _hasMore.value = page.hasMore
+        if (!page.staleSources.isNullOrEmpty()) {
+            _showStaleWarning.value = true
+            Timber.w("Unified history stale sources: ${page.staleSources}")
+        }
+        // TASK-10 — on append, merge only the new page into the already-normalized list instead of
+        // re-normalizing the whole accumulation each page (was O(pages²) with per-item catalog lookups).
+        _transactions.value = if (append) {
+            normalizeTransactionHistoryUseCase.merge(_transactions.value, page.items, address)
+        } else {
+            normalizeTransactionHistoryUseCase(page.items, address)
+        }
+    }
+
+    private fun buildSinglePair(networkName: String?, address: String?): List<HistoryAddress> {
+        if (networkName.isNullOrBlank() || address.isNullOrBlank()) return emptyList()
+        val resolved = NetworkName.entries.find { it.name.equals(networkName, ignoreCase = true) } ?: return emptyList()
+        val networkId = networkCatalog.getNetworkInfoByName(resolved)?.id ?: return emptyList()
+        return listOf(HistoryAddress(networkId, address))
+    }
+
+    private fun buildHistoryPairs(keys: List<WalletKey>): List<HistoryAddress> {
+        val pairs = keys.mapNotNull { key ->
+            val networkId = networkCatalog.getNetworkInfoByName(key.networkName)?.id ?: return@mapNotNull null
+            HistoryAddress(networkId, key.address)
+        }
+        if (pairs.size > MAX_HISTORY_PAIRS) {
+            Timber.w(
+                "History request capped at $MAX_HISTORY_PAIRS pairs; dropping ${pairs.size - MAX_HISTORY_PAIRS} of ${pairs.size}"
+            )
+            return pairs.take(MAX_HISTORY_PAIRS)
+        }
+        return pairs
+    }
+
+    /** DIRECT-mode / unsupported-proxy fallback: per-network RPC aggregation (KAN-11 guardrail). */
+    private suspend fun loadLegacy(
+        isAll: Boolean,
+        normalizedNetwork: String?,
+        normalizedAddress: String?,
+        cacheKey: String,
+        refreshingIds: List<String>
+    ) {
+        if (isAll) {
+            val wallet = getActiveWalletUseCase() ?: run {
+                _transactions.value = emptyList()
+                _errorMessage.value = "No active wallet selected"
+                return
+            }
+            val keys = wallet.keys.distinctBy { key -> key.networkName.name to key.address.lowercase(Locale.US) }
+            val aggregatedResults = mutableListOf<TransactionRecord>()
+            val resultMutex = Mutex()
+
+            supervisorScope {
+                keys.map { key ->
+                    async(Dispatchers.IO) {
+                        val networkResults = fetchHistoryForWalletKey(key)
+                        resultMutex.withLock {
+                            if (networkResults.isNotEmpty()) {
+                                aggregatedResults.addAll(networkResults)
+                                _transactions.value = normalizeTransactionHistoryUseCase(aggregatedResults.toList())
+                            }
+                        }
+                    }
+                }.joinAll()
+            }
+
+            val finalHistory = normalizeTransactionHistoryUseCase(aggregatedResults)
+            _transactions.value = finalHistory
+            markNetworksUpdated(refreshingIds)
+            cacheStore.put(cacheKey, finalHistory.toTypedArray())
+        } else {
+            val networkName = NetworkName.entries.find { it.name.equals(normalizedNetwork, ignoreCase = true) }
+            if (networkName == null || normalizedAddress == null) {
+                _transactions.value = emptyList()
+                _errorMessage.value = "Network not found"
+                return
+            }
+            when (val result = getTransactionHistoryUseCase(networkName, normalizedAddress)) {
+                is ResultResponse.Success -> {
+                    val history = normalizeTransactionHistoryUseCase(result.data, normalizedAddress)
+                    _transactions.value = history
+                    markNetworksUpdated(refreshingIds)
+                    cacheStore.put(cacheKey, history.toTypedArray())
+                }
+
+                is ResultResponse.Error -> {
+                    _transactions.value = emptyList()
+                    _errorMessage.value = result.exception.message ?: "Failed to load transaction history"
+                }
             }
         }
     }
@@ -323,77 +492,6 @@ class TransactionHistoryViewModel @Inject constructor(
                 }
             } finally {
                 _isLoading.value = false
-            }
-        }
-    }
-
-    private fun loadAllHistory(forceRefresh: Boolean = false) {
-        launchSafe {
-            setNetworkRefreshing(HISTORY_ALL_NETWORKS_OPTION_ID, true)
-            _isLoading.value = true
-            _transactions.value = emptyList()
-            _errorMessage.value = null
-            _selectedTransaction.value = null
-
-            try {
-                val wallet = getActiveWalletUseCase() ?: run {
-                    _transactions.value = emptyList()
-                    _errorMessage.value = "No active wallet selected"
-                    return@launchSafe
-                }
-
-                val keys = wallet.keys
-                    .distinctBy { key -> key.networkName.name to key.address.lowercase(Locale.US) }
-                val networkOptionIds = keys.map { key -> optionId(key.networkName.name, key.address) }
-                setNetworksRefreshing(networkOptionIds, true)
-
-                val walletId = wallet.id
-                val cacheKey = getHistoryCacheKey(walletId, null, null)
-
-                try {
-                    if (!forceRefresh) {
-                        val cached = cacheStore.get(cacheKey, Array<TransactionRecord>::class.java)
-                        if (cached != null && cached.isNotEmpty()) {
-                            val history = normalizeTransactionHistoryUseCase(cached.toList())
-                            _transactions.value = history
-                            markNetworksUpdated(networkOptionIds + HISTORY_ALL_NETWORKS_OPTION_ID)
-                            return@launchSafe
-                        }
-                    }
-
-                    refreshWalletAddressBook()
-
-                    val aggregatedResults = mutableListOf<TransactionRecord>()
-                    val resultMutex = Mutex()
-
-                    supervisorScope {
-                        keys.map { key ->
-                            async(Dispatchers.IO) {
-                                val networkResults = fetchHistoryForWalletKey(key)
-                                val networkOptionId = optionId(key.networkName.name, key.address)
-                                resultMutex.withLock {
-                                    markNetworkUpdated(networkOptionId)
-                                    if (networkResults.isNotEmpty()) {
-                                        aggregatedResults.addAll(networkResults)
-                                        _transactions.value = normalizeTransactionHistoryUseCase(aggregatedResults.toList())
-                                    }
-                                }
-                            }
-                        }.joinAll()
-                    }
-
-                    val finalHistory = normalizeTransactionHistoryUseCase(aggregatedResults)
-                    _transactions.value = finalHistory
-                    markNetworkUpdated(HISTORY_ALL_NETWORKS_OPTION_ID)
-
-                    // Save to Cache
-                    cacheStore.put(cacheKey, finalHistory.toTypedArray())
-                } finally {
-                    setNetworksRefreshing(networkOptionIds, false)
-                }
-            } finally {
-                _isLoading.value = false
-                setNetworkRefreshing(HISTORY_ALL_NETWORKS_OPTION_ID, false)
             }
         }
     }
@@ -661,7 +759,7 @@ class TransactionHistoryViewModel @Inject constructor(
 
     fun formatTransactionFee(transaction: TransactionRecord): String {
         val feeValue = transactionDetailFor(transaction)?.fee ?: transaction.fee
-        val feeDecimal = rawFeeToDecimal(transaction, feeValue)
+        val feeDecimal = rawFeeToDecimal(transaction, feeValue?: BigInteger.ZERO)
         val symbol = transactionSymbol(transaction, forFee = true)
 
         return if (feeValue == BigInteger.ZERO) {
@@ -841,9 +939,6 @@ class TransactionHistoryViewModel @Inject constructor(
         }
     }
 
-    private fun rawFeeToDecimal(transaction: TransactionRecord): BigDecimal {
-        return rawFeeToDecimal(transaction, transaction.fee)
-    }
 
     private fun rawFeeToDecimal(transaction: TransactionRecord, fee: BigInteger): BigDecimal {
         return BigDecimal(fee).movePointLeft(networkDecimals(transaction))

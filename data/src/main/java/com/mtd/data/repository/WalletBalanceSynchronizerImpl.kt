@@ -53,8 +53,11 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
 
     private suspend fun refreshAllPrices(wallets: List<Wallet>) {
         val allAssets = assetCatalog.getAllAssetConfigs()
-        val allCoinIds = allAssets.map { it.symbol }.distinct()
-        val pricesResult = marketDataRepository.getLatestPrices(allCoinIds)
+        val symbols = allAssets.map { it.symbol }.distinct()
+        val ids = allAssets.map { it.id }.distinct()
+
+        val resultPair: Pair<List<String>, List<String>> = Pair(symbols, ids)
+        val pricesResult = marketDataRepository.getLatestPrices(resultPair)
 
         if (pricesResult is ResultResponse.Success) {
             val pricesMap = pricesResult.data.associateBy { it.assetId }

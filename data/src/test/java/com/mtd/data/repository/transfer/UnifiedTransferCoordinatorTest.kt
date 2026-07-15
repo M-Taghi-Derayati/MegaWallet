@@ -7,10 +7,13 @@ import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.data.repository.gasless.EvmGaslessCoordinator
 import com.mtd.data.repository.gasless.PendingGaslessTxStore
 import com.mtd.data.repository.gasless.TronGaslessCoordinator
+import com.mtd.domain.interfaceRepository.IAssetCatalog
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.EvmApproveQuoteResult
 import com.mtd.domain.model.EvmGaslessSession
 import com.mtd.domain.model.EvmGaslessTransferRequest
-import com.mtd.domain.model.GaslessChain
 import com.mtd.domain.model.GaslessQueuedTx
 import com.mtd.domain.model.GaslessTxStatus
 import com.mtd.domain.model.PendingGaslessTx
@@ -40,6 +43,8 @@ class UnifiedTransferCoordinatorTest {
     private lateinit var evmGaslessCoordinator: EvmGaslessCoordinator
     private lateinit var tronGaslessCoordinator: TronGaslessCoordinator
     private lateinit var pendingStore: PendingGaslessTxStore
+    private lateinit var connectionModeProvider: IBlockchainConnectionModeProvider
+    private lateinit var assetCatalog: IAssetCatalog
     private lateinit var coordinator: UnifiedTransferCoordinator
 
     @Before
@@ -49,13 +54,19 @@ class UnifiedTransferCoordinatorTest {
         evmGaslessCoordinator = mockk(relaxed = true)
         tronGaslessCoordinator = mockk(relaxed = true)
         pendingStore = mockk(relaxed = true)
+        connectionModeProvider = mockk(relaxed = true)
+        assetCatalog = mockk(relaxed = true)
+        // These tests cover the DIRECT path; default the mode accordingly.
+        every { connectionModeProvider.currentMode() } returns BlockchainConnectionMode.DIRECT
 
         coordinator = UnifiedTransferCoordinator(
             walletRepository = walletRepository,
             blockchainRegistry = blockchainRegistry,
             evmGaslessCoordinator = evmGaslessCoordinator,
             tronGaslessCoordinator = tronGaslessCoordinator,
-            pendingGaslessTxStore = pendingStore
+            pendingGaslessTxStore = pendingStore,
+            connectionModeProvider = connectionModeProvider,
+            assetCatalog = assetCatalog
         )
     }
 
@@ -67,6 +78,7 @@ class UnifiedTransferCoordinatorTest {
 
         val request = UnifiedTransferRequest(
             networkId = "sepolia",
+            assetId = "ETH-SEPOLIA",
             mode = TransferMode.NORMAL,
             toAddress = "0x000000000000000000000000000000000000dEaD",
             amount = BigInteger("1000000000000000"),
@@ -95,6 +107,7 @@ class UnifiedTransferCoordinatorTest {
 
         val request = UnifiedTransferRequest(
             networkId = "shasta_testnet",
+            assetId = "USDT-TRON",
             mode = TransferMode.NORMAL,
             toAddress = "TAUNv6F6m3n9aYH6Q4qk8Vh8W5u7WkQF5A",
             amount = BigInteger("1000"),
@@ -123,6 +136,7 @@ class UnifiedTransferCoordinatorTest {
 
         val request = UnifiedTransferRequest(
             networkId = "doge_mainnet",
+            assetId = "DOGE-DOGE_MAINNET",
             mode = TransferMode.NORMAL,
             toAddress = "DH5yaieqoZN36fDVciNyRueRGvGLR3mr7L",
             amount = BigInteger("100000000")
@@ -144,6 +158,7 @@ class UnifiedTransferCoordinatorTest {
     fun `sendNormal returns error for invalid request and does not call walletRepository`() = runTest {
         val request = UnifiedTransferRequest(
             networkId = "sepolia",
+            assetId = "ETH-SEPOLIA",
             mode = TransferMode.NORMAL,
             toAddress = "0x000000000000000000000000000000000000dEaD",
             amount = BigInteger.ZERO
@@ -163,6 +178,7 @@ class UnifiedTransferCoordinatorTest {
         val evmSession = EvmGaslessSession(
             request = EvmGaslessTransferRequest(
                 networkId = "sepolia",
+                assetId = "USDC-SEPOLIA",
                 tokenAddress = "0x186cca6904490818AB0DC409ca59D932A2366031",
                 targetAddress = "0x000000000000000000000000000000000000dEaD",
                 amount = BigInteger("1"),
@@ -171,6 +187,7 @@ class UnifiedTransferCoordinatorTest {
             networkName = NetworkName.SEPOLIA,
             userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
             chainId = 11155111L,
+            assetId = "USDC-SEPOLIA",
             relayerContract = "0x1111111111111111111111111111111111111111",
             treasuryAddress = "0x2222222222222222222222222222222222222222",
             nonce = BigInteger.ONE,
@@ -182,6 +199,7 @@ class UnifiedTransferCoordinatorTest {
 
         val request = UnifiedTransferRequest(
             networkId = "sepolia",
+            assetId = "USDC-SEPOLIA",
             mode = TransferMode.GASLESS,
             toAddress = "0x000000000000000000000000000000000000dEaD",
             amount = BigInteger("1"),
@@ -197,12 +215,18 @@ class UnifiedTransferCoordinatorTest {
         coVerify(exactly = 0) { tronGaslessCoordinator.prepareSession(any()) }
     }
 
+    // Phase 4: the hardcoded BSC_CHAIN_IDS gasless block was removed — per-network
+    // gasless availability is now decided by the backend capability
+    // (FeatureAvailabilityResolver), so prepareGasless no longer blocks BSC. The two
+    // BSC-block tests that asserted the old behavior were deleted.
+
     @Test
-    fun `submitGasless stores pending EVM queue item`() = runTest {
+    fun `quoteEvmApproveRequirement dispatches only to EVM coordinator`() = runTest {
         val session = UnifiedGaslessSession.Evm(
             EvmGaslessSession(
                 request = EvmGaslessTransferRequest(
                     networkId = "sepolia",
+                    assetId = "USDC-SEPOLIA",
                     tokenAddress = "0x186cca6904490818AB0DC409ca59D932A2366031",
                     targetAddress = "0x000000000000000000000000000000000000dEaD",
                     amount = BigInteger("1"),
@@ -211,6 +235,45 @@ class UnifiedTransferCoordinatorTest {
                 networkName = NetworkName.SEPOLIA,
                 userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
                 chainId = 11155111L,
+                assetId = "USDC-SEPOLIA",
+                relayerContract = "0x1111111111111111111111111111111111111111",
+                treasuryAddress = "0x2222222222222222222222222222222222222222",
+                nonce = BigInteger.ONE,
+                allowance = BigInteger.ZERO,
+                prepareToken = "prepare_token_evm_1",
+                idempotencyKey = "idem_evm_1"
+            )
+        )
+        val quote = EvmApproveQuoteResult(
+            approveRequired = true,
+            approvalAmount = BigInteger.TEN,
+            approvalAmountMode = "unlimited"
+        )
+        coEvery { evmGaslessCoordinator.quoteApproveRequirement(any()) } returns ResultResponse.Success(quote)
+
+        val result = coordinator.quoteEvmApproveRequirement(session)
+
+        assertEquals(quote, (result as ResultResponse.Success).data)
+        coVerify(exactly = 1) { evmGaslessCoordinator.quoteApproveRequirement(session.value) }
+        coVerify(exactly = 0) { tronGaslessCoordinator.quoteApproveRequirement(any()) }
+    }
+
+    @Test
+    fun `submitGasless stores pending EVM queue item`() = runTest {
+        val session = UnifiedGaslessSession.Evm(
+            EvmGaslessSession(
+                request = EvmGaslessTransferRequest(
+                    networkId = "sepolia",
+                    assetId = "USDC-SEPOLIA",
+                    tokenAddress = "0x186cca6904490818AB0DC409ca59D932A2366031",
+                    targetAddress = "0x000000000000000000000000000000000000dEaD",
+                    amount = BigInteger("1"),
+                    permit2Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+                ),
+                networkName = NetworkName.SEPOLIA,
+                userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
+                chainId = 11155111L,
+                assetId = "USDC-SEPOLIA",
                 relayerContract = "0x1111111111111111111111111111111111111111",
                 treasuryAddress = "0x2222222222222222222222222222222222222222",
                 nonce = BigInteger.ONE,
@@ -230,7 +293,7 @@ class UnifiedTransferCoordinatorTest {
         val slot = slot<PendingGaslessTx>()
         every { pendingStore.put(capture(slot)) } returns Unit
         coordinator.submitGasless(session)
-        assertEquals(GaslessChain.EVM, slot.captured.chain)
+        assertEquals("sepolia", slot.captured.networkId)
         assertEquals("queue_1", slot.captured.queueId)
         assertEquals("wallet_1", slot.captured.walletId)
     }
@@ -243,11 +306,13 @@ class UnifiedTransferCoordinatorTest {
                     networkId = "shasta_testnet",
                     tokenAddress = "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
                     targetAddress = "TAUNv6F6m3n9aYH6Q4qk8Vh8W5u7WkQF5A",
+                    assetId = "USDT-TRON",
                     amount = BigInteger("1")
                 ),
                 networkName = NetworkName.SHASTA,
                 userAddress = "TAUNv6F6m3n9aYH6Q4qk8Vh8W5u7WkQF5A",
                 chainId = 2494104990L,
+                assetId = "USDT-TRON",
                 relayerContract = "TVjsyZ7fYF3qLF6BQgPmTEZy1xrNNyVAAA",
                 treasuryAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
                 nonce = BigInteger.ONE,
@@ -259,6 +324,7 @@ class UnifiedTransferCoordinatorTest {
         coEvery {
             tronGaslessCoordinator.pollUntilFinal(
                 txId = "queue_1",
+                networkId = "shasta_testnet",
                 pollIntervalMs = 1L,
                 timeoutMs = 20L
             )
@@ -281,7 +347,7 @@ class UnifiedTransferCoordinatorTest {
         assertTrue(result is ResultResponse.Success)
         every { pendingStore.remove(any(), any()) } returns Unit
         coordinator.pollGaslessUntilFinal(session, "queue_1", pollIntervalMs = 1L, timeoutMs = 20L)
-        io.mockk.verify { pendingStore.remove(GaslessChain.TRON, "queue_1") }
+        io.mockk.verify { pendingStore.remove("shasta_testnet", "queue_1") }
     }
 
     private fun evmNetwork(id: String, chainId: Long): BlockchainNetwork {

@@ -1,13 +1,13 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+
     alias(libs.plugins.android.hilt)
     alias(libs.plugins.android.ksp)
 }
 
 android {
     namespace = "com.mtd.core"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
 
@@ -30,8 +30,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
 
     }
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
 
@@ -48,19 +50,7 @@ dependencies {
     implementation(libs.bundles.okhttp)
 
     api(libs.timber)
-  /*  api("org.bouncycastle:bcprov-jdk15to18:1.70")
-    api(libs.bundles.web3){
-        exclude(group = "org.bouncycastle")
-    }
-    api(libs.bitcoinj){
-        exclude(group = "org.bouncycastle")
-    }
 
-    api(libs.bitcoin.kmp)
-    api(libs.bitcoin.jni)
-
-
-    api(libs.bundles.google.auth)*/
 
 
     implementation(libs.bundles.web3)

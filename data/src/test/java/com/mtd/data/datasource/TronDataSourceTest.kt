@@ -5,6 +5,7 @@ import com.mtd.core.network.tron.TronNetwork
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertTrue
+import org.junit.Ignore
 import org.junit.Test
 import retrofit2.Retrofit
 
@@ -32,6 +33,7 @@ class TronDataSourceTest {
     private val okHttpClient = OkHttpClient.Builder().build()
     private val retrofitBuilder = Retrofit.Builder().baseUrl("https://google.com")
 
+    @Ignore("Live integration test — hits real Shasta RPC and requires a Java 11+ environment; run manually, not in the hermetic JVM unit suite.")
     @Test
     fun `full tron integration test on shasta`() = runBlocking {
         println("=== Starting Tron Integration Test ===")

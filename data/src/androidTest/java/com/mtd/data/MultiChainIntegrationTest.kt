@@ -69,7 +69,7 @@ class MultiChainIntegrationTest {
             secureStorage = secureStorage,
             blockchainRegistry = blockchainRegistry,
             gson = gson,
-            dataSourceFactory = dataSourceFactory
+            dataSourceFactory = dagger.Lazy{dataSourceFactory}
         )
 
         // ۵. آماده‌سازی وضعیت اولیه برای هر تست

@@ -17,7 +17,7 @@ import javax.inject.Inject
 
 class CloudWalletBalanceCalculatorImpl @Inject constructor(
     private val keyManager: KeyManager,
-    private val dataSourceFactory: ChainDataSourceFactory,
+    private val dataSourceFactory: dagger.Lazy<ChainDataSourceFactory>,
     private val assetRegistry: AssetRegistry,
     private val blockchainRegistry: BlockchainRegistry,
     private val marketDataRepository: IMarketDataRepository
@@ -36,10 +36,13 @@ class CloudWalletBalanceCalculatorImpl @Inject constructor(
     }
 
     private suspend fun getPricesMap(allAssets: List<AssetConfig>): Map<String, AssetPriceDto> {
-        val assetIds = allAssets.map { it.symbol }.distinct()
-        if (assetIds.isEmpty()) return emptyMap()
+        val symbols = allAssets.map { it.symbol }.distinct()
+        val ids = allAssets.map { it.id }.distinct()
 
-        return when (val result = marketDataRepository.getLatestPrices(assetIds)) {
+        val resultPair: Pair<List<String>, List<String>> = Pair(symbols, ids)
+        if (resultPair.first.isEmpty()) return emptyMap()
+
+        return when (val result = marketDataRepository.getLatestPrices(resultPair)) {
             is ResultResponse.Success -> result.data.associateBy { it.assetId }
             is ResultResponse.Error -> emptyMap()
         }
@@ -59,7 +62,7 @@ class CloudWalletBalanceCalculatorImpl @Inject constructor(
 
         keys.forEach { key ->
             val chainId = key.chainId ?: return@forEach
-            val dataSource = dataSourceFactory.create(chainId)
+            val dataSource = dataSourceFactory.get().create(chainId)
             val networkId = blockchainRegistry.getNetworkByName(key.networkName)?.id
 
             if (key.networkType == NetworkType.EVM) {

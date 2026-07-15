@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
-import com.mtd.megawallet.ui.compose.theme.Green
+import com.mtd.common_ui.theme.Green
 
 /**
  * کارت‌های انیمیشنی که در بالای صفحه "افزودن کیف پول موجود" به صورت پشته‌ای نمایش داده می‌شوند.

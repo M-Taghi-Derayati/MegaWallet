@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
     val BOTTOM_NAV_ICON_SIZE = 28.dp
     val BOTTOM_NAV_PADDING_HORIZONTAL = 16.dp
     val BOTTOM_NAV_PADDING_VERTICAL = 12.dp
-    val BOTTOM_NAV_PADDING_BOTTOM = 20.dp
+    val BOTTOM_NAV_PADDING_BOTTOM = 12.dp
     val BOTTOM_NAV_DIVIDER_HEIGHT = 0.4.dp
     val BOTTOM_NAV_DIVIDER_ALPHA = 0.1f
     
@@ -55,4 +55,20 @@ import androidx.compose.ui.unit.sp
     val FAB_MENU_ITEM_BACKGROUND = Color(0xFF2D2D2D)
 
     val FAB_SWAP_COLOR = Color(0xFF444444)
+
+    /**
+     * Z-index scale for the root-level, full-screen overlays stacked above the dashboard [Scaffold].
+     * Named so the stacking order is self-documenting and accidental collisions are obvious at a glance.
+     * Larger value = drawn on top. The dashboard/Scaffold itself sits at the implicit base layer (z = 0).
+     * Values are spaced by 100 to leave head-room for inserting a layer between two existing ones.
+     */
+    object ZLayer {
+        const val ASSET_DETAIL = 1000f          // morphing asset-detail screen
+        const val SEND = 1800f                  // send flow
+        const val HISTORY_DETAIL_SHEET = 1900f  // transaction-details bottom sheet (history tab)
+        const val RECEIVE = 2000f               // receive flow
+        const val MULTI_WALLET = 3000f          // wallet switcher
+        const val ADD_EXISTING_WALLET = 4000f   // import existing wallet
+        const val CREATE_WALLET = 5000f         // create new wallet
+    }
 }

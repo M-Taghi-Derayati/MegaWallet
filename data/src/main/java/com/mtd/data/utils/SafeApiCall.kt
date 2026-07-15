@@ -1,6 +1,7 @@
 package com.mtd.data.utils
 
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.error.ApiException
 import com.mtd.domain.model.error.AppError
 import com.mtd.domain.model.error.ErrorMapper
 import retrofit2.HttpException
@@ -17,6 +18,11 @@ suspend fun <T> safeApiCall(
         ResultResponse.Success(result)
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
+    } catch (e: ApiException) {
+        // Already a typed taxonomy error (e.g. from the gasless gateway / proxy) — preserve the
+        // ApiError code end-to-end so callers branch on it instead of a flattened AppError.
+        Timber.e(e, "API call failed (typed)")
+        ResultResponse.Error(e)
     } catch (e: Exception) {
         Timber.e(e, "API call failed")
         val appError = mapDataException(e)

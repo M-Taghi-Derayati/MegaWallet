@@ -2,6 +2,8 @@ package com.mtd.data.service
 
 import com.mtd.data.dto.EvmSponsorApproveRequestDto
 import com.mtd.data.dto.EvmSponsorApproveResponseDto
+import com.mtd.data.dto.EvmApproveQuoteRequestDto
+import com.mtd.data.dto.EvmApproveQuoteResponseDto
 import com.mtd.data.dto.GaslessEligibilityRequestDto
 import com.mtd.data.dto.GaslessEligibilityResponseDto
 import com.mtd.data.dto.GaslessPrepareResponseDto
@@ -55,6 +57,12 @@ interface GaslessApiService {
         @Body request: TronApproveQuoteRequestDto
     ): Response<TronApproveQuoteResponseDto>
 
+    @POST("api/{chain}/quote/approve")
+    suspend fun quoteEvmApprove(
+        @Path("chain") chain: String,
+        @Body request: EvmApproveQuoteRequestDto
+    ): Response<EvmApproveQuoteResponseDto>
+
     @POST("api/{chain}/relay")
     suspend fun relayGasless(
         @Path("chain") chain: String,
@@ -62,13 +70,17 @@ interface GaslessApiService {
         @Body request: GaslessRelayRequestDto
     ): Response<GaslessRelayResponseDto>
 
-    @POST("api/tron/sponsor-approve")
+    // Phase 2: sponsor-approve is now relayPrefix-routed (@Path) like every other
+    // gasless endpoint — the previously hardcoded api/tron and api/evm literals are gone.
+    @POST("api/{chain}/sponsor-approve")
     suspend fun sponsorTronApprove(
+        @Path("chain") chain: String,
         @Body request: TronSponsorApproveRequestDto
     ): Response<TronSponsorApproveResponseDto>
 
-    @POST("api/evm/sponsor-approve")
+    @POST("api/{chain}/sponsor-approve")
     suspend fun sponsorEvmApprove(
+        @Path("chain") chain: String,
         @Body request: EvmSponsorApproveRequestDto
     ): Response<EvmSponsorApproveResponseDto>
 
