@@ -424,6 +424,28 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   `EventDeduplicationCache` + `SocketRefreshMapper`, so a WS+FCM duplicate is handled once. See
   [[refresh-and-monitoring-policy]].
 
+### TASK-35 — 24h price-change % not displayed (user review, item 11) — ⏳ Client ready; blocked on server
+- **Root cause:** NOT a client rendering bug. The chain is correctly wired end-to-end
+  (`RelayerPriceEntryDto.change24h` → `AssetPriceDto.priceChanges24h` → `AssetItem.priceChange24h` →
+  `WalletScreen`/`AssetDetailScreen.formatPriceChange`). The **primary price source
+  `GET /api/v1/prices` does not return a 24h-change field at all** — per the server contract
+  (`MEGAWALLET_ANDROID_API_CONTRACT.md` §1.6) each entry is only `{ usd, irr, source, fetchedAt }`. So
+  `change24h` parses null → `RelayerPriceDataSource` maps it to `ZERO` → every asset shows ~0.00%. The
+  change-capable path (`CoinDetailApiService`, CoinCap `changePercent24Hr`) is only the **fallback**, used
+  when the relayer path fails, and is a **direct third-party** call — so in normal operation it never runs.
+- **Decision (user):** fix **server-side** — add the change field to `/api/v1/prices` (relayer stays the
+  single source; no extra client calls, no direct-CoinCap dependency).
+- **Server contract to implement:** add `change24h` to each `prices[symbol]` entry as a **percent number**
+  (e.g. `2.84` = +2.84%, `-1.5` = −1.5%), sourced from the existing feed (CoinGecko
+  `price_change_percentage_24h` / CoinCap `changePercent24Hr`). Optional per symbol (omit for `{error}`
+  symbols). Example: `"ETH": { "usd": 3500.12, "irr": …, "change24h": 2.84, "source": "coingecko", … }`.
+- **Client status:** already consumes a field named `change24h` (primary `@SerializedName` on
+  `RelayerPriceEntryDto`, + `changePercent24h`/`changePercent24Hr` alternates). **No client code change is
+  required** once the server sends it — the badge will render real values automatically. Tidied the DTO
+  comment to state the agreed contract (removed the old "unverified/guessed" hedging).
+- **Verify (once server ships it):** wallet list + asset detail show real ±% badges (green up / red down),
+  not a flat 0.00%. **Modules:** data (client), + server. **Deps:** server change.
+
 ---
 
 ## Sprint 6 — Optional / Hygiene

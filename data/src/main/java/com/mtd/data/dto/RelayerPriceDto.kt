@@ -25,12 +25,14 @@ data class RelayerPriceEntryDto(
     @SerializedName("irr") val irr: BigDecimal? = null,
     @SerializedName("source") val source: String? = null,
     @SerializedName("fetchedAt") val fetchedAt: Long? = null,
-    // 24h change %: the §1.6 sample does NOT show this field, so its real name is UNVERIFIED against
-    // the live body. The alternates cover the plausible server spellings; if absent it stays null and
-    // the UI simply renders no change badge (never crashes). Confirm against a real /api/v1/prices body.
+    // 24h change as a PERCENT number (e.g. 2.84 = +2.84%, -1.5 = -1.5%) — item 11.
+    // Contract: the server adds `change24h` to each `/api/v1/prices` entry (sourced from CoinGecko's
+    // `price_change_percentage_24h` / CoinCap `changePercent24Hr`). It is optional per symbol: a symbol
+    // that resolves to `{error}` (or has no change this round) omits it → stays null and the UI simply
+    // renders no change badge. The alternates tolerate a couple of equivalent server spellings.
     @SerializedName(
         value = "change24h",
-        alternate = ["changePercent24h", "priceChange24h", "usd24hChange", "changePct24h", "change"]
+        alternate = ["changePercent24h", "changePercent24Hr"]
     )
     val change24h: BigDecimal? = null,
     // Per-symbol failure isolation — a non-null error means this symbol carries no price this round.
