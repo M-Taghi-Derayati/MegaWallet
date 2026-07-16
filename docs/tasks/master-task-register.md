@@ -281,11 +281,31 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   - ✅ **Live events now refresh the UI** — previously a live frame refreshed *nothing* (only a system
     notification; a wallet re-read only on reconnect). `dispatchRefreshFor` now fans meaningful events to
     the refresh bus: `BalanceUpdated`/`GrowthFeeShareAccrued` → `WalletNeedsRefresh`; `TxStatusChanged` →
-    `WalletNeedsRefresh` + `TransactionHistoryNeedsRefresh`. **Coarse by design:** surgical per-asset
-    targeting (`WalletAssetNeedsRefresh`) is deferred until the socket's `chain` (a "relayPrefix"-style
-    key, not the app `networkId`) and ambiguous `token` (symbol vs contract address) formats are confirmed
-    against the relayer WS contract / a real on-device frame — guessing the map wrong would silently miss
-    updates, so coarse-but-correct ships first. (Tracked as the spawned "targeted socket events" task.)
+    `WalletNeedsRefresh` + `TransactionHistoryNeedsRefresh`. This matches the **server's documented intent**
+    (§8 of `ANDROID_SERVER_INTEGRATION.md`, server repo `docs/`): the WS pushes *thin invalidation signals*,
+    never data — the client refreshes the relevant repository and never renders the payload. So the
+    refresh-on-signal shape is correct; see the contract-alignment gap below.
+  - ⚠️ **SocketEvent contract is STALE vs the live server (from `ANDROID_SERVER_INTEGRATION.md` 2026-07-13):**
+    - The server's current thin signals are **`tx.new`** `{eventId,txHash,networkId,addressIdentityId,cursor}`,
+      **`balance.invalidated`** `{eventId,walletId,networkId,assetId,cursor}`, **`tx.status.updated`**
+      `{eventId,txHash,networkId,status,cursor}` (+ legacy `tx.status.changed`/`balance.updated`/
+      `growth.fee_share.accrued`). `parseEnvelope` only handles the four `connection.ready`/legacy names, so
+      the **three primary signals fall through to `Unknown` and are dropped** — the app would ignore live
+      events once the server flag flips. **Forward-compat bug to fix.**
+    - **Targeting is now UNAMBIGUOUS** (unblocks the deferred "targeted socket events" task): the payloads
+      carry the app's own **`networkId`** verbatim (e.g. `sepolia`, `base_sepolia`, `shasta_testnet` — the
+      bundle ids, NOT a relayPrefix) plus **`assetId`/`walletId`**. So `balance.invalidated` →
+      `WalletAssetNeedsRefresh(assetId, networkId)`, `tx.new`/`tx.status.updated` →
+      `TransactionHistoryNeedsRefresh(networkId, …)` map cleanly. My earlier "relayPrefix reverse-map / token
+      ambiguity" blocker was wrong — that's the *gasless* path, not the socket.
+    - **Dedup should key on `payload.eventId` (5s window)**, not the envelope `id` (current code dedups the
+      envelope id; welcome frame id=`welcome`, signals carry the real id inside the payload).
+    - **`connection.ready.payload.heartbeatMs`** gives the server's heartbeat interval — use it instead of the
+      hardcoded 30 s.
+    - **Gating:** `REALTIME_THIN_EVENTS_ENABLED` is **currently OFF** server-side (only `connection.ready` +
+      pong arrive). Re-aligning the parser is safe to build now but can't be verified on-device until the
+      flag flips — so it's spec'd, not yet implemented. When done, swap the coarse `WalletNeedsRefresh` fan-out
+      for the targeted events above.
   - **Verify on-device:** burst of tx events (no drops beyond buffer), airplane-mode toggle →
     reconnect fires a refresh, and a token minted after a premature `connect()` still opens the socket.
 - **Problem:** `SharedFlow(replay=1)` event loss; no confirmed reconnect re-sync; socket reconnect guard;
@@ -313,6 +333,34 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
 - **Steps:** request the permission at an appropriate moment (post-onboarding), handle denial gracefully.
 - **Acceptance:** on A13+, prompt shown; notifications deliver after grant. **Rollback:** revert. **Regression:**
   none. **Testing:** A13/14/15 emulator grant+deny paths.
+
+### TASK-32 — Batch monitoring enrollment for ALL wallets (`/monitoring/subscribe`) — 🆕 Planned
+- **Problem:** realtime `tx.new`/`balance.invalidated` signals + deposit FCM only fire for addresses the
+  server has in its **monitored set**, and today an address is only enrolled as a *side-effect* of a
+  `/history` request for the **currently-selected** wallet (`TransactionHistoryViewModel.buildHistoryPairs`
+  → `ProxyChainDataSource.history`). So non-active wallets get no realtime/deposit signals until the user
+  opens their history, and enrollment is re-triggered on every wallet switch. **Source:** server
+  `ANDROID_SERVER_INTEGRATION.md` (2026-07-13) §5 added a purpose-built endpoint.
+- **Endpoint:** `POST /api/mobile/v1/monitoring/subscribe`
+  `{ "addresses":[ {"address","networkId"}, … ] }` → `{ ok, subscribed, total, results:[{address,networkId,ok,error?}] }`.
+  Durable + idempotent (one call per wallet lifetime); per-pair failures reported in `results[]` without
+  failing the batch; **max 25 pairs/call — chunk beyond that** (same bound as `/history`). `/history`
+  auto-enroll remains only a safety net — do NOT rely on the history screen.
+- **Files:** new `MonitoringSubscribeRequestDto`/response DTO, `MobileProxyApiService.monitoringSubscribe`,
+  a repo/use case (`SubscribeMonitoringUseCase`), and a call site. **Modules:** data, domain, app. **Deps:** none.
+- **Difficulty:** Low–Med · **Est:** 1 · **Risk:** Low · **Priority:** P1 (gates realtime/deposit coverage).
+- **Steps:** (1) add DTO + service method + repo/use case; (2) gather **all** wallets' `(address, networkId)`
+  pairs across every `WalletKey` (not just the active wallet); (3) call once after **login / wallet create /
+  wallet import / add-network** (and whenever the local wallet/network set changes), chunked to 25;
+  (4) run off-main, fire-and-forget with per-chunk error logging (idempotent, so a failed chunk just retries
+  next trigger). Auth: needs the Bearer JWT (`proxy:write`-ish) — sequence after `WalletSessionAuthCoordinator`.
+- **Acceptance:** after adding/importing a wallet, all its `(address, networkId)` pairs appear enrolled
+  (`subscribed`/`results`), and a deposit to a **non-active** wallet surfaces via FCM/`balance.invalidated`
+  without opening its history. **Rollback:** remove the call site (behavior falls back to `/history`
+  safety-net enroll). **Regression:** none (additive; idempotent). **Testing:** unit-test the pair-gathering
+  + chunking; on-device, import a wallet and confirm a deposit notification without visiting history.
+- **Note:** signal *delivery* is still gated by the server's `REALTIME_THIN_EVENTS_ENABLED` (OFF); enrollment
+  itself works now, and FCM deposit push is not gated. Pairs with the socket-contract re-alignment under TASK-22.
 
 ---
 
