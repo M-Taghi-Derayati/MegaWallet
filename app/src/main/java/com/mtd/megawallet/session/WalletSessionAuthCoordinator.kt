@@ -7,6 +7,7 @@ import com.mtd.domain.usecase.auth.EnsureAuthenticatedUseCase
 import com.mtd.domain.usecase.auth.RefreshSessionUseCase
 import com.mtd.domain.usecase.auth.SignOutUseCase
 import com.mtd.domain.usecase.monitoring.SubscribeMonitoringUseCase
+import com.mtd.megawallet.notification.FcmTokenRegistrar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,6 +40,7 @@ class WalletSessionAuthCoordinator @Inject constructor(
     private val refreshSession: RefreshSessionUseCase,
     private val signOut: SignOutUseCase,
     private val subscribeMonitoring: SubscribeMonitoringUseCase,
+    private val fcmTokenRegistrar: FcmTokenRegistrar,
     private val tokenStore: ITokenStore
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -67,6 +69,8 @@ class WalletSessionAuthCoordinator @Inject constructor(
 
         if (walletId == null) {
             // Lock or delete-of-last-wallet → drop session + tear down realtime.
+            // Unregister the FCM token first (needs the JWT that sign-out is about to clear).
+            fcmTokenRegistrar.unregister()
             when (val r = signOut()) {
                 is ResultResponse.Error -> Timber.w(r.exception, "[Auth] sign-out cleanup failed")
                 else -> Unit
@@ -84,6 +88,9 @@ class WalletSessionAuthCoordinator @Inject constructor(
                 // set), so a plain wallet switch never re-sends — only a newly created/imported wallet
                 // triggers the network call. Fire-and-forget off the auth path.
                 enrollMonitoring()
+                // Item 10 (FCM) — register this install's push token now that we have a JWT (device
+                // identity). No-op when the token is unchanged, so it's cheap on every auth.
+                fcmTokenRegistrar.syncToken()
             }
             is ResultResponse.Error -> Timber.w(r.exception, "[Auth] sign-in failed for wallet=$walletId")
         }

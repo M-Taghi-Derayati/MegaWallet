@@ -23,6 +23,7 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         const val KEY_LOCKOUT_UNTIL = "lockout_until"
         const val KEY_CONNECTION_MODE = "blockchain_connection_mode"
         const val KEY_MONITORING_SUBSCRIBED_WALLET_IDS = "monitoring_subscribed_wallet_ids"
+        const val KEY_REGISTERED_FCM_TOKEN = "registered_fcm_token"
         const val DEFAULT_LOCK_TIMEOUT_SECONDS = 30
     }
 
@@ -117,5 +118,16 @@ class UserPreferencesRepositoryImpl @Inject constructor(
 
     override suspend fun setMonitoringSubscribedWalletIds(ids: Set<String>) {
         prefs.edit { putStringSet(KEY_MONITORING_SUBSCRIBED_WALLET_IDS, ids) }
+    }
+
+    override suspend fun getRegisteredFcmToken(): String? {
+        return prefs.getString(KEY_REGISTERED_FCM_TOKEN, null)
+    }
+
+    override suspend fun setRegisteredFcmToken(token: String?) {
+        prefs.edit {
+            if (token.isNullOrBlank()) remove(KEY_REGISTERED_FCM_TOKEN)
+            else putString(KEY_REGISTERED_FCM_TOKEN, token)
+        }
     }
 }

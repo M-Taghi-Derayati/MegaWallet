@@ -50,4 +50,12 @@ interface IUserPreferencesRepository {
      */
     suspend fun getMonitoringSubscribedWalletIds(): Set<String>
     suspend fun setMonitoringSubscribedWalletIds(ids: Set<String>)
+
+    /**
+     * Item 10 (FCM) — the FCM device token last successfully registered with the relayer
+     * (`/api/notifications/devices`). Persisted so we skip re-registering an unchanged token and know
+     * which token to unregister on logout. Null when no token is currently registered.
+     */
+    suspend fun getRegisteredFcmToken(): String?
+    suspend fun setRegisteredFcmToken(token: String?)
 }

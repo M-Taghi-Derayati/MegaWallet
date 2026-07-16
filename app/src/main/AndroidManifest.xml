@@ -44,6 +44,22 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MegaWallet" />
+
+        <!-- Item 10 (FCM) — receives device tokens + data pushes; routes them through the shared
+             realtime pipeline (PushMessageHandler) and registers tokens (FcmTokenRegistrar). -->
+        <service
+            android:name=".notification.MegaFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Route notification-type FCM messages to the existing "trade_notifications" channel. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="trade_notifications" />
+
     </application>
 
 </manifest>

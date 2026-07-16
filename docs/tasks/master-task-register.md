@@ -397,6 +397,33 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   tab → no `/history` call; tap History → loads active wallet; switch wallet then open History → new wallet's
   data; switch while on History → reloads new wallet.
 
+### TASK-34 — Wire FCM push end-to-end (device token + refresh + display + dispatch) — ✅ Done
+- **Problem (user review, item 10):** the whole `/api/notifications` stack existed (`INotificationRepository`,
+  `NotificationApiService`, DTOs, `NotificationRepositoryImpl`) but nothing called it — no FCM token was ever
+  sent to the server, no `FirebaseMessagingService` existed to receive tokens/messages, no token refresh, and
+  data pushes weren't displayed or routed. (User had only added the `firebase-messaging` lib + `google-services.json`.)
+- **Fix:**
+  - `MegaFirebaseMessagingService` (`@AndroidEntryPoint`) declared in the manifest with the
+    `com.google.firebase.MESSAGING_EVENT` filter + a `default_notification_channel_id` meta-data pointing at
+    the existing `trade_notifications` channel.
+  - `FcmTokenRegistrar` (app) — registers the token via `INotificationRepository.registerDevice` **after auth**
+    (`WalletSessionAuthCoordinator.syncToken()`, needs the JWT for identity) and on Firebase `onNewToken`;
+    persists the last-registered token (`IUserPreferencesRepository.getRegisteredFcmToken`) to skip unchanged
+    re-registers; `unregister()` on logout (before the JWT is cleared).
+  - `PushMessageHandler` (:data) — routes a data-only push through the SAME pipeline as the socket: dedup on
+    `eventId` via the shared singleton `EventDeduplicationCache` (cross-transport WS↔FCM), refresh-on-signal
+    via the shared `SocketRefreshMapper` → `IAppEventBus`, and shows the server-provided (localized) title/body
+    via the existing `NotificationService`. Parses the flat FCM `data` map into the same `SocketEvent` types.
+  - **Modules:** app, data, domain. **Files:** new `MegaFirebaseMessagingService`, `FcmTokenRegistrar`,
+    `PushMessageHandler`; edited `WalletSessionAuthCoordinator`, `IUserPreferencesRepository`(+impl),
+    `AndroidManifest`. **Deps:** `firebase-messaging` (already added).
+- **Not built here** (Gradle unavailable) — inspection-verified. **Verify on-device:** after unlock, a
+  `POST /api/notifications/devices` fires once (token in logs); a server test push refreshes the balance/history
+  and shows a notification; background push shows a tray notification; logout sends `DELETE …/devices/:token`.
+- **Note:** the socket path (`NotificationSocketManager`) is untouched; both transports share
+  `EventDeduplicationCache` + `SocketRefreshMapper`, so a WS+FCM duplicate is handled once. See
+  [[refresh-and-monitoring-policy]].
+
 ---
 
 ## Sprint 6 — Optional / Hygiene
