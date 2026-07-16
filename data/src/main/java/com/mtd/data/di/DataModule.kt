@@ -14,6 +14,7 @@ import com.mtd.data.repository.CachedWalletBalanceReaderImpl
 import com.mtd.data.repository.CloudWalletBalanceCalculatorImpl
 import com.mtd.data.repository.GsonCloudWalletBackupCodec
 import com.mtd.data.repository.MarketDataRepositoryImpl
+import com.mtd.data.repository.MonitoringRepositoryImpl
 import com.mtd.data.repository.SendAssetDataSourceImpl
 import com.mtd.data.repository.TransactionStatusRepositoryImpl
 import com.mtd.data.repository.UserPreferencesRepositoryImpl
@@ -50,6 +51,7 @@ import com.mtd.domain.interfaceRepository.IGaslessTronRepository
 import com.mtd.domain.interfaceRepository.IGrowthRepository
 import com.mtd.domain.interfaceRepository.IMarketDataRepository
 import com.mtd.domain.interfaceRepository.INotificationRepository
+import com.mtd.domain.interfaceRepository.IMonitoringRepository
 import com.mtd.domain.interfaceRepository.ISwapRepository
 import com.mtd.domain.interfaceRepository.ISendAssetDataSource
 import com.mtd.domain.interfaceRepository.ITokenStore
@@ -117,6 +119,12 @@ abstract class DataModule {
     abstract fun bindTransactionStatusRepository(
         impl: TransactionStatusRepositoryImpl
     ): ITransactionStatusRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindMonitoringRepository(
+        impl: MonitoringRepositoryImpl
+    ): IMonitoringRepository
 
     @Binds
     @Singleton

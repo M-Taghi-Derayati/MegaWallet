@@ -334,7 +334,7 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
 - **Acceptance:** on A13+, prompt shown; notifications deliver after grant. **Rollback:** revert. **Regression:**
   none. **Testing:** A13/14/15 emulator grant+deny paths.
 
-### TASK-32 — Batch monitoring enrollment for ALL wallets (`/monitoring/subscribe`) — 🆕 Planned
+### TASK-32 — Batch monitoring enrollment for ALL wallets (`/monitoring/subscribe`) — ✅ Done (build-verified; delivery gated by server flag)
 - **Problem:** realtime `tx.new`/`balance.invalidated` signals + deposit FCM only fire for addresses the
   server has in its **monitored set**, and today an address is only enrolled as a *side-effect* of a
   `/history` request for the **currently-selected** wallet (`TransactionHistoryViewModel.buildHistoryPairs`
@@ -361,6 +361,17 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   + chunking; on-device, import a wallet and confirm a deposit notification without visiting history.
 - **Note:** signal *delivery* is still gated by the server's `REALTIME_THIN_EVENTS_ENABLED` (OFF); enrollment
   itself works now, and FCM deposit push is not gated. Pairs with the socket-contract re-alignment under TASK-22.
+- **Done (2026-07-16):** added `MonitoringSubscription`/`MonitoringSubscribeResult` domain models,
+  `IMonitoringRepository` + `SubscribeMonitoringUseCase` (gathers all `WalletKey`s across every wallet,
+  maps `NetworkName`→bundle `networkId` via `INetworkCatalog`, dedups, chunks to 25), `MonitoringDto`
+  (request/response, un-enveloped), `MobileProxyApiService.monitoringSubscribe`, `MonitoringRepositoryImpl`
+  (logs per-pair `results[]` failures without failing the batch), and a DI binding. Call site:
+  `WalletSessionAuthCoordinator.handleWalletChange` fires `enrollMonitoring()` fire-and-forget after each
+  successful `ensureAuthenticated` (covers app-start/unlock/switch/create/import — keys are derived at
+  create/import so there's no separate add-network trigger). Unit tests:
+  `SubscribeMonitoringUseCaseTest` (:data, MockK) covers gather+dedup, 25-chunking, unknown-network drop,
+  empty-wallets no-op, and wallet-read-failure propagation. **Not run here** (Gradle unavailable in env) —
+  inspection-verified only.
 
 ---
 

@@ -6,6 +6,7 @@ import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.usecase.auth.EnsureAuthenticatedUseCase
 import com.mtd.domain.usecase.auth.RefreshSessionUseCase
 import com.mtd.domain.usecase.auth.SignOutUseCase
+import com.mtd.domain.usecase.monitoring.SubscribeMonitoringUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,6 +38,7 @@ class WalletSessionAuthCoordinator @Inject constructor(
     private val ensureAuthenticated: EnsureAuthenticatedUseCase,
     private val refreshSession: RefreshSessionUseCase,
     private val signOut: SignOutUseCase,
+    private val subscribeMonitoring: SubscribeMonitoringUseCase,
     private val tokenStore: ITokenStore
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -75,8 +77,24 @@ class WalletSessionAuthCoordinator @Inject constructor(
         // A transition between two distinct non-null wallets is a switch → force a fresh session.
         val forceFresh = previous != null
         when (val r = ensureAuthenticated(forceFresh = forceFresh)) {
-            is ResultResponse.Success -> scheduleProactiveRefresh()
+            is ResultResponse.Success -> {
+                scheduleProactiveRefresh()
+                // TASK-32 — now that the JWT is minted, enroll EVERY local wallet's (address,networkId)
+                // pairs for realtime/deposit monitoring in one shot. Idempotent + durable, so re-running
+                // it on each unlock/switch/create/import is safe; fire-and-forget off the auth path.
+                enrollMonitoring()
+            }
             is ResultResponse.Error -> Timber.w(r.exception, "[Auth] sign-in failed for wallet=$walletId")
+        }
+    }
+
+    private fun enrollMonitoring() {
+        scope.launch {
+            when (val r = subscribeMonitoring()) {
+                is ResultResponse.Success ->
+                    Timber.d("[Monitoring] enrolled ${r.data.size} pair(s) for realtime/deposit monitoring")
+                is ResultResponse.Error -> Timber.w(r.exception, "[Monitoring] batch enrollment failed")
+            }
         }
     }
 

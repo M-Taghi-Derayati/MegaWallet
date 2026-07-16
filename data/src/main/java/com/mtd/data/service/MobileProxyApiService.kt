@@ -9,6 +9,8 @@ import com.mtd.data.dto.BroadcastRequestDto
 import com.mtd.data.dto.FeeOptionsDto
 import com.mtd.data.dto.HistoryRequestDto
 import com.mtd.data.dto.HistoryResponseDto
+import com.mtd.data.dto.MonitoringSubscribeRequestDto
+import com.mtd.data.dto.MonitoringSubscribeResponseDto
 import com.mtd.data.dto.NetworksDto
 import com.mtd.data.dto.PrepareTxDto
 import com.mtd.data.dto.PrepareContractCallRequestDto
@@ -48,6 +50,13 @@ interface MobileProxyApiService {
     suspend fun history(
         @Body body: HistoryRequestDto
     ): Response<HistoryResponseDto>
+
+    // Batch monitoring enrollment (TASK-32). NOT BM-33-enveloped — one call spans many networks;
+    // durable + idempotent; max 25 pairs/call (chunk beyond). Auth: Bearer JWT (proxy:write-ish).
+    @POST("api/mobile/v1/monitoring/subscribe")
+    suspend fun monitoringSubscribe(
+        @Body body: MonitoringSubscribeRequestDto
+    ): Response<MonitoringSubscribeResponseDto>
 
     @GET("api/mobile/v1/networks/{networkId}/fees/options")
     suspend fun feeOptions(
