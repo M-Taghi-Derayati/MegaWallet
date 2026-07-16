@@ -10,6 +10,7 @@ import com.mtd.core.notification.NotificationService
 import com.mtd.data.BuildConfig
 import com.mtd.data.di.ForWebSocket
 import com.mtd.domain.interfaceRepository.IAppEventBus
+import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.ITokenStore
 import com.mtd.domain.model.AppEvent
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -43,13 +44,15 @@ import kotlin.math.pow
  *    compatibility (priority order matches the contract): `Authorization: Bearer …` header,
  *    `Sec-WebSocket-Protocol: bearer,<token>` subprotocol, and `?token=` query param. An anonymous
  *    handshake is rejected with 401, so we never attempt a connection without a valid session.
- *  - **30s heartbeat** — the OkHttp client also pings at the protocol level, but we additionally send
- *    app-level `{"type":"ping"}` frames and run a watchdog that force-reconnects a socket that has
- *    gone silent (no inbound frame within 2× the interval = dead peer).
+ *  - **Adaptive heartbeat** — the OkHttp client also pings at the protocol level, but we additionally
+ *    send app-level `{"type":"ping"}` frames on the interval the server advertises in
+ *    `connection.ready.payload.heartbeatMs` (default 30s until the welcome frame arrives), and run a
+ *    watchdog that force-reconnects a socket gone silent (no inbound frame within 2× the interval).
  *  - **Exponential backoff** — reconnect delay doubles (2s → 4s → … capped at 60s) and resets on a
  *    clean open.
- *  - **De-duplication** — every inbound event is gated through [EventDeduplicationCache] on its `id`
- *    so an event that also arrives via FCM is not surfaced twice.
+ *  - **De-duplication** — every inbound event is gated through [EventDeduplicationCache] on its
+ *    `payload.eventId` (thin signals) or envelope `id` (legacy) so an event that also arrives via FCM
+ *    is not surfaced twice.
  */
 @Singleton
 class NotificationSocketManager @Inject constructor(
@@ -58,6 +61,7 @@ class NotificationSocketManager @Inject constructor(
     private val tokenStore: ITokenStore,
     private val dedupeCache: EventDeduplicationCache,
     private val appEventBus: IAppEventBus,
+    private val networkCatalog: INetworkCatalog,
     @ApplicationContext private val context: Context
 ) {
     private var webSocket: WebSocket? = null
@@ -69,6 +73,9 @@ class NotificationSocketManager @Inject constructor(
     // Distinguishes the first successful connect (cold start already loads data) from every later
     // (re)connect, which must re-sync any state missed while the socket was down. See onOpen().
     @Volatile private var hasConnectedBefore = false
+    // Heartbeat cadence — starts at the default and is refined by `connection.ready.payload.heartbeatMs`
+    // once the welcome frame arrives, so we ping on the server's actual interval instead of a guess.
+    @Volatile private var heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS
 
     private var heartbeatJob: Job? = null
     private var reconnectJob: Job? = null
@@ -159,10 +166,11 @@ class NotificationSocketManager @Inject constructor(
         lastInboundAtMs = System.currentTimeMillis()
         heartbeatJob = scope.launch {
             while (isActive) {
-                delay(HEARTBEAT_INTERVAL_MS)
+                val interval = heartbeatIntervalMs
+                delay(interval)
                 val socket = webSocket ?: break
                 val silentForMs = System.currentTimeMillis() - lastInboundAtMs
-                if (silentForMs > HEARTBEAT_INTERVAL_MS * 2) {
+                if (silentForMs > interval * 2) {
                     Timber.w("[NotificationSocket] Heartbeat timeout (${silentForMs}ms silent). Forcing reconnect.")
                     socket.cancel() // hard close → onFailure → scheduleReconnect()
                     break
@@ -201,9 +209,22 @@ class NotificationSocketManager @Inject constructor(
             val parsed = parseEnvelope(text) ?: return
             if (parsed.isHeartbeat) return // pong — liveness only, nothing to surface.
 
-            // Dedup across transports (WS + FCM) on the event id.
-            if (!dedupeCache.shouldProcess(parsed.event.id)) {
-                Timber.d("[NotificationSocket] Duplicate event '${parsed.event.id}' dropped.")
+            // The welcome frame tells us the server's real heartbeat interval — adopt it and restart
+            // the ping loop so we track the peer's cadence instead of a hardcoded 30s.
+            (parsed.event as? SocketEvent.ConnectionReady)?.heartbeatMs
+                ?.takeIf { it in MIN_HEARTBEAT_INTERVAL_MS..MAX_HEARTBEAT_INTERVAL_MS }
+                ?.let { serverInterval ->
+                    if (serverInterval != heartbeatIntervalMs) {
+                        heartbeatIntervalMs = serverInterval
+                        startHeartbeat()
+                    }
+                }
+
+            // Dedup across transports (WS + FCM). Thin signals carry a `payload.eventId`; legacy events
+            // and the welcome frame fall back to the envelope `id`.
+            val dedupKey = parsed.event.eventId ?: parsed.event.id
+            if (!dedupeCache.shouldProcess(dedupKey)) {
+                Timber.d("[NotificationSocket] Duplicate event '$dedupKey' dropped.")
                 return
             }
 
@@ -238,26 +259,19 @@ class NotificationSocketManager @Inject constructor(
     }
 
     /**
-     * Fan a live event out to the app-wide refresh bus so the foreground UI reflects it immediately.
-     * Previously live frames refreshed *nothing* (they only produced a system notification); a wallet
-     * would only re-read on the next reconnect or a manual pull. Meaningful events now trigger a refresh.
+     * Fan a live event out to the app-wide refresh bus so the foreground UI reflects it immediately —
+     * the server sends *thin invalidation signals*, never data, so the client re-reads the relevant
+     * repository and never renders the payload (§8 of the contract).
      *
-     * NOTE: this is deliberately **coarse** (a full wallet / current-history refresh). Surgically
-     * targeting only the affected asset — `AppEvent.WalletAssetNeedsRefresh(networkId, assetId, …)` —
-     * needs the socket's identifier formats confirmed first: the server's `chain` is a "relayPrefix"-style
-     * key (not the app's `networkId`, so it needs a reverse map) and `token` is ambiguous
-     * (symbol vs contract address). That surgical pass is tracked separately; coarse-but-correct here is a
-     * strict improvement and can never silently miss an update by guessing the mapping wrong.
+     * The **thin signals** carry the app's own `networkId` verbatim (+ `assetId`/`walletId`), so they
+     * map to **targeted** refreshes: `balance.invalidated` → refresh just that asset;
+     * `tx.new`/`tx.status.updated` → refresh history (network-scoped when the `networkId` reverse-maps
+     * to a local `NetworkName`). A missing id degrades to the broader refresh so an update is never
+     * silently dropped. The **legacy** events stay coarse (whole-wallet) as before.
      */
     private fun dispatchRefreshFor(event: SocketEvent) {
-        val refreshEvents: List<AppEvent> = when (event) {
-            is SocketEvent.BalanceUpdated -> listOf(AppEvent.WalletNeedsRefresh)
-            is SocketEvent.TxStatusChanged -> listOf(
-                AppEvent.WalletNeedsRefresh,             // a status change can move the balance
-                AppEvent.TransactionHistoryNeedsRefresh() // …and the history list
-            )
-            is SocketEvent.GrowthFeeShareAccrued -> listOf(AppEvent.WalletNeedsRefresh)
-            is SocketEvent.ConnectionReady, SocketEvent.Unknown -> emptyList()
+        val refreshEvents = SocketRefreshMapper.refreshEventsFor(event) { networkId ->
+            networkCatalog.getNetworkInfoById(networkId)?.name?.name
         }
         if (refreshEvents.isEmpty()) return
         scope.launch { refreshEvents.forEach { appEventBus.postEvent(it) } }
@@ -282,7 +296,36 @@ class NotificationSocketManager @Inject constructor(
             val payload = root.optJSONObject("payload") ?: JSONObject()
 
             val event = when (name) {
-                "connection.ready" -> SocketEvent.ConnectionReady(id)
+                "connection.ready" -> SocketEvent.ConnectionReady(
+                    id = id,
+                    heartbeatMs = payload.optLongOrNull("heartbeatMs")
+                )
+                // Thin monitoring signals (current server model) — carry `eventId` + the app's `networkId`.
+                "tx.new" -> SocketEvent.TxNew(
+                    id = id,
+                    eventId = payload.optStringOrNull("eventId"),
+                    txHash = payload.optStringOrNull("txHash"),
+                    networkId = payload.optStringOrNull("networkId"),
+                    addressIdentityId = payload.optStringOrNull("addressIdentityId"),
+                    cursor = payload.optStringOrNull("cursor")
+                )
+                "balance.invalidated" -> SocketEvent.BalanceInvalidated(
+                    id = id,
+                    eventId = payload.optStringOrNull("eventId"),
+                    walletId = payload.optStringOrNull("walletId"),
+                    networkId = payload.optStringOrNull("networkId"),
+                    assetId = payload.optStringOrNull("assetId"),
+                    cursor = payload.optStringOrNull("cursor")
+                )
+                "tx.status.updated" -> SocketEvent.TxStatusUpdated(
+                    id = id,
+                    eventId = payload.optStringOrNull("eventId"),
+                    txHash = payload.optStringOrNull("txHash"),
+                    networkId = payload.optStringOrNull("networkId"),
+                    status = payload.optStringOrNull("status"),
+                    cursor = payload.optStringOrNull("cursor")
+                )
+                // Legacy per-user events — still accepted, handled coarsely below.
                 "tx.status.changed" -> SocketEvent.TxStatusChanged(
                     id = id,
                     txId = payload.optStringOrNull("id"),
@@ -324,47 +367,156 @@ class NotificationSocketManager @Inject constructor(
         }
 
         when (event) {
-            is SocketEvent.TxStatusChanged -> {
-                val status = event.status?.uppercase()
-                when (status) {
-                    "SUCCESS" -> notificationService.showTradeNotification(
-                        "تراکنش موفق",
-                        "تراکنش شما با موفقیت ثبت شد."
-                    )
-                    "FAILED", "TIMEOUT" -> notificationService.showTradeNotification(
-                        "تراکنش ناموفق",
-                        "تراکنش شما تکمیل نشد."
-                    )
-                    else -> { /* QUEUED/PENDING — no user-facing notification */ }
-                }
-            }
+            is SocketEvent.TxStatusChanged -> notifyForTxStatus(event.status)
+            is SocketEvent.TxStatusUpdated -> notifyForTxStatus(event.status)
             is SocketEvent.GrowthFeeShareAccrued -> notificationService.showTradeNotification(
                 "پاداش جدید",
                 "سهم کارمزد دعوت به حساب شما اضافه شد."
             )
-            else -> { /* connection.ready / balance.updated / unknown → silent */ }
+            // tx.new / balance.invalidated / balance.updated / connection.ready / unknown → silent
+            // (they drive a refresh, not a user-facing alert; deposits are handled by FCM in background).
+            else -> Unit
+        }
+    }
+
+    private fun notifyForTxStatus(status: String?) {
+        when (status?.uppercase()) {
+            "SUCCESS" -> notificationService.showTradeNotification(
+                "تراکنش موفق",
+                "تراکنش شما با موفقیت ثبت شد."
+            )
+            "FAILED", "TIMEOUT" -> notificationService.showTradeNotification(
+                "تراکنش ناموفق",
+                "تراکنش شما تکمیل نشد."
+            )
+            else -> { /* QUEUED/PENDING — no user-facing notification */ }
         }
     }
 
     private fun JSONObject.optStringOrNull(key: String): String? =
         if (has(key) && !isNull(key)) optString(key).takeIf { it.isNotBlank() } else null
 
+    private fun JSONObject.optLongOrNull(key: String): Long? =
+        if (has(key) && !isNull(key)) optLong(key).takeIf { it > 0 } else null
+
     private companion object {
         const val NORMAL_CLOSURE = 1000
-        const val HEARTBEAT_INTERVAL_MS = 30_000L
+        const val DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000L
+        // Sanity bounds for a server-advertised heartbeat: ignore absurd values that would either
+        // hammer the socket or let a dead peer linger.
+        const val MIN_HEARTBEAT_INTERVAL_MS = 5_000L
+        const val MAX_HEARTBEAT_INTERVAL_MS = 300_000L
         const val RECONNECT_BASE_MS = 2_000.0
         const val RECONNECT_MAX_MS = 60_000L
     }
 }
 
 /**
- * Realtime frames the client surfaces, aligned to the relayer's targeted WS events. All money fields
- * stay raw `String` (BigInt-as-String invariant) — never parsed to Long/Double here.
+ * Pure mapping from a [SocketEvent] to the app-wide refresh events it should trigger (TASK-22). The
+ * server sends *thin invalidation signals*, never data — so each maps to a repository re-read, never a
+ * payload render (§8 of `ANDROID_SERVER_INTEGRATION.md`).
+ *
+ * Kept side-effect-free and Android-free (no `JSONObject`/`Context`) so the targeting rules are unit
+ * testable in isolation. [resolveNetworkName] reverse-maps the signal's bundle `networkId` to a local
+ * [com.mtd.domain.model.core.NetworkName] name (or null when unknown).
+ */
+internal object SocketRefreshMapper {
+
+    fun refreshEventsFor(
+        event: SocketEvent,
+        resolveNetworkName: (networkId: String) -> String?
+    ): List<AppEvent> = when (event) {
+        // ── Thin monitoring signals (targeted) ──────────────────────────────────────────────────
+        // balance.invalidated → refresh only the affected asset when both ids are present; otherwise a
+        // whole-wallet refresh (a missing assetId must never silently skip the balance update).
+        is SocketEvent.BalanceInvalidated ->
+            if (!event.networkId.isNullOrBlank() && !event.assetId.isNullOrBlank()) {
+                listOf(AppEvent.WalletAssetNeedsRefresh(assetId = event.assetId, networkId = event.networkId))
+            } else {
+                listOf(AppEvent.WalletNeedsRefresh)
+            }
+        // tx.new / tx.status.updated → refresh history, scoped to the network when the networkId
+        // reverse-maps to a local NetworkName; a null/unknown network yields an unscoped refresh
+        // (consumers treat a blank network as "refresh the current view").
+        is SocketEvent.TxNew -> listOf(historyRefresh(event.networkId, resolveNetworkName))
+        is SocketEvent.TxStatusUpdated -> listOf(historyRefresh(event.networkId, resolveNetworkName))
+        // ── Legacy per-user events (coarse) ─────────────────────────────────────────────────────
+        is SocketEvent.BalanceUpdated -> listOf(AppEvent.WalletNeedsRefresh)
+        is SocketEvent.TxStatusChanged -> listOf(
+            AppEvent.WalletNeedsRefresh,              // a status change can move the balance
+            AppEvent.TransactionHistoryNeedsRefresh() // …and the history list
+        )
+        is SocketEvent.GrowthFeeShareAccrued -> listOf(AppEvent.WalletNeedsRefresh)
+        is SocketEvent.ConnectionReady, SocketEvent.Unknown -> emptyList()
+    }
+
+    private fun historyRefresh(
+        networkId: String?,
+        resolveNetworkName: (String) -> String?
+    ): AppEvent {
+        val networkName = networkId?.takeIf { it.isNotBlank() }?.let(resolveNetworkName)
+        return AppEvent.TransactionHistoryNeedsRefresh(networkName = networkName)
+    }
+}
+
+/**
+ * Realtime frames the client surfaces, aligned to the relayer's WS contract (§8 of
+ * `ANDROID_SERVER_INTEGRATION.md`). Two generations coexist:
+ *
+ *  - **Thin monitoring signals** ([TxNew], [BalanceInvalidated], [TxStatusUpdated]) — the current
+ *    server model. Payloads carry a dedicated `eventId` (dedup key, 5s window) and the app's own
+ *    `networkId` verbatim (e.g. `sepolia`, `base_sepolia`, `shasta_testnet` — the bundle id, NOT a
+ *    relayPrefix), so they map cleanly to targeted refreshes. `cursor` is opaque — never parsed.
+ *  - **Legacy per-user events** ([TxStatusChanged], [BalanceUpdated], [GrowthFeeShareAccrued]) — may
+ *    still arrive; handled coarsely (whole-wallet refresh) as before.
+ *
+ * All money fields stay raw `String` (BigInt-as-String invariant) — never parsed to Long/Double here.
  */
 sealed interface SocketEvent {
+    /** Envelope frame id (`{ id, name, ts, payload }`). Welcome frame = `"welcome"`. */
     val id: String?
 
-    data class ConnectionReady(override val id: String?) : SocketEvent
+    /**
+     * The monitoring-signal dedup id (`payload.eventId`). Present only on the thin signals; dedup
+     * falls back to [id] for everything else. See [EventDeduplicationCache].
+     */
+    val eventId: String? get() = null
+
+    data class ConnectionReady(
+        override val id: String?,
+        /** Server heartbeat interval from `payload.heartbeatMs`; drives the app-level ping cadence. */
+        val heartbeatMs: Long? = null
+    ) : SocketEvent
+
+    /** `tx.new` — a monitored address is involved in a new transaction. → refresh history. */
+    data class TxNew(
+        override val id: String?,
+        override val eventId: String?,
+        val txHash: String?,
+        val networkId: String?,
+        val addressIdentityId: String?,
+        val cursor: String?
+    ) : SocketEvent
+
+    /** `balance.invalidated` — a specific `(walletId, networkId, assetId)` balance is stale. → refresh that asset. */
+    data class BalanceInvalidated(
+        override val id: String?,
+        override val eventId: String?,
+        val walletId: String?,
+        val networkId: String?,
+        val assetId: String?,
+        val cursor: String?
+    ) : SocketEvent
+
+    /** `tx.status.updated` — a tracked tx changed status. → refresh history / status. */
+    data class TxStatusUpdated(
+        override val id: String?,
+        override val eventId: String?,
+        val txHash: String?,
+        val networkId: String?,
+        val status: String?,
+        val cursor: String?
+    ) : SocketEvent
 
     data class TxStatusChanged(
         override val id: String?,

@@ -284,28 +284,28 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
     `WalletNeedsRefresh` + `TransactionHistoryNeedsRefresh`. This matches the **server's documented intent**
     (§8 of `ANDROID_SERVER_INTEGRATION.md`, server repo `docs/`): the WS pushes *thin invalidation signals*,
     never data — the client refreshes the relevant repository and never renders the payload. So the
-    refresh-on-signal shape is correct; see the contract-alignment gap below.
-  - ⚠️ **SocketEvent contract is STALE vs the live server (from `ANDROID_SERVER_INTEGRATION.md` 2026-07-13):**
-    - The server's current thin signals are **`tx.new`** `{eventId,txHash,networkId,addressIdentityId,cursor}`,
-      **`balance.invalidated`** `{eventId,walletId,networkId,assetId,cursor}`, **`tx.status.updated`**
-      `{eventId,txHash,networkId,status,cursor}` (+ legacy `tx.status.changed`/`balance.updated`/
-      `growth.fee_share.accrued`). `parseEnvelope` only handles the four `connection.ready`/legacy names, so
-      the **three primary signals fall through to `Unknown` and are dropped** — the app would ignore live
-      events once the server flag flips. **Forward-compat bug to fix.**
-    - **Targeting is now UNAMBIGUOUS** (unblocks the deferred "targeted socket events" task): the payloads
-      carry the app's own **`networkId`** verbatim (e.g. `sepolia`, `base_sepolia`, `shasta_testnet` — the
-      bundle ids, NOT a relayPrefix) plus **`assetId`/`walletId`**. So `balance.invalidated` →
-      `WalletAssetNeedsRefresh(assetId, networkId)`, `tx.new`/`tx.status.updated` →
-      `TransactionHistoryNeedsRefresh(networkId, …)` map cleanly. My earlier "relayPrefix reverse-map / token
-      ambiguity" blocker was wrong — that's the *gasless* path, not the socket.
-    - **Dedup should key on `payload.eventId` (5s window)**, not the envelope `id` (current code dedups the
-      envelope id; welcome frame id=`welcome`, signals carry the real id inside the payload).
-    - **`connection.ready.payload.heartbeatMs`** gives the server's heartbeat interval — use it instead of the
-      hardcoded 30 s.
-    - **Gating:** `REALTIME_THIN_EVENTS_ENABLED` is **currently OFF** server-side (only `connection.ready` +
-      pong arrive). Re-aligning the parser is safe to build now but can't be verified on-device until the
-      flag flips — so it's spec'd, not yet implemented. When done, swap the coarse `WalletNeedsRefresh` fan-out
-      for the targeted events above.
+    refresh-on-signal shape is correct; the thin-signal targeting is the re-alignment below.
+  - ✅ **SocketEvent contract re-aligned to the live server (2026-07-16):**
+    - Added the three thin signals to `SocketEvent` + `parseEnvelope`: **`tx.new`**
+      `{eventId,txHash,networkId,addressIdentityId,cursor}`, **`balance.invalidated`**
+      `{eventId,walletId,networkId,assetId,cursor}`, **`tx.status.updated`**
+      `{eventId,txHash,networkId,status,cursor}` — they no longer fall through to `Unknown`/get dropped.
+      Legacy `tx.status.changed`/`balance.updated`/`growth.fee_share.accrued` remain accepted.
+    - **Targeted fan-out** — extracted a pure, Android-free `SocketRefreshMapper`: `balance.invalidated`
+      → `WalletAssetNeedsRefresh(assetId, networkId)` (networkId is the bundle id verbatim, used directly
+      by `HomeViewModel.refreshSingleAssetBalance`), falling back to `WalletNeedsRefresh` when `assetId`
+      is absent; `tx.new`/`tx.status.updated` → `TransactionHistoryNeedsRefresh(networkName)` where
+      `networkId` is reverse-mapped to a local `NetworkName` via `INetworkCatalog.getNetworkInfoById`
+      (unknown network ⇒ unscoped refresh). Legacy events stay coarse (`WalletNeedsRefresh` [+ history]).
+    - **Dedup now keys on `payload.eventId`** (falls back to envelope `id` for legacy/welcome) — the 5s
+      `EventDeduplicationCache` window was already correct.
+    - **Adaptive heartbeat** — adopts `connection.ready.payload.heartbeatMs` (bounded 5s–300s) and
+      restarts the ping loop on it, instead of the hardcoded 30s (still the pre-welcome default).
+    - **Tests:** `SocketRefreshMapperTest` (:data, pure) covers asset-targeting, missing-assetId
+      fallback, network-scoped vs unscoped history refresh, and legacy-coarse mapping.
+    - **Gating:** `REALTIME_THIN_EVENTS_ENABLED` is **currently OFF** server-side (only `connection.ready`
+      + pong arrive), so live signal delivery can't be verified on-device until the flag flips. The parser
+      + mapper are built and unit-tested now; they activate automatically when the server turns it on.
   - **Verify on-device:** burst of tx events (no drops beyond buffer), airplane-mode toggle →
     reconnect fires a refresh, and a token minted after a premature `connect()` still opens the socket.
 - **Problem:** `SharedFlow(replay=1)` event loss; no confirmed reconnect re-sync; socket reconnect guard;
