@@ -372,6 +372,30 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   `SubscribeMonitoringUseCaseTest` (:data, MockK) covers gather+dedup, 25-chunking, unknown-network drop,
   empty-wallets no-op, and wallet-read-failure propagation. **Not run here** (Gradle unavailable in env) —
   inspection-verified only.
+- **Reworked (2026-07-16, user review):** the original gathered pairs from `getAllWallets()`, which
+  returns metadata-only wallets with `keys=emptyList()` → it enrolled **zero** addresses. Now:
+  `SubscribeMonitoringUseCase` uses the **active** wallet's real derived keys; enrollment is **once per
+  wallet** (gated by a persisted `IUserPreferencesRepository.getMonitoringSubscribedWalletIds` set), so a
+  plain wallet switch is a no-op and only a newly created/imported wallet (which becomes active) hits the
+  network; `DeleteWalletUseCase` prunes the id so a re-import re-enrolls; partial-chunk failures aren't
+  recorded (retry next activation). Call site unchanged (`WalletSessionAuthCoordinator`, now a cheap
+  no-op on switch). See [[refresh-and-monitoring-policy]].
+
+### TASK-33 — Lazy, wallet-scoped history load (user review) — ✅ Done
+- **Problem (item 1):** `TransactionHistoryViewModel` is created eagerly by `MainScreen` (`hiltViewModel()`),
+  and its `init → observeActiveWallet` called `loadHistory()` immediately → history services fired on app
+  open, before the History tab was ever shown. **Problem (item 6):** on wallet switch the screen could show
+  the previous wallet's data; opening History didn't guarantee the selected wallet's data.
+- **Fix:** removed the eager `init` load. `observeActiveWallet` now only rebuilds network options and, on a
+  wallet **change**, resets history state (clears data, resets filter to "all", invalidates the load key) —
+  fetching only if the screen is currently visible. New `onScreenShown()`/`onScreenHidden()` (wired from
+  `MainScreen` via `LaunchedEffect(selectedTab)`): `onScreenShown` is the sole initial-fetch trigger, so
+  history services are never called until the tab is opened, and it always loads the **active** wallet.
+  Socket/FCM `TransactionHistoryNeedsRefresh` while hidden just invalidates (defers to next open) instead of
+  fetching. **Modules:** app. **Files:** `TransactionHistoryViewModel`, `MainScreen`. **Deps:** none.
+- **Not built here** (Gradle unavailable) — inspection-verified. **Verify on-device:** open app on Wallet
+  tab → no `/history` call; tap History → loads active wallet; switch wallet then open History → new wallet's
+  data; switch while on History → reloads new wallet.
 
 ---
 

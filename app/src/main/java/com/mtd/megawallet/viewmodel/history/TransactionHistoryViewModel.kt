@@ -132,6 +132,12 @@ class TransactionHistoryViewModel @Inject constructor(
     private var refreshingNetworkIds: Set<String> = emptySet()
     private val lastNetworkRefreshTimes = mutableMapOf<String, Long>()
 
+    // TASK item 1 & 6 — history is loaded lazily (only while the screen is on-screen) and always for
+    // the currently-active wallet. [isScreenVisible] gates the fetch; [observedWalletId] detects a
+    // wallet switch so we invalidate the old wallet's data instead of showing it under the new wallet.
+    private var isScreenVisible = false
+    private var observedWalletId: String? = null
+
     init {
         listenToGlobalEvents()
         observeActiveWallet()
@@ -407,20 +413,68 @@ class TransactionHistoryViewModel @Inject constructor(
         launchSafe(checkNetwork = false) {
             observeActiveWalletUseCase().collect { wallet ->
                 if (wallet != null) {
+                    val walletChanged = wallet.id != observedWalletId
+                    observedWalletId = wallet.id
                     rebuildNetworkOptions(wallet.keys)
-                    // وقتی کیف پول عوض می‌شود، کلید لود قبلی را ریست می‌کنیم تا لود مجدد اجباری شود
-                    lastLoadedKey = null
-                    loadHistory(currentNetworkNameStr, currentUserAddress)
+
+                    if (walletChanged) {
+                        // A switch: drop the previous wallet's data + filter and reset the load key so
+                        // the new wallet's history is fetched fresh. We only fetch here if the history
+                        // screen is actually on-screen — otherwise the fetch is deferred to onScreenShown
+                        // (item 1: no history calls before the screen is opened; item 6: never show the
+                        // old wallet's data under the new wallet).
+                        resetHistoryStateForWalletChange()
+                        if (isScreenVisible) {
+                            loadHistory(currentNetworkNameStr, currentUserAddress, forceRefresh = true)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Called when the history screen becomes visible (History tab selected). Loads the active wallet's
+     * history on demand — this is the ONLY entry point that triggers the initial fetch, so history
+     * services are never called until the user opens the screen (item 1).
+     */
+    fun onScreenShown() {
+        isScreenVisible = true
+        loadHistory(currentNetworkNameStr, currentUserAddress)
+    }
+
+    /** Called when the history screen is no longer visible, so a later wallet switch defers its fetch. */
+    fun onScreenHidden() {
+        isScreenVisible = false
+    }
+
+    private fun resetHistoryStateForWalletChange() {
+        lastLoadedKey = null
+        currentNetworkNameStr = null
+        currentUserAddress = null
+        nextCursor = null
+        currentPairs = emptyList()
+        unifiedActive = false
+        _transactions.value = emptyList()
+        _errorMessage.value = null
+        _selectedTransaction.value = null
+        _hasMore.value = false
+        _showStaleWarning.value = false
+        selectAllNetworks()
     }
 
     private fun listenToGlobalEvents() {
         launchSafe(checkNetwork = false) {
             appEventBus.events.collect { event ->
                 if (event is AppEvent.TransactionHistoryNeedsRefresh && shouldRefreshFor(event)) {
-                    applyHistoryRefreshEvent(event)
+                    if (isScreenVisible) {
+                        applyHistoryRefreshEvent(event)
+                    } else {
+                        // Item 1 — don't hit history services while the screen is hidden. Invalidate so
+                        // the next onScreenShown fetches fresh; the signal (socket/FCM) isn't lost, just
+                        // deferred until the user actually looks at the history.
+                        lastLoadedKey = null
+                    }
                 }
             }
         }

@@ -239,6 +239,13 @@ private fun MainDashboardContent(
     // فلگ برای تشخیص اینکه آیا از MultiWallet وارد فلوی ساخت/ایمپورت شده‌ایم
     var isFromMultiWallet by remember { mutableStateOf(false) }
     val selectedTab by mainViewModel.selectedTab.collectAsStateWithLifecycle()
+
+    // Load transaction history lazily — only once the History tab is actually selected — and let the
+    // ViewModel know when it's hidden so a wallet switch defers its refetch (items 1 & 6).
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == MainTab.HISTORY) historyViewModel.onScreenShown() else historyViewModel.onScreenHidden()
+    }
+
     val shouldShowMainFab = selectedTab == MainTab.WALLET &&
         selectedAssetId == null &&
         !showSendScreen &&
