@@ -1,9 +1,10 @@
 package com.mtd.data.usecase
 
+import com.mtd.domain.interfaceRepository.IActiveWalletProvider
 import com.mtd.domain.interfaceRepository.IMonitoringRepository
 import com.mtd.domain.interfaceRepository.INetworkCatalog
-import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.interfaceRepository.NetworkInfo
+import com.mtd.domain.model.IUserPreferencesRepository
 import com.mtd.domain.model.MonitoringSubscribeResult
 import com.mtd.domain.model.MonitoringSubscription
 import com.mtd.domain.model.ResultResponse
@@ -17,6 +18,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -24,72 +26,81 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * TASK-32 — verifies the pair-gathering + chunking of [SubscribeMonitoringUseCase]: it collects
- * (address, networkId) across ALL wallets, maps each key's [NetworkName] to its bundle id, dedups,
- * drops keys whose network isn't in the catalog, and chunks to the server's 25-pair bound.
+ * TASK-32 — verifies [SubscribeMonitoringUseCase]: it enrolls the ACTIVE wallet's real derived keys
+ * exactly once (gated by the persisted subscribed-wallet-id set), maps `NetworkName`→bundle id, dedups,
+ * chunks to 25, records the wallet only on full success, and never re-sends for an already-known wallet.
  */
 class SubscribeMonitoringUseCaseTest {
 
-    private lateinit var walletRepository: IWalletRepository
+    private lateinit var activeWalletProvider: IActiveWalletProvider
     private lateinit var monitoringRepository: IMonitoringRepository
     private lateinit var networkCatalog: INetworkCatalog
+    private lateinit var userPreferences: IUserPreferencesRepository
     private lateinit var useCase: SubscribeMonitoringUseCase
 
     @Before
     fun setUp() {
-        walletRepository = mockk(relaxed = true)
+        activeWalletProvider = mockk(relaxed = true)
         monitoringRepository = mockk(relaxed = true)
         networkCatalog = mockk(relaxed = true)
+        userPreferences = mockk(relaxed = true)
         useCase = SubscribeMonitoringUseCase(
-            walletRepository = dagger.Lazy { walletRepository },
+            activeWalletProvider = activeWalletProvider,
             monitoringRepository = dagger.Lazy { monitoringRepository },
-            networkCatalog = networkCatalog
+            networkCatalog = networkCatalog,
+            userPreferences = userPreferences
         )
 
-        // networkId = the enum name lowercased, so we can assert mapping without the real catalog.
         every { networkCatalog.getNetworkInfoByName(any()) } answers {
-            val name = firstArg<NetworkName>()
-            networkInfo(name)
+            networkInfo(firstArg())
         }
         coEvery { monitoringRepository.subscribe(any()) } returns
-            ResultResponse.Success(MonitoringSubscribeResult(subscribed = 0, total = 0))
+            ResultResponse.Success(MonitoringSubscribeResult(0, 0))
+        coEvery { userPreferences.getMonitoringSubscribedWalletIds() } returns emptySet()
+    }
+
+    private fun activeWallet(wallet: Wallet?) {
+        every { activeWalletProvider.activeWallet } returns MutableStateFlow(wallet)
     }
 
     @Test
-    fun `gathers pairs across all wallets, maps networkId, and dedups`() = runTest {
-        coEvery { walletRepository.getAllWallets() } returns ResultResponse.Success(
-            listOf(
-                wallet("w1", key(NetworkName.SEPOLIA, "0xA"), key(NetworkName.SHASTA, "Tx")),
-                // Duplicate of the first pair (same address+network) must collapse.
-                wallet("w2", key(NetworkName.SEPOLIA, "0xA"), key(NetworkName.BASESEPOLIA, "0xB"))
-            )
+    fun `enrolls a new active wallet's pairs and records its id`() = runTest {
+        activeWallet(
+            wallet("w1", key(NetworkName.SEPOLIA, "0xA"), key(NetworkName.SHASTA, "Tx"))
         )
-
         val captured = slot<List<MonitoringSubscription>>()
         coEvery { monitoringRepository.subscribe(capture(captured)) } returns
             ResultResponse.Success(MonitoringSubscribeResult(0, 0))
+        val recorded = slot<Set<String>>()
+        coEvery { userPreferences.setMonitoringSubscribedWalletIds(capture(recorded)) } returns Unit
 
-        val result = useCase()
+        useCase()
 
-        assertTrue(result is ResultResponse.Success)
-        // 4 keys, one is a dup → 3 distinct pairs, single chunk.
-        coVerify(exactly = 1) { monitoringRepository.subscribe(any()) }
         assertEquals(
             setOf(
                 MonitoringSubscription("0xA", "sepolia"),
-                MonitoringSubscription("Tx", "shasta"),
-                MonitoringSubscription("0xB", "basesepolia")
+                MonitoringSubscription("Tx", "shasta")
             ),
             captured.captured.toSet()
         )
+        assertEquals(setOf("w1"), recorded.captured)
+    }
+
+    @Test
+    fun `already-subscribed wallet is a no-op`() = runTest {
+        activeWallet(wallet("w1", key(NetworkName.SEPOLIA, "0xA")))
+        coEvery { userPreferences.getMonitoringSubscribedWalletIds() } returns setOf("w1")
+
+        useCase()
+
+        coVerify(exactly = 0) { monitoringRepository.subscribe(any()) }
+        coVerify(exactly = 0) { userPreferences.setMonitoringSubscribedWalletIds(any()) }
     }
 
     @Test
     fun `chunks pair-sets larger than the 25 bound`() = runTest {
-        // 30 distinct pairs on one network → 2 chunks (25 + 5).
         val keys = (1..30).map { key(NetworkName.SEPOLIA, "0x$it") }
-        coEvery { walletRepository.getAllWallets() } returns
-            ResultResponse.Success(listOf(wallet("w1", *keys.toTypedArray())))
+        activeWallet(wallet("w1", *keys.toTypedArray()))
 
         val chunks = mutableListOf<List<MonitoringSubscription>>()
         coEvery { monitoringRepository.subscribe(capture(chunks)) } returns
@@ -98,16 +109,13 @@ class SubscribeMonitoringUseCaseTest {
         useCase()
 
         assertEquals(listOf(25, 5), chunks.map { it.size })
-        assertTrue(chunks.all { it.size <= 25 })
         assertEquals(30, chunks.flatten().distinct().size)
     }
 
     @Test
     fun `drops keys whose network is not in the catalog`() = runTest {
         every { networkCatalog.getNetworkInfoByName(NetworkName.DOGE) } returns null
-        coEvery { walletRepository.getAllWallets() } returns ResultResponse.Success(
-            listOf(wallet("w1", key(NetworkName.SEPOLIA, "0xA"), key(NetworkName.DOGE, "Dx")))
-        )
+        activeWallet(wallet("w1", key(NetworkName.SEPOLIA, "0xA"), key(NetworkName.DOGE, "Dx")))
 
         val captured = slot<List<MonitoringSubscription>>()
         coEvery { monitoringRepository.subscribe(capture(captured)) } returns
@@ -119,8 +127,8 @@ class SubscribeMonitoringUseCaseTest {
     }
 
     @Test
-    fun `no wallets means no subscribe call`() = runTest {
-        coEvery { walletRepository.getAllWallets() } returns ResultResponse.Success(emptyList())
+    fun `no active wallet means no subscribe call`() = runTest {
+        activeWallet(null)
 
         val result = useCase()
 
@@ -129,14 +137,18 @@ class SubscribeMonitoringUseCaseTest {
     }
 
     @Test
-    fun `propagates a wallet-read failure without subscribing`() = runTest {
-        coEvery { walletRepository.getAllWallets() } returns
+    fun `partial chunk failure does not record the wallet`() = runTest {
+        val keys = (1..30).map { key(NetworkName.SEPOLIA, "0x$it") }
+        activeWallet(wallet("w1", *keys.toTypedArray()))
+        // First chunk ok, second fails → wallet must NOT be recorded (retries next activation).
+        coEvery { monitoringRepository.subscribe(any()) } returnsMany listOf(
+            ResultResponse.Success(MonitoringSubscribeResult(0, 0)),
             ResultResponse.Error(IllegalStateException("boom"))
+        )
 
-        val result = useCase()
+        useCase()
 
-        assertTrue(result is ResultResponse.Error)
-        coVerify(exactly = 0) { monitoringRepository.subscribe(any()) }
+        coVerify(exactly = 0) { userPreferences.setMonitoringSubscribedWalletIds(any()) }
     }
 
     private fun networkInfo(name: NetworkName) = NetworkInfo(

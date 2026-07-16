@@ -4,6 +4,7 @@ import com.mtd.domain.interfaceRepository.IBackupRepository
 import com.mtd.domain.interfaceRepository.ICloudWalletBackupCodec
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.Asset
+import com.mtd.domain.model.IUserPreferencesRepository
 import com.mtd.domain.model.CloudWalletMetadata
 import com.mtd.domain.model.ImportData
 import com.mtd.domain.model.ResultResponse
@@ -45,10 +46,20 @@ class SwitchActiveWalletUseCase @Inject constructor(
 }
 
 class DeleteWalletUseCase @Inject constructor(
-    private val walletRepository: dagger.Lazy<IWalletRepository>
+    private val walletRepository: dagger.Lazy<IWalletRepository>,
+    private val userPreferences: dagger.Lazy<IUserPreferencesRepository>
 ) {
     suspend operator fun invoke(walletId: String): ResultResponse<Unit> {
-        return walletRepository.get().deleteWallet(walletId)
+        val result = walletRepository.get().deleteWallet(walletId)
+        // TASK-32 — forget this wallet's monitoring enrollment so a later re-import re-enrolls it.
+        if (result is ResultResponse.Success) {
+            val prefs = userPreferences.get()
+            val subscribed = prefs.getMonitoringSubscribedWalletIds()
+            if (walletId in subscribed) {
+                prefs.setMonitoringSubscribedWalletIds(subscribed - walletId)
+            }
+        }
+        return result
     }
 }
 

@@ -22,6 +22,7 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         const val KEY_FAILED_UNLOCK_ATTEMPTS = "failed_unlock_attempts"
         const val KEY_LOCKOUT_UNTIL = "lockout_until"
         const val KEY_CONNECTION_MODE = "blockchain_connection_mode"
+        const val KEY_MONITORING_SUBSCRIBED_WALLET_IDS = "monitoring_subscribed_wallet_ids"
         const val DEFAULT_LOCK_TIMEOUT_SECONDS = 30
     }
 
@@ -105,5 +106,16 @@ class UserPreferencesRepositoryImpl @Inject constructor(
 
     override suspend fun setLockoutUntil(timestampMs: Long) {
         prefs.edit { putLong(KEY_LOCKOUT_UNTIL, timestampMs.coerceAtLeast(0L)) }
+    }
+
+    override suspend fun getMonitoringSubscribedWalletIds(): Set<String> {
+        // Copy — the Set returned by SharedPreferences must not be mutated or retained.
+        return prefs.getStringSet(KEY_MONITORING_SUBSCRIBED_WALLET_IDS, emptySet())
+            ?.toSet()
+            ?: emptySet()
+    }
+
+    override suspend fun setMonitoringSubscribedWalletIds(ids: Set<String>) {
+        prefs.edit { putStringSet(KEY_MONITORING_SUBSCRIBED_WALLET_IDS, ids) }
     }
 }

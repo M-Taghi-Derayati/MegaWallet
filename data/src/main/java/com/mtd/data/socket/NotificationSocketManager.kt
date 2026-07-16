@@ -70,9 +70,6 @@ class NotificationSocketManager @Inject constructor(
     @Volatile private var shouldBeConnected = false
     @Volatile private var reconnectAttempts = 0
     @Volatile private var lastInboundAtMs = 0L
-    // Distinguishes the first successful connect (cold start already loads data) from every later
-    // (re)connect, which must re-sync any state missed while the socket was down. See onOpen().
-    @Volatile private var hasConnectedBefore = false
     // Heartbeat cadence — starts at the default and is refined by `connection.ready.payload.heartbeatMs`
     // once the welcome frame arrives, so we ping on the server's actual interval instead of a guess.
     @Volatile private var heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS
@@ -191,14 +188,11 @@ class NotificationSocketManager @Inject constructor(
             Timber.i("[NotificationSocket] ✅ Connected.")
             reconnectAttempts = 0
             startHeartbeat()
-            // Re-sync on every (re)connect except the very first: while the socket was down (dropped,
-            // backgrounded, or offline) we may have missed balance/tx/history pushes. The cold-start
-            // path already loads on the first connect, so only fan out a refresh on later ones.
-            if (hasConnectedBefore) {
-                Timber.d("[NotificationSocket] Reconnected → requesting state re-sync.")
-                scope.launch { appEventBus.postEvent(AppEvent.WalletNeedsRefresh) }
-            }
-            hasConnectedBefore = true
+            // Deliberately NO state re-sync here. A (re)connect — including the foreground reconnect
+            // after the screen turns on — must re-establish ONLY the socket; it must not fan out a
+            // balance/history refresh. Any state that actually changed while we were away is delivered
+            // as a thin signal over this socket (or via FCM) and refreshed on receipt; a manual pull
+            // covers anything else. (Reverts the earlier TD-46 reconnect fan-out per product decision.)
         }
 
         @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)

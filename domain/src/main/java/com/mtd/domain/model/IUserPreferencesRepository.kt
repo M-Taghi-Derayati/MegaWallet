@@ -42,4 +42,12 @@ interface IUserPreferencesRepository {
     suspend fun setFailedUnlockAttempts(count: Int)
     suspend fun getLockoutUntil(): Long
     suspend fun setLockoutUntil(timestampMs: Long)
+
+    /**
+     * TASK-32 — wallet ids already enrolled for backend monitoring (`/monitoring/subscribe`).
+     * Persisted so enrollment fires **once per wallet** (on create/import), never again on a plain
+     * wallet switch. Pruned when a wallet is deleted so a re-import re-enrolls.
+     */
+    suspend fun getMonitoringSubscribedWalletIds(): Set<String>
+    suspend fun setMonitoringSubscribedWalletIds(ids: Set<String>)
 }

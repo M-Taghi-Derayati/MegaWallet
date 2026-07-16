@@ -79,9 +79,10 @@ class WalletSessionAuthCoordinator @Inject constructor(
         when (val r = ensureAuthenticated(forceFresh = forceFresh)) {
             is ResultResponse.Success -> {
                 scheduleProactiveRefresh()
-                // TASK-32 — now that the JWT is minted, enroll EVERY local wallet's (address,networkId)
-                // pairs for realtime/deposit monitoring in one shot. Idempotent + durable, so re-running
-                // it on each unlock/switch/create/import is safe; fire-and-forget off the auth path.
+                // TASK-32 — now that the JWT is minted, enroll the active wallet for realtime/deposit
+                // monitoring. The use case is a no-op when this wallet was already enrolled (persisted
+                // set), so a plain wallet switch never re-sends — only a newly created/imported wallet
+                // triggers the network call. Fire-and-forget off the auth path.
                 enrollMonitoring()
             }
             is ResultResponse.Error -> Timber.w(r.exception, "[Auth] sign-in failed for wallet=$walletId")
