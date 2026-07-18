@@ -171,8 +171,16 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   - ✅ **Multi-asset price param** — `MarketDataRepositoryImpl.fetchLatestPricesFromCoinDesk` multi-asset
     branch called `getPrices(idsString)` positionally, binding ids to `search` and leaving `ids` null →
     wrong/empty prices. Now always `getPrices(ids = idsString)`; dead `symbolString` removed.
-  - ⏳ **Tron PROXY feeLevel** & **EVM L1 fee units** — money-math; **deferred** pending on-device
-    verification (send on TRON PROXY + a Base L1-fee check) so the fix can be validated, not changed blind.
+  - ✅ **Tron PROXY feeLevel** (2026-07-17, Tron-priority pass) — `ProxyChainDataSource` sent the **raw
+    Persian tier label** («عادی»/«کند»/«سریع») to the prepare endpoint on the **TRON native** path
+    (`sendTron`) and the **EVM contract-call** path, while only the EVM token path translated it to the
+    backend's machine keys (`slow`/`standard`/`fast`). So TRON sends silently fell back to the server
+    default tier. Centralized the mapping in `toBackendFeeLevel(feeLevel)` (Persian→machine, machine
+    pass-through, unknown→`standard`) and applied it at all three prepare sites. **Verify on-device:**
+    a TRON PROXY send with each tier selected reaches the server as slow/standard/fast (not «عادی»).
+  - ⏳ **EVM L1 fee units** — money-math; still **deferred** pending an on-device Base L1-fee check
+    (though `getFeeOptions` already prefers the context-aware `totalFee` per tier, which addresses the
+    L2 underestimate) so the fix can be validated, not changed blind.
   - ✅ **nullable-fee "0"** — `formatTransactionFee` fell through to the `else` branch on a `null` fee
     (`null == ZERO` is false) and formatted `null ?: ZERO`, so an **unknown** fee rendered as "0",
     indistinguishable from a genuine zero-fee tx. Now a `when` shows a neutral placeholder ("—") for
@@ -255,6 +263,54 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   per-network `if(PROXY)` branches. **Acceptance:** single routing point; DIRECT/PROXY behaviorally equal.
   **Rollback:** revert. **Regression:** all sends. **Testing:** send matrix DIRECT×PROXY × EVM/TRON/UTXO.
 
+### TASK-36 — Smart transport failover (PROXY ⇄ DIRECT auto-switch on error) — 🆕 Planned
+- **Problem (user request):** the transport mode is a single persisted user preference
+  (`DefaultBlockchainConnectionModeProvider`, read synchronously via `IBlockchainConnectionModeProvider.currentMode()`).
+  If the selected transport is unhealthy — the centralized Mobile Blockchain Proxy (`/api/mobile/v1`) is
+  down/5xx/timeouts, **or** the direct public RPCs are rate-limited/unreachable — every read/broadcast on
+  that mode just fails, even though the *other* transport would succeed. There is no automatic fallback.
+- **Goal:** when calls on the active transport fail (transient/transport-level, not business errors), fall
+  back to the other transport for that operation, and remember the healthy one for a short window; recover
+  to the user's preferred mode when it's healthy again. Direction is symmetric: PROXY→DIRECT **and**
+  DIRECT→PROXY.
+- **Root cause:** `ChainDataSourceFactory` picks exactly one `IChainDataSource` per call from
+  `currentMode()`; there's no health signal or retry-on-alternate wrapper. Both sources already return the
+  **same domain types**, so a fallback is transport-transparent to ViewModels (same invariant the mode
+  toggle relies on).
+- **Design sketch:** introduce a `FailoverChainDataSource` decorator (or a policy in the factory) that,
+  on a **classified transport failure** (IOException/timeout/HTTP 5xx/429 — NOT a valid on-chain revert,
+  insufficient-funds, nonce, or a signed-tx rejection, which must NOT be retried on another transport),
+  transparently retries the same operation on the alternate `IChainDataSource`. Add a lightweight
+  per-transport health tracker (circuit-breaker: N consecutive failures → mark unhealthy for a cooldown,
+  prefer the healthy one) so we don't pay the failed-primary latency on every call. **Broadcast is the
+  danger zone** — a send that failed *after* the node accepted it must not be re-broadcast blindly on the
+  other transport (double-spend/duplicate risk); gate broadcast failover on idempotency
+  (`IdempotencyInterceptor` / gasless session-stable key already give byte-identical retries a stable key)
+  or restrict failover to **reads** first and treat broadcast conservatively.
+- **Files:** `ChainDataSourceFactory`, new `FailoverChainDataSource` + a `TransportHealthTracker`,
+  `IBlockchainConnectionModeProvider` (expose an *effective* vs *preferred* mode), error-classification
+  helper. **Modules:** data (+ domain interface if a health signal is surfaced to UI). **Deps:** pairs with
+  **TASK-18** (consolidate DIRECT/PROXY routing) — do TASK-18 first so there's a single routing point to
+  wrap; **TASK-16** (fee/parity) so both paths are behaviorally equal before auto-switching between them.
+- **Difficulty:** Med–High · **Est:** 2.5 · **Risk:** Med–High (broadcast dup / masking real errors) · **Priority:** P2.
+- **Steps:** (1) classify errors into transient-transport vs business/final; (2) wrap reads with
+  retry-on-alternate + circuit-breaker health tracking; (3) decide broadcast policy (idempotent-only, or
+  reads-only in v1); (4) surface effective-mode to the UI (optional badge) without changing the user's saved
+  preference; (5) auto-recover to preferred mode after cooldown/health-check.
+- **Acceptance:** with PROXY forced to fail (e.g. bad base URL), balances/history still load via DIRECT and
+  vice-versa; a genuine on-chain error is **not** masked by a pointless alternate retry; no duplicate
+  broadcast. **Rollback:** feature-flag the failover decorator off → falls back to today's single-mode
+  behavior. **Regression:** all reads/sends on both modes; idempotency. **Testing:** unit-test error
+  classification + circuit-breaker; MockWebServer 5xx/timeout on one transport; send matrix
+  DIRECT×PROXY × EVM/TRON/UTXO with forced primary failure.
+- **Note:** keep the user's explicit mode as the *preferred* setting — failover is a temporary,
+  self-healing override, never a silent permanent switch.
+- **Precedent to reuse (not the same thing):** DIRECT already has *intra-transport* failover —
+  `EvmDataSource.executeWithFailover` rotates through `network.RpcUrlsEvm` on error (15s per-RPC timeout),
+  and `getTransactionHistory` walks `network.explorers`. That's RPC-endpoint rotation *within* DIRECT,
+  **not** PROXY⇄DIRECT transport switching — TASK-36 is the missing cross-transport layer above it. Model
+  the error-classification + timeout after `executeWithFailover` for consistency.
+
 ### TASK-22 — Realtime robustness (buffer + reconnect re-sync) — ✅ Implemented
 - **Status:** ✅ Implemented:
   - ✅ **Foreground/background socket lifecycle** (user-reported: socket stayed open while backgrounded /
@@ -308,6 +364,16 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
       + mapper are built and unit-tested now; they activate automatically when the server turns it on.
   - **Verify on-device:** burst of tx events (no drops beyond buffer), airplane-mode toggle →
     reconnect fires a refresh, and a token minted after a premature `connect()` still opens the socket.
+  - **⏳ Follow-up (server doc §8.2 refinement, not yet done):** the contract now specifies the *exact*
+    repository action per signal — `tx.new → historyRepository.syncSince(cursor, networkId)`,
+    `balance.invalidated → balanceRepository.refresh(walletId, networkId, assetId)`,
+    `tx.status.updated → transactionRepository.refresh(txHash, networkId)`. Our `SocketRefreshMapper`
+    currently maps `tx.new`/`tx.status.updated` to a **coarse** `TransactionHistoryNeedsRefresh(networkName)`
+    and **ignores the opaque `cursor`**. This is functionally safe (the doc: "a missed/duplicated signal only
+    ever causes a redundant re-fetch"), but the cursor-based `syncSince` + the `since` (epoch-ms) incremental
+    `/history` param would make the refresh *incremental* instead of a full network reload. Low priority while
+    `REALTIME_THIN_EVENTS_ENABLED` is OFF; do it when wiring an incremental history repo. Pass `cursor`
+    through untouched — never parse it.
 - **Problem:** `SharedFlow(replay=1)` event loss; no confirmed reconnect re-sync; socket reconnect guard;
   backoff dup. **TD:** 42, 46, N-6. **Files:** `NotificationSocketManager`, `GlobalEventBus`, realtime gateway.
 - **Difficulty:** Med · **Est:** 2 · **Risk:** Med · **Priority:** P2.
@@ -445,6 +511,103 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   comment to state the agreed contract (removed the old "unverified/guessed" hedging).
 - **Verify (once server ships it):** wallet list + asset detail show real ±% badges (green up / red down),
   not a flat 0.00%. **Modules:** data (client), + server. **Deps:** server change.
+
+### TASK-37 — On-demand transaction detail (fee/energy completeness on tx open) — ✅ Data layer done (verify on-device)
+- **Done (2026-07-17):** the fetch-on-open plumbing already existed end-to-end
+  (`TransactionHistoryViewModel:715` → `GetTransactionFeeDetailsUseCase` →
+  `IWalletRepository.getTransactionFeeDetails` → `IChainDataSource.getTransactionFeeDetails`), and the
+  **DIRECT** path (`TronDataSource.getTransactionFeeDetails` → native `gettransactioninfobyid`) already
+  returned real fee/energy. The gap was **PROXY**: `ProxyChainDataSource.getTransactionFeeDetails` hit the
+  `…/status` endpoint (no fee) and always mapped to `fee=0`. Now it calls the new
+  `GET …/:txId/detail` (`MobileProxyApiService.transactionDetail` → `ProxyEnvelope<TxDetailDto>`,
+  DTOs `TxDetailDto`/`TxDetailTronDto`/`TxDetailEvmDto`/`TxFeeBreakdownDto` in `MobileProxyDto.kt`) and
+  maps `feeRaw` + the TRON `feeBreakdown`/energy/bandwidth into `TransactionFeeDetails`
+  (PENDING → `feeRaw:null` falls back to the breakdown, then ZERO). So opening a TRON **token** transfer
+  (incoming or gasless) in PROXY mode now shows the real fee/energy instead of `0`.
+- **Verify on-device (PROXY mode):** open an incoming TRON MST transfer → real energy + fee (not 0);
+  open a pending tx → fills on confirmation. **Assumed** the `…/detail` response is BM-33-enveloped like
+  the sibling `…/status` route — confirm against the live server; if it's bare, drop the `ProxyEnvelope<>`.
+- **Original problem/spec kept below for reference.**
+- **Problem (server doc §5, 2026-07-XX addition):** the unified `/history` feed is **intentionally partial
+  for fee/energy** — for a **TRON token** transfer the fee/energy live on the *carrier* tx which is usually
+  NOT in the queried account's list (incoming transfer, or a relayer-funded gasless send), so the list
+  returns `tron.energyUsed`/`bandwidthUsed = null` and `feeRaw = "0"`. EVM token rows can be similarly thin.
+  Today `TransactionDetailsBottomSheet` renders only what the list row carries, so an opened TRON/token tx
+  shows a **wrong `0` fee / blank energy**.
+- **Endpoint:** `GET /api/mobile/v1/networks/:networkId/transactions/:txHash/detail` — the server-side proxy
+  of `gettransactioninfobyid` (TRON) / `eth_getTransactionReceipt` (EVM), so filtered users get the same
+  complete data DIRECT gives. Returns `{ txId, type, status, confirmations, blockNumber, timestamp, feeRaw,
+  <evm|tron> block }`. A `PENDING` result has `feeRaw:null` → poll `…/status` or wait for the WS
+  `tx.status.updated` signal. Settled results are cached server-side (re-opens are free).
+- **Rule:** call it **lazily, only when the user OPENS a transaction** (the detail sheet) — never per row in
+  the list. Merge `feeRaw` + the per-family block into the item already in hand; show a spinner/placeholder
+  for the fee/energy fields until it resolves.
+- **Files:** `MobileProxyApiService` (+ a `transactionDetail` method + DTO), a repo/use case
+  (`GetTransactionDetailUseCase`), `TransactionDetailsBottomSheet` + its VM/state to fetch-on-open and merge.
+  **Modules:** data, domain, app. **Deps:** none (works today; realtime-flag independent).
+- **Difficulty:** Low–Med · **Est:** 1 · **Risk:** Low · **Priority:** P2 (correctness of displayed fees).
+- **Steps:** (1) DTO + `GET …/detail` service method; (2) use case returning a merged
+  `TransactionFeeDetails`; (3) fetch-on-open in the detail sheet, placeholder→value, handle `PENDING`
+  (`feeRaw:null`) by polling `…/status` or awaiting `tx.status.updated`; (4) cache the merged result in-VM
+  so a re-open doesn't refetch. **Acceptance:** opening a TRON token transfer (incoming or gasless) shows the
+  **real** fee + energy, not `0`/blank; opening a pending tx shows "pending" then fills on confirmation.
+  **Rollback:** hide the detail fetch (falls back to today's list-only render). **Regression:** detail-sheet
+  render for native/EVM/BTC rows unchanged. **Testing:** MockWebServer detail fixtures (TRON token, EVM,
+  pending); on-device open an incoming TRON MST transfer and confirm real energy/fee.
+
+### TASK-39 — PROXY unified-history nested-shape mapping (token rows + energy/gas dropped) — ✅ Fixed (verify on-device)
+- **Problem (found 2026-07-17 from a live `/history` capture):** the unified `/history` item is **nested**
+  — token info under `tokenTransfer{ symbol, decimals, amountRaw, contractAddress }`, per-family fee/energy
+  under `tron{ energyUsed, bandwidthUsed, feeBreakdown }` / `evm{ gasPriceRaw, gasUsedRaw, nonce }`, asset
+  under `display{ isNative, symbol, decimals }`. But `HistoryItemDtoDeserializer` used a plain
+  `context.deserialize(json, …FlatDto)` that reads **top-level** `tokenSymbol`/`energyUsed`/`gasPriceRaw`
+  — all absent → null. Effect: **token transfers (e.g. TRON MST, and any EVM ERC-20) were mis-mapped as
+  native** (`tokenDetails()` returns null when symbol/contract are null), so they didn't render under their
+  token/asset filter; energy/bandwidth/gas were lost. **DIRECT was unaffected** (its own parsers already
+  read the real shape) — hence "only PROXY".
+- **Fix:** rewrote `HistoryItemDtoDeserializer` to read the nested JSON explicitly (`tokenTransfer`, `tron`,
+  `evm`, `bitcoin` blocks) and flatten into the DTOs the mapper consumes; `contractAddress` falls back
+  tokenTransfer→family-block. Null-safe primitive/bigint/object accessors added. `HistoryItemMapper.toDomain`
+  unchanged (it already prefers the token amount over `valueRaw`). **Modules:** data. **Files:**
+  `HistoryItemDto.kt`. Pairs with **TASK-37** (the tx-detail sheet's fee/energy, PROXY `getTransactionFeeDetails`
+  → `/detail`). **Not built here** (Gradle unavailable) — inspection-verified against the live capture.
+- **Verify on-device (PROXY):** history now lists TRON **MST** token transfers (and EVM token transfers) with
+  the right symbol/amount, and a row's energy/bandwidth/gas populate; native rows unchanged.
+
+### TASK-40 — Pin web3j to the Android artifact (6.x is Java-21/Jackson-3 → crashes on Android) — ✅ Fixed (build+verify)
+- **Problem (two on-device FATALs, same root):** the catalog had `web3j core/crypto/utils = 6.0.0`. web3j
+  **5.x/6.x are Java-21-only** and use **Jackson 3 (`tools.jackson`)**, which needs runtime APIs absent on
+  Android: (1) `Collectors.toUnmodifiableMap` (Java 10) → `NoSuchMethodError` from the Jackson java-time
+  module; (2) `java.lang.Class.isRecord()` (Java 16, Android API 33+) → `NoSuchMethodError` in
+  `tools.jackson.databind.JavaType.isRecordType` during JSON-RPC request serialization
+  (`org.web3j.protocol.Service.send`). So **any** web3j RPC (EVM/TRON reads, gasless allowance) crashed on
+  sub-33 devices. Core library desugaring backports #1 but **cannot** backport #2 (`isRecord()` is a VM
+  method on `java.lang.Class`, not a rewritable library API).
+- **Root cause:** web3j 6.x dropped Android; the Java binaries are compiled with Java 21. The **only**
+  Android-supported build is the `-android` classifier line (LFDT-web3j `android` branch, Jackson 2).
+- **Fix:** pinned `webCore`/`webCoreUtils` → **`4.12.3-android`** (verified latest `-android` on Maven
+  Central for `core`/`crypto`/`utils`/`abi`). Every web3j API the app uses (`Credentials`, `Sign`, `Keys`,
+  `Bip32ECKeyPair`, `MnemonicUtils`, `RawTransaction`, `TransactionEncoder`, `FunctionEncoder`,
+  `StructuredDataEncoder`/EIP-712, `Web3j`, `HttpService`, `Numeric`, abi datatypes) exists in 4.12.3, so
+  the API drift is minimal. Core library desugaring stays (harmless; now optional for web3j).
+- **Build + verify (Gradle unavailable here — user builds):** clean build should compile; if it fails on
+  **BouncyCastle** (the root `resolutionStrategy` force-pins `bcprov-jdk18on:1.73` for the web3j/bitcoin
+  dup-class conflict), the `-android` variant may pull a different BC — adjust the pin then. On-device: a
+  TRON/EVM gasless send + a DIRECT RPC read no longer crash. **Never bump web3j past `4.12.3-android`.**
+
+### TASK-38 — Signed config bundle bootstrap (network/asset catalog from server) — ✅ Already implemented (verify)
+- **Server doc §3:** drive the network/asset catalog + `networkId`s from a **signed** server bundle instead
+  of hardcoding: `GET /config/public-key` (pin), `GET /config/bundle` (`{version,networks,assets,signature}`,
+  secp256k1-verify before trusting), `GET /config/version` (cheap re-fetch poll), `GET /capabilities`
+  (feature flags).
+- **Status:** ✅ Present in code — `ConfigApiService`, `ConfigBundleDto`, `Secp256k1ConfigSignatureVerifier`
+  (+ `ConfigSignatureVerifier` iface), `ConfigManager` (offline-first, with `ConfigManagerOfflineFirstTest`),
+  `LocalConfigAssetProvider` (bundled `networks.json`/`assets.json` as the fallback/seed), `ConfigCacheStore`,
+  `CapabilityApiService` + `CapabilityManager` + `CapabilityDto`, wired in `DataModule` and consumed by
+  `WalletRepositoryImpl`. So §3 is satisfied: the local JSON is now the **seed/offline fallback**, not the
+  source of truth. **Verify on-device:** first launch fetches + signature-verifies the server bundle (pinned
+  key), a `config/version` bump triggers a re-fetch, and an invalid signature is rejected (falls back to the
+  last-good/local seed, never trusts an unverified bundle). No new work unless verification finds a gap.
 
 ---
 

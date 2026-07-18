@@ -60,15 +60,42 @@ class PushMessageHandler @Inject constructor(
         }
 
         // Show whatever the server asked us to show (already Persian-localized). Prefer an explicit
-        // notification block; fall back to data-payload title/body for pure data-only messages.
-        val title = notificationTitle ?: data["title"]
-        val body = notificationBody ?: data["body"]
+        // notification block, then a data-payload title/body, and finally an event-type fallback so a
+        // pure data-only signal (no title/body) still surfaces — matching the WS foreground behavior.
+        val fallback = event?.let(::fallbackNotificationFor)
+        val title = notificationTitle ?: data["title"] ?: fallback?.first
+        val body = notificationBody ?: data["body"] ?: fallback?.second
         if (!title.isNullOrBlank() || !body.isNullOrBlank()) {
-            showNotification(title.orEmpty(), body.orEmpty())
+            // A new-tx signal routes to the deposit channel (custom sound); everything else uses the
+            // default trade channel — mirrors [NotificationSocketManager]'s channel choice.
+            showNotification(title.orEmpty(), body.orEmpty(), isDeposit = event is SocketEvent.TxNew)
         }
     }
 
-    private fun showNotification(title: String, body: String) {
+    /**
+     * Generic per-event notification text for data-only pushes the server didn't pre-render. Mirrors
+     * [NotificationSocketManager.handleNotification] so background (FCM) and foreground (WS) stay
+     * consistent. Returns null for signals that are refresh-only (no user-facing alert).
+     */
+    private fun fallbackNotificationFor(event: SocketEvent): Pair<String, String>? = when (event) {
+        is SocketEvent.TxNew ->
+            "تراکنش جدید" to "یک تراکنش جدید روی آدرس شما ثبت شد."
+        is SocketEvent.TxStatusUpdated -> when (event.status?.uppercase()) {
+            "SUCCESS" -> "تراکنش موفق" to "تراکنش شما با موفقیت ثبت شد."
+            "FAILED", "TIMEOUT" -> "تراکنش ناموفق" to "تراکنش شما تکمیل نشد."
+            else -> null
+        }
+        is SocketEvent.TxStatusChanged -> when (event.status?.uppercase()) {
+            "SUCCESS" -> "تراکنش موفق" to "تراکنش شما با موفقیت ثبت شد."
+            "FAILED", "TIMEOUT" -> "تراکنش ناموفق" to "تراکنش شما تکمیل نشد."
+            else -> null
+        }
+        is SocketEvent.GrowthFeeShareAccrued ->
+            "پاداش جدید" to "سهم کارمزد دعوت به حساب شما اضافه شد."
+        else -> null
+    }
+
+    private fun showNotification(title: String, body: String, isDeposit: Boolean) {
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
@@ -76,7 +103,11 @@ class PushMessageHandler @Inject constructor(
         ) {
             return
         }
-        notificationService.showTradeNotification(title, body)
+        if (isDeposit) {
+            notificationService.showDepositNotification(title, body)
+        } else {
+            notificationService.showTradeNotification(title, body)
+        }
     }
 
     /** Builds a [SocketEvent] from the flat FCM data map (mirrors [NotificationSocketManager]'s parser). */

@@ -361,14 +361,22 @@ class NotificationSocketManager @Inject constructor(
         }
 
         when (event) {
+            // A monitored address is involved in a new tx (incoming or outgoing — the thin signal
+            // doesn't distinguish, and it carries no amount/token). Surface a generic alert in the
+            // foreground too so the user gets an immediate ping the moment funds move. The paired
+            // dispatchRefreshFor() already refreshes history, so the list updates behind the alert.
+            is SocketEvent.TxNew -> notificationService.showDepositNotification(
+                "تراکنش جدید",
+                "یک تراکنش جدید روی آدرس شما ثبت شد."
+            )
             is SocketEvent.TxStatusChanged -> notifyForTxStatus(event.status)
             is SocketEvent.TxStatusUpdated -> notifyForTxStatus(event.status)
             is SocketEvent.GrowthFeeShareAccrued -> notificationService.showTradeNotification(
                 "پاداش جدید",
                 "سهم کارمزد دعوت به حساب شما اضافه شد."
             )
-            // tx.new / balance.invalidated / balance.updated / connection.ready / unknown → silent
-            // (they drive a refresh, not a user-facing alert; deposits are handled by FCM in background).
+            // balance.invalidated / balance.updated / connection.ready / unknown → silent
+            // (they drive a refresh, not a user-facing alert).
             else -> Unit
         }
     }
