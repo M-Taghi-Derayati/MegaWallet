@@ -595,6 +595,20 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   dup-class conflict), the `-android` variant may pull a different BC — adjust the pin then. On-device: a
   TRON/EVM gasless send + a DIRECT RPC read no longer crash. **Never bump web3j past `4.12.3-android`.**
 
+### TASK-41 — Tron DIRECT-mode reliability/correctness (explorer failover + fee amount) — ✅ Fixed
+- **Problem (found in the Tron audit):** `TronDataSource` (DIRECT mode) had two latent issues:
+  - **history single-explorer** — `getTransactionHistory` built its explorer client from
+    `network.explorers[0]` only. Unlike the RPC path (which fails over `RpcUrls`), a single dead/rate-limited
+    explorer blanked the **entire** Tron history (native + token).
+  - **fee estimate used the wrong amount** — the TRC-20 branch of `getFeeOptions` estimated energy against
+    `asset.balance.toBigInteger()` (the **display** balance, whole coins) instead of the raw send `amount`
+    param — wrong units and semantics for the `triggerConstantContract` transfer param.
+- **Fix:** added `executeExplorerWithFailover { … }` (mirrors `executeNativeApiWithFailover`) and routed the
+  native+token history fetch through it (trailing-slash-normalized base URL). Fee estimate now uses
+  `amount ?: BigInteger.ONE` (raw). **Modules:** data. **Files:** `TronDataSource.kt`. **Not built here** —
+  inspection-verified. **Verify on-device (DIRECT):** history still loads if the primary explorer is down;
+  TRC-20 fee preview is sane for the actual amount.
+
 ### TASK-38 — Signed config bundle bootstrap (network/asset catalog from server) — ✅ Already implemented (verify)
 - **Server doc §3:** drive the network/asset catalog + `networkId`s from a **signed** server bundle instead
   of hardcoding: `GET /config/public-key` (pin), `GET /config/bundle` (`{version,networks,assets,signature}`,

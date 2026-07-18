@@ -108,6 +108,25 @@ class TronDataSource(
         throw lastException ?: IllegalStateException("All TRON RPCs failed")
     }
 
+    private suspend fun <T> executeExplorerWithFailover(block: suspend (TronExplorerService) -> T): T {
+        var lastException: Exception? = null
+
+        for ((index, explorer) in network.explorers.withIndex()) {
+            try {
+                return withTimeout(NATIVE_API_FAILOVER_TIMEOUT_MS) {
+                    val baseUrl = if (explorer.endsWith("/")) explorer else "$explorer/"
+                    val api = retrofitBuilder.baseUrl(baseUrl).build().create(TronExplorerService::class.java)
+                    block(api)
+                }
+            } catch (e: Exception) {
+                lastException = e
+                Timber.e(e, "TRON explorer failed [${index + 1}/${network.explorers.size}] $explorer")
+            }
+        }
+
+        throw lastException ?: IllegalStateException("All TRON explorers failed for ${network.id}")
+    }
+
     override suspend fun getBalance(address: String): ResultResponse<BigDecimal> {
         return ResultResponse.Success(BigDecimal.ZERO)
     }
@@ -147,9 +166,14 @@ class TronDataSource(
     override suspend fun getTransactionHistory(address: String): ResultResponse<List<TransactionRecord>> {
         return try {
             val records = mutableListOf<TransactionRecord>()
-            val api = retrofitBuilder.baseUrl(network.explorers[0]).build().create(TronExplorerService::class.java)
-            // ۱. دریافت تراکنش‌های بومی (TRX)
-            val normalTxs = api.getTrxHistory(address, limit = 20, start = 0)
+            // Fetch native + token history on the first healthy explorer, failing over across the
+            // configured explorers (mirrors the RPC failover) so one dead explorer no longer blanks
+            // the entire history.
+            val (normalTxs, tokenTxs) = executeExplorerWithFailover { api ->
+                api.getTrxHistory(address, limit = 20, start = 0) to
+                    api.getTokenHistory(address, limit = 20, start = 0)
+            }
+            // ۱. تراکنش‌های بومی (TRX)
             normalTxs.data.forEach { tx ->
                 val contract = tx.rawData.contract.firstOrNull { it.type == TRON_TRANSFER_CONTRACT }
                     ?: return@forEach
@@ -183,8 +207,7 @@ class TronDataSource(
                 )
             }
 
-            // ۲. دریافت تراکنش‌های توکن (TRC20 - مثل USDT)
-            val tokenTxs = api.getTokenHistory(address, limit = 20, start = 0)
+            // ۲. تراکنش‌های توکن (TRC20 - مثل USDT)
             tokenTxs.data.forEach { tx ->
                 if (!tx.isTransferEvent()) return@forEach
                 if (tx.value <= BigInteger.ZERO) return@forEach
@@ -362,8 +385,11 @@ class TronDataSource(
                         api.getAccountResource(AccountRequest(address = fromHex, visible = false))
                     } catch (_: Exception) { null }
 
-                    val amount = asset.balance.toBigInteger()
-                    val parameter = encodeTransferParams(toAddress, amount)
+                    // Estimate energy against the real send amount (raw units). Falls back to a nominal
+                    // 1 unit for a blind pre-quote (amount == null). `asset.balance` was wrong here — it's
+                    // the DISPLAY balance (whole coins), not the raw transfer amount.
+                    val estimateAmount = amount ?: BigInteger.ONE
+                    val parameter = encodeTransferParams(toAddress, estimateAmount)
 
                     // ۱. بررسی داینامیک وجود توکن در مقصد (برای تخمین جریمه Storage)
                     val destinationHasToken = try {
