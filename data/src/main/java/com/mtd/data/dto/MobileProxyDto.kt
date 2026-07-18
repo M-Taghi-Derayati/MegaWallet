@@ -188,6 +188,42 @@ data class TxStatusDto(
     @SerializedName("blockNumber") val blockNumber: Long? = null
 )
 
+// ── on-demand tx detail (GET …/:txId/detail) ─────────────────────────────────
+// Full fee/energy/gas — the server proxy of gettransactioninfobyid (TRON) / eth_getTransactionReceipt
+// (EVM). Fetched LAZILY when the user opens a tx: the /history list is intentionally partial for TRON
+// token rows (carrier tx not in the account list → energy=null, feeRaw="0"), so this fills the real
+// values. A PENDING receipt has feeRaw=null. Raw money fields are BigInteger-as-String
+// (BigIntegerStringAdapter). Envelope assumed BM-33 like the sibling …/status route — verify on live.
+data class TxFeeBreakdownDto(
+    @SerializedName("feeRaw") val feeRaw: BigInteger? = null,
+    @SerializedName("energyFeeRaw") val energyFeeRaw: BigInteger? = null,
+    @SerializedName("networkFeeRaw") val networkFeeRaw: BigInteger? = null
+)
+
+data class TxDetailTronDto(
+    @SerializedName("energyUsed") val energyUsed: Long? = null,
+    @SerializedName("bandwidthUsed") val bandwidthUsed: Long? = null,
+    @SerializedName("feeBreakdown") val feeBreakdown: TxFeeBreakdownDto? = null
+)
+
+data class TxDetailEvmDto(
+    @SerializedName("gasUsedRaw") val gasUsedRaw: BigInteger? = null,
+    @SerializedName("effectiveGasPriceRaw") val effectiveGasPriceRaw: BigInteger? = null,
+    @SerializedName("feeRaw") val feeRaw: BigInteger? = null
+)
+
+data class TxDetailDto(
+    @SerializedName("txId") val txId: String? = null,
+    @SerializedName("type") val type: String? = null,            // "tron" | "evm" | "bitcoin"
+    @SerializedName("status") val status: String? = null,        // PENDING | CONFIRMED | FAILED
+    @SerializedName("confirmations") val confirmations: Long? = null,
+    @SerializedName("blockNumber") val blockNumber: Long? = null,
+    @SerializedName("timestamp") val timestamp: Long? = null,
+    @SerializedName("feeRaw") val feeRaw: BigInteger? = null,     // null while PENDING (no receipt yet)
+    @SerializedName("tron") val tron: TxDetailTronDto? = null,
+    @SerializedName("evm") val evm: TxDetailEvmDto? = null
+)
+
 // ── diagnostics (GET /networks) ───────────────────────────────────────────────
 data class NetworksDto(
     @SerializedName("networks") val networks: List<String>? = null

@@ -16,6 +16,7 @@ import com.mtd.data.dto.PrepareTxDto
 import com.mtd.data.dto.PrepareContractCallRequestDto
 import com.mtd.data.dto.PrepareTxRequestDto
 import com.mtd.data.dto.ProxyEnvelope
+import com.mtd.data.dto.TxDetailDto
 import com.mtd.data.dto.TxStatusDto
 import retrofit2.Response
 import retrofit2.http.Body
@@ -94,4 +95,13 @@ interface MobileProxyApiService {
         @Path("networkId") networkId: String,
         @Path("txId") txId: String
     ): Response<ProxyEnvelope<TxStatusDto>>
+
+    // On-demand full fee/energy/gas — proxy of gettransactioninfobyid (TRON) /
+    // eth_getTransactionReceipt (EVM). Call LAZILY on tx-open only (never per list row); settled
+    // results are cached server-side. PENDING → feeRaw:null.
+    @GET("api/mobile/v1/networks/{networkId}/transactions/{txId}/detail")
+    suspend fun transactionDetail(
+        @Path("networkId") networkId: String,
+        @Path("txId") txId: String
+    ): Response<ProxyEnvelope<TxDetailDto>>
 }

@@ -167,13 +167,37 @@ class ProxyChainDataSource(
     }
 
     override suspend fun getTransactionFeeDetails(txId: String): ResultResponse<TransactionFeeDetails> {
-        // The proxy status endpoint returns { txId, status, confirmations, blockNumber } only — it
-        // does NOT carry fee details. We still hit it to validate the tx id, but fee is unavailable
-        // here (a dedicated fee-details source would be a separate backend ask).
+        // On-demand full fee/energy — the server proxy of gettransactioninfobyid (TRON) /
+        // eth_getTransactionReceipt (EVM). The history list is intentionally partial for TRON token
+        // rows (feeRaw="0", energy=null on the carrier tx), so this fills the real values when the
+        // user OPENS a tx. A PENDING receipt has feeRaw=null → surfaced as ZERO until it settles.
         return proxyCall(
-            call = { proxyService.transactionStatus(network.id, txId) },
-            map = { TransactionFeeDetails(fee = BigInteger.ZERO) }
+            call = { proxyService.transactionDetail(network.id, txId) },
+            map = { dto ->
+                TransactionFeeDetails(
+                    // Top-level feeRaw is null while PENDING; fall back to the TRON breakdown, then ZERO.
+                    fee = dto.feeRaw ?: dto.tron?.feeBreakdown?.feeRaw ?: BigInteger.ZERO,
+                    energyUsed = dto.tron?.energyUsed,
+                    bandwidthUsed = dto.tron?.bandwidthUsed,
+                    energyFee = dto.tron?.feeBreakdown?.energyFeeRaw,
+                    networkFee = dto.tron?.feeBreakdown?.networkFeeRaw
+                )
+            }
         )
+    }
+
+    /**
+     * Maps the UI's Persian fee-tier label (from [getFeeOptions]: «کند»/«عادی»/«سریع») to the
+     * backend's machine key (`slow`/`standard`/`fast`) that the prepare endpoints expect. Passing the
+     * raw Persian string made TRON native + EVM contract-call sends silently fall back to the server
+     * default tier (TASK-16). Already-machine keys pass through; unknown/absent → `standard`.
+     */
+    private fun toBackendFeeLevel(feeLevel: String?): String = when (feeLevel) {
+        "کند" -> "slow"
+        "عادی" -> "standard"
+        "سریع" -> "fast"
+        "slow", "standard", "fast" -> feeLevel
+        else -> "standard"
     }
 
     override suspend fun sendTransaction(
@@ -216,7 +240,7 @@ class ProxyChainDataSource(
                                     data = contractData,
                                     valueWei = params.amount,
                                     gasLimit = params.gasLimit.takeIf { it > BigInteger.ZERO },
-                                    feeLevel = params.feeLevel
+                                    feeLevel = toBackendFeeLevel(params.feeLevel)
                                 )
                             )
                         },
@@ -254,12 +278,7 @@ class ProxyChainDataSource(
                                 recipient = params.to,
                                 assetId = assetId,
                                 amountRaw = params.amount,
-                                feeLevel = when(params.feeLevel){
-                                      "کند"->"slow"
-                                      "عادی"->"standard"
-                                      "سریع"->"fast"
-                                    else->"standard"
-                                }
+                                feeLevel = toBackendFeeLevel(params.feeLevel)
                             )
                         )
                     },
@@ -352,7 +371,7 @@ class ProxyChainDataSource(
                                 recipient = params.toAddress,
                                 assetId = assetId,
                                 amountRaw = params.amount,
-                                feeLevel = params.feeLevel
+                                feeLevel = toBackendFeeLevel(params.feeLevel)
                             )
                         )
                     },
