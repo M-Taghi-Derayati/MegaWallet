@@ -66,6 +66,7 @@ android {
         }
     }
     compileOptions {
+
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -83,7 +84,7 @@ android {
         resources {
             pickFirsts.add("META-INF/FastDoubleParser-LICENSE")
             pickFirsts.add("META-INF/FastDoubleParser-NOTICE")
-            pickFirsts.add("META-INF/thirdparty-LICENSE")
+
             // حذف امضاهای تکراری و فایل‌های بیهوده برای کاهش حجم APK
             excludes += setOf(
                 "META-INF/*.SF",
@@ -98,7 +99,15 @@ android {
                 "META-INF/LICENSE",
                 "META-INF/LICENSE.txt",
                 "META-INF/io.netty.versions.properties",
-                "META-INF/native-image/io.netty/**"
+                "META-INF/native-image/io.netty/**",
+                // Jackson 2 + Jackson 3 both ship these license/notice texts → duplicate-path clash.
+                // They're pure license text (unused at runtime), so drop them. (Jackson 3 itself is
+                // dead weight here — web3j -android is a fat jar with its own Jackson 2 — but it comes
+                // in transitively from another dep; excluding these files is the safe, targeted fix.)
+                "META-INF/thirdparty-LICENSE",
+                "META-INF/thirdparty-NOTICE",
+                "META-INF/LICENSE.md",
+                "META-INF/NOTICE.md"
             )
 
             pickFirsts.add("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
@@ -141,6 +150,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.messaging)
+    implementation(libs.firebase.analytics)
 
     implementation(libs.dagger.hilt)
     ksp(libs.dagger.hilt.compiler)

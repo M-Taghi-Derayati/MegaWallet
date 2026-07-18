@@ -11,8 +11,11 @@ material = "1.14.0"
 firebase_plugin="4.5.0"
 firebase-bom="34.16.0"
 crashlytics-plugin="3.0.7"
-webCore="6.0.0"
-webCoreUtils="6.0.0"
+# web3j 5.x/6.x are Java-21-only (Jackson 3 → Class.isRecord(), absent < API 33) and have NO -android
+# artifact, so they crash on Android (NoSuchMethodError isRecord/toUnmodifiableMap). `4.12.3-android`
+# is web3j's latest official Android build (LFDT-web3j `android` branch, Jackson 2). Do NOT bump. TASK-40.
+webCore="4.12.3-android"
+webCoreUtils="4.12.3-android"
 security-crypto="1.1.0"
 bitcoinj-core="0.17.1"
 recyclerview="1.4.0"
@@ -105,6 +108,7 @@ leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", ve
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 
 # Wave 4 — multidex removed (dead)
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
