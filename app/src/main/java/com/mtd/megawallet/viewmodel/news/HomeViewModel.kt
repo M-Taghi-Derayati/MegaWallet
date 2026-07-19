@@ -658,16 +658,38 @@ class HomeViewModel @Inject constructor(
         return rate
     }
 
+    // Item 4 — defer refresh events fired while the wallet screen isn't the visible tab, and apply them
+    // on entry (mirrors the history screen). The socket/FCM signal is never lost, just coalesced until
+    // the user actually looks at the wallet.
+    private var isScreenVisible = true // wallet is the initial tab
+    private var pendingRefreshOnShow = false
+
     private fun listenToGlobalEvents() {
         launchSafe(checkNetwork = false) {
             appEventBus.events.collect { event ->
                 when (event) {
-                    is AppEvent.WalletNeedsRefresh -> refreshData()
-                    is AppEvent.WalletAssetNeedsRefresh -> refreshSingleAssetBalance(event)
+                    is AppEvent.WalletNeedsRefresh ->
+                        if (isScreenVisible) refreshData() else pendingRefreshOnShow = true
+                    is AppEvent.WalletAssetNeedsRefresh ->
+                        if (isScreenVisible) refreshSingleAssetBalance(event) else pendingRefreshOnShow = true
                     else -> Unit
                 }
             }
         }
+    }
+
+    /** Wallet tab became visible — apply any refresh that was deferred while it was hidden. */
+    fun onScreenShown() {
+        isScreenVisible = true
+        if (pendingRefreshOnShow) {
+            pendingRefreshOnShow = false
+            refreshData()
+        }
+    }
+
+    /** Wallet tab hidden — subsequent refresh signals are deferred until re-entry. */
+    fun onScreenHidden() {
+        isScreenVisible = false
     }
 
     fun refreshData() {

@@ -244,6 +244,9 @@ private fun MainDashboardContent(
     // ViewModel know when it's hidden so a wallet switch defers its refetch (items 1 & 6).
     LaunchedEffect(selectedTab) {
         if (selectedTab == MainTab.HISTORY) historyViewModel.onScreenShown() else historyViewModel.onScreenHidden()
+        // Item 4 — same deferred-refresh discipline for the wallet screen: a balance signal that arrives
+        // while the user is on another tab is applied when they return to the wallet, not in the background.
+        if (selectedTab == MainTab.WALLET) homeViewModel.onScreenShown() else homeViewModel.onScreenHidden()
     }
 
     val shouldShowMainFab = selectedTab == MainTab.WALLET &&
