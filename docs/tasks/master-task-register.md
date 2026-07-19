@@ -652,15 +652,17 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   `PushMessageHandler.kt`. **Verify:** foreground incoming tx → sound in-app; app closed → FCM push plays
   the custom sound.
 
-### TASK-44 — Generalize deferred-refresh-on-entry to all tab screens (item 4) — ✅ Fixed (wallet + history)
+### TASK-44 — Generalize deferred-refresh-on-entry to all tab screens (item 4) — ✅ Fixed → ⚠️ wallet-gating REVERTED (see TASK-45)
 - **Problem (user, item 4):** a refresh signal (socket/FCM) that arrives while a screen isn't the visible
   tab should be applied when the user enters that screen — for **all** screens. Only History did this
   (TASK-33); `HomeViewModel` (wallet) refreshed eagerly in the background.
-- **Fix:** `HomeViewModel` now tracks `isScreenVisible` + a coalesced `pendingRefreshOnShow`; while hidden,
-  `WalletNeedsRefresh`/`WalletAssetNeedsRefresh` are deferred and applied in `onScreenShown()`. `MainScreen`
-  drives `onScreenShown/Hidden` from `selectedTab == WALLET` (alongside the existing HISTORY wiring). Send is
-  a transient overlay (always visible when in use) → out of scope. **Files:** `HomeViewModel.kt`,
-  `MainScreen.kt`. **Verify:** on History tab, trigger a balance change → wallet updates only on returning to it.
+- **Original fix:** `HomeViewModel` tracked `isScreenVisible` + a coalesced `pendingRefreshOnShow`; while
+  hidden, `WalletNeedsRefresh`/`WalletAssetNeedsRefresh` were deferred and applied in `onScreenShown()`.
+- **⚠️ Reverted for the wallet screen (2026-07-19, commit 2f6f538 — see TASK-45):** the wallet screen is the
+  SINGLE writer of the shared `asset_balance_*` cache every OTHER screen reads on open, so deferring its
+  refresh left freshly-opened screens showing the pre-transaction balance. Wallet balance signals are now
+  processed LIVE (item-4 intent still met via its StateFlow on entry). **History keeps the gating** (it writes
+  no shared cache), so item 4 stands where it's correct. **Files:** `HomeViewModel.kt`, `MainScreen.kt`.
 
 ### TASK-38 — Signed config bundle bootstrap (network/asset catalog from server) — ✅ Already implemented (verify)
 - **Server doc §3:** drive the network/asset catalog + `networkId`s from a **signed** server bundle instead
@@ -675,6 +677,48 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   source of truth. **Verify on-device:** first launch fetches + signature-verifies the server bundle (pinned
   key), a `config/version` bump triggers a re-fetch, and an invalid signature is rejected (falls back to the
   last-good/local seed, never trusts an unverified bundle). No new work unless verification finds a gap.
+
+### TASK-45 — Balance stays stale on every screen after a send (shared-cache + signal targeting) — ✅ Fixed
+- **Problem (user, 2026-07-19):** after a withdrawal the balance was correct on-chain but **every** screen —
+  including freshly-opened ones — kept showing the pre-tx amount. Three compounding causes:
+  1. `SocketRefreshMapper` mapped `tx.new` → **history only**; the balance refresh relied solely on
+     `balance.invalidated`, so a delivered `tx.new` alone left the shared `asset_balance_*` cache stale.
+  2. TASK-44's visibility gating deferred the wallet screen's refresh while another tab was in front, but the
+     wallet screen is the **single writer** of the shared balance cache all screens read → starved them.
+  3. `HomeViewModel.refreshSingleAssetBalance` matched `balance.invalidated` only by `config.id == assetId`
+     and otherwise fell through to `contractAddress == null`, so a token invalidation (server `"usdt"` vs
+     local composite id `"USDT-SEPOLIA"`) silently refreshed the **native** asset — the token never updated.
+- **Fix (commits 2f6f538, 2291664):** (1) `tx.new` → history refresh **+ `WalletNeedsRefresh`** (coarse,
+  redundant with `balance.invalidated` but safe — a new tx moves the balance); (2) wallet balance signals
+  processed **live**, gating reverted (see TASK-44); (3) match by **id OR symbol** (case-insensitive) OR
+  contract, and refresh the whole network on no-match instead of guessing native. **Files:**
+  `NotificationSocketManager.kt` (mapper), `HomeViewModel.kt`. Test: `SocketRefreshMapperTest` updated.
+- **Verify on-device:** send/receive → balance updates on wallet AND on freshly-opened asset-detail/multi-wallet.
+
+### TASK-46 — Rich tx notifications from the realtime display descriptor — ✅ Fixed
+- **Problem:** `realtime-event-contract.md` §2 adds a display hint to `tx.new`
+  (`direction/assetKind/asset/amountRaw/tokenSymbol/tokenDecimal`), and FCM thin signals are now **DATA-ONLY**
+  (no server title/body). We parsed none of it, so the closed-app notification was always generic
+  ("تراکنش جدید").
+- **Fix (commit b9ae94c):** new `TxDescriptor` parsed on both WS (`parseEnvelope`) and FCM (`parseFcmData`);
+  a shared pure `TransactionNotificationText` builds identical wording for both paths ("مبلغ ۱.۵ USDT دریافت
+  شد." / "… ارسال شد."), generic fallback when absent. **Files:** `NotificationSocketManager.kt`,
+  `PushMessageHandler.kt`. Test: `TransactionNotificationTextTest`. **Verify:** deposit with app open (sound +
+  amount) and closed (FCM shows the real amount). **Deferred:** in-app toast preview separate from the notif.
+
+### TASK-47 — MAX EVM send rejected: PROXY under-reserves the gas ceiling — ✅ Fixed
+- **Problem (user, 2026-07-18 log):** a MAX native send on Sepolia PROXY was rejected at broadcast with
+  `insufficient funds for intrinsic transaction cost`. The MAX deduction used the proxy fee mapper's
+  `feeInSmallestUnit` = the **gasPrice-based** `estimatedCost`/`totalFee` (`gasLimit × gasPrice + l1DataFee`),
+  but an EIP-1559 node reserves `gasLimit × maxFeePerGas (+ l1DataFee)` up-front. `value = balance − fee`
+  therefore left `value + reserved` a few ×10¹⁰ wei **over** the balance → rejected. **PROXY-only**; DIRECT
+  (`EvmDataSource.getFeeOptions`) already reserved the maxFeePerGas ceiling.
+- **Fix (commit 4de78c2):** `ProxyChainDataSource.getFeeOptions` computes the EVM reserve as
+  `tier.maxFeePerGas × gasLimit + (tier.l1DataFee ?: 0)` (mirrors DIRECT; ceiling ≥ totalFee so the L2 fix is
+  preserved); non-EVM / older backends keep the context-aware total. **Files:** `ProxyChainDataSource.kt`.
+  Test: `ProxyChainDataSourceTest` (ceiling assertion). **Verify on-device:** MAX native send in PROXY mode
+  succeeds. **Known residual:** if gas rises between GET `/fees/options` and POST `/prepare`, the server
+  reserves more at prepare and MAX can still fail (drift) — add a small buffer to the MAX deduction if seen.
 
 ---
 
