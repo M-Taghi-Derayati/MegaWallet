@@ -40,8 +40,13 @@ import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.supervisorScope
@@ -85,7 +90,17 @@ class TransactionHistoryViewModel @Inject constructor(
 ) : BaseViewModel(errorManager) {
 
     private val _transactions = MutableStateFlow<List<TransactionRecord>>(emptyList())
-    val transactions = _transactions.asStateFlow()
+
+    // Item 2 — locally-created optimistic pendings from a just-sent tx. Kept SEPARATE from the loaded
+    // list so they (a) show the moment History opens, (b) survive the lazy-history reset + every reload,
+    // and (c) disappear automatically once the backend returns the same hash or they age out. Never
+    // cached or paginated — only [_transactions] is.
+    private val _localPending = MutableStateFlow<List<TransactionRecord>>(emptyList())
+    private val pendingLocalTtlSeconds = 30L * 60 // 30 min safety cap for an un-indexed pending
+
+    val transactions: StateFlow<List<TransactionRecord>> =
+        combine(_transactions, _localPending) { loaded, pending -> mergeLocalPending(loaded, pending) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _networkOptions = MutableStateFlow<List<HistoryNetworkOption>>(emptyList())
     val networkOptions = _networkOptions.asStateFlow()
@@ -467,6 +482,12 @@ class TransactionHistoryViewModel @Inject constructor(
         launchSafe(checkNetwork = false) {
             appEventBus.events.collect { event ->
                 if (event is AppEvent.TransactionHistoryNeedsRefresh && shouldRefreshFor(event)) {
+                    // Item 2 — capture the optimistic pending regardless of screen visibility (it's local,
+                    // no network) so a tx sent from the Send screen still appears the moment History opens
+                    // and survives the reload. Only the NETWORK refresh below is gated by visibility.
+                    event.pendingTransaction
+                        ?.let(buildPendingHistoryTransactionUseCase::invoke)
+                        ?.let(::addLocalPending)
                     if (isScreenVisible) {
                         applyHistoryRefreshEvent(event)
                     } else {
@@ -492,11 +513,52 @@ class TransactionHistoryViewModel @Inject constructor(
         return networkMatches && addressMatches
     }
 
-    private fun applyHistoryRefreshEvent(event: AppEvent.TransactionHistoryNeedsRefresh) {
-        event.pendingTransaction?.let(buildPendingHistoryTransactionUseCase::invoke)?.let { pending ->
-            _transactions.value = normalizeTransactionHistoryUseCase(listOf(pending) + _transactions.value)
-        }
+    /**
+     * Records an optimistic pending (from a just-sent tx) into the durable local set, pruning any that
+     * expired or that the backend has already returned. Not gated by screen visibility (item 2).
+     */
+    private fun addLocalPending(pending: TransactionRecord) {
+        val nowSec = System.currentTimeMillis() / 1000
+        val loadedHashes = _transactions.value.mapTo(HashSet()) { it.hash.lowercase(Locale.US) }
+        _localPending.value = (_localPending.value + pending)
+            .distinctBy { it.hash.lowercase(Locale.US) }
+            .filter { rec ->
+                rec.hash.lowercase(Locale.US) !in loadedHashes && !isPendingExpired(rec, nowSec)
+            }
+    }
 
+    /**
+     * Display-time merge: prepend the still-relevant local pendings to the loaded list. Drops any the
+     * backend already returned (same hash), that aged out, or that don't belong to the current filter.
+     */
+    private fun mergeLocalPending(
+        loaded: List<TransactionRecord>,
+        pending: List<TransactionRecord>
+    ): List<TransactionRecord> {
+        if (pending.isEmpty()) return loaded
+        val nowSec = System.currentTimeMillis() / 1000
+        val loadedHashes = loaded.mapTo(HashSet()) { it.hash.lowercase(Locale.US) }
+        val active = pending.filter { rec ->
+            rec.hash.lowercase(Locale.US) !in loadedHashes &&
+                !isPendingExpired(rec, nowSec) &&
+                pendingMatchesCurrentFilter(rec)
+        }
+        if (active.isEmpty()) return loaded
+        return normalizeTransactionHistoryUseCase(active + loaded, currentUserAddress)
+    }
+
+    private fun isPendingExpired(rec: TransactionRecord, nowSec: Long): Boolean {
+        // A pending with an unset/zero timestamp is treated as fresh (never expire on a missing ts).
+        return rec.timestamp > 0L && (nowSec - rec.timestamp) >= pendingLocalTtlSeconds
+    }
+
+    /** Only surface a local pending in views it belongs to: all-networks, or its own network. */
+    private fun pendingMatchesCurrentFilter(rec: TransactionRecord): Boolean {
+        val net = currentNetworkNameStr ?: return true // "all networks" view shows every pending
+        return rec.networkName?.name?.equals(net, ignoreCase = true) == true
+    }
+
+    private fun applyHistoryRefreshEvent(event: AppEvent.TransactionHistoryNeedsRefresh) {
         val networkName = event.networkName?.let { raw ->
             NetworkName.entries.find { it.name.equals(raw, ignoreCase = true) }
         }
