@@ -34,6 +34,14 @@ class ChainDataSourceFactory @Inject constructor(
 ) {
     private val dataSourceCache = mutableMapOf<String, IChainDataSource>()
 
+    // TASK-36 — shared so circuit-breaker state persists per (mode, network) across decorators.
+    private val healthTracker = TransportHealthTracker()
+
+    private companion object {
+        // Kill switch: flip to false to restore single-transport behavior (no failover). TASK-36.
+        const val FAILOVER_ENABLED = true
+    }
+
     /**
      * مجموعهٔ providerهای موجود برای ساخت datasourceها.
      * فعلاً به‌صورت داخلی مقداردهی می‌شود تا سازگاری با تست‌ها و DI فعلی حفظ شود.
@@ -125,8 +133,31 @@ class ChainDataSourceFactory @Inject constructor(
 
         val provider = providers.firstOrNull { it.mode == mode && it.supports(network) }
             ?: throw unsupportedModeException(mode, network)
+        val preferred = provider.create(network)
 
-        val newDataSource = provider.create(network)
+        // TASK-36 — wrap the mode-selected source so reads self-heal onto the other transport when
+        // this one has a transport/server failure. The user's `mode` stays the preferred transport;
+        // failover is a temporary, per-call override (broadcast is never failed over). Flag-gated.
+        val alternateMode = if (mode == BlockchainConnectionMode.PROXY) {
+            BlockchainConnectionMode.DIRECT
+        } else {
+            BlockchainConnectionMode.PROXY
+        }
+        val alternateProvider = providers.firstOrNull {
+            it.mode == alternateMode && it.supports(network)
+        }
+
+        val newDataSource = if (FAILOVER_ENABLED && alternateProvider != null) {
+            TransportFailoverChainDataSource(
+                preferred = preferred,
+                alternateFactory = { alternateProvider.create(network) },
+                preferredMode = mode,
+                networkId = network.id,
+                health = healthTracker
+            )
+        } else {
+            preferred
+        }
         dataSourceCache[cacheKey] = newDataSource
         return newDataSource
     }
