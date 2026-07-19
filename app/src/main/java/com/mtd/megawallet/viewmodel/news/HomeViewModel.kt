@@ -658,38 +658,24 @@ class HomeViewModel @Inject constructor(
         return rate
     }
 
-    // Item 4 — defer refresh events fired while the wallet screen isn't the visible tab, and apply them
-    // on entry (mirrors the history screen). The socket/FCM signal is never lost, just coalesced until
-    // the user actually looks at the wallet.
-    private var isScreenVisible = true // wallet is the initial tab
-    private var pendingRefreshOnShow = false
-
+    // Item 4 (revised) — unlike the history screen, the wallet screen is the SINGLE writer of the shared
+    // per-asset balance cache (asset_balance_*) that EVERY other screen reads on open (asset detail,
+    // multi-wallet, …). Deferring its data refresh while the wallet tab is hidden would leave that cache
+    // holding the pre-transaction balance, so freshly-opened screens would show a stale value — exactly the
+    // "balance came correct but every screen still shows the old amount" bug. We therefore ALWAYS process
+    // balance signals here — keeping the shared cache fresh — regardless of which tab is visible. Item 4's
+    // intent ("see the update after entering the screen") is still met for the wallet UI itself: it reflects
+    // the latest via its StateFlow on re-entry, no deferral needed.
     private fun listenToGlobalEvents() {
         launchSafe(checkNetwork = false) {
             appEventBus.events.collect { event ->
                 when (event) {
-                    is AppEvent.WalletNeedsRefresh ->
-                        if (isScreenVisible) refreshData() else pendingRefreshOnShow = true
-                    is AppEvent.WalletAssetNeedsRefresh ->
-                        if (isScreenVisible) refreshSingleAssetBalance(event) else pendingRefreshOnShow = true
+                    is AppEvent.WalletNeedsRefresh -> refreshData()
+                    is AppEvent.WalletAssetNeedsRefresh -> refreshSingleAssetBalance(event)
                     else -> Unit
                 }
             }
         }
-    }
-
-    /** Wallet tab became visible — apply any refresh that was deferred while it was hidden. */
-    fun onScreenShown() {
-        isScreenVisible = true
-        if (pendingRefreshOnShow) {
-            pendingRefreshOnShow = false
-            refreshData()
-        }
-    }
-
-    /** Wallet tab hidden — subsequent refresh signals are deferred until re-entry. */
-    fun onScreenHidden() {
-        isScreenVisible = false
     }
 
     fun refreshData() {

@@ -450,7 +450,16 @@ internal object SocketRefreshMapper {
         // tx.new / tx.status.updated → refresh history, scoped to the network when the networkId
         // reverse-maps to a local NetworkName; a null/unknown network yields an unscoped refresh
         // (consumers treat a blank network as "refresh the current view").
-        is SocketEvent.TxNew -> listOf(historyRefresh(event.networkId, resolveNetworkName))
+        //
+        // tx.new ALSO refreshes the wallet balance. §8.2 nominally assigns the balance refresh to a
+        // separate `balance.invalidated` signal, but a new tx on the user's address inherently moves the
+        // balance, and relying on `balance.invalidated` alone left every screen showing the pre-tx balance
+        // whenever that signal was missing/late (the just-sent-withdrawal case). Coarse and redundant with
+        // balance.invalidated, but safe — matching this mapper's existing redundant-but-safe stance.
+        is SocketEvent.TxNew -> listOf(
+            historyRefresh(event.networkId, resolveNetworkName),
+            AppEvent.WalletNeedsRefresh
+        )
         is SocketEvent.TxStatusUpdated -> listOf(historyRefresh(event.networkId, resolveNetworkName))
         // ── Legacy per-user events (coarse) ─────────────────────────────────────────────────────
         is SocketEvent.BalanceUpdated -> listOf(AppEvent.WalletNeedsRefresh)
