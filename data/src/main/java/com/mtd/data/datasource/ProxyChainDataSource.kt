@@ -126,15 +126,24 @@ class ProxyChainDataSource(
             },
             map = { dto ->
                 val evmGasLimit = dto.gasLimit
+                val isEvm = network.networkType == NetworkType.EVM
                 // Backend returns a `tiers` object (slow/standard/fast machine keys), not an array.
                 listOfNotNull(
                     dto.tiers?.slow?.let { it to "کند" },
                     dto.tiers?.standard?.let { it to "عادی" },
                     dto.tiers?.fast?.let { it to "سریع" }
                 ).map { (tier, level) ->
-                    // Prefer the context-aware total when present (per-tier, then top-level), else the
-                    // legacy blind `estimatedCost`. This is what fixes the 3-20× L2 underestimate.
-                    val feeRaw = tier.totalFee ?: dto.totalFee ?: tier.estimatedCost ?: BigInteger.ZERO
+                    // For EVM the node reserves gasLimit × maxFeePerGas (+ l1DataFee) up-front, NOT the
+                    // gasPrice-based `estimatedCost`/`totalFee` (which is l2ExecutionFee = gasLimit × gasPrice
+                    // + l1DataFee). Using the lower estimate here made a MAX native send deduct too little, so
+                    // value + reserved exceeded the balance and broadcast was rejected ("insufficient funds").
+                    // Reserve the ceiling — mirrors the DIRECT path (EvmDataSource.getFeeOptions) and still
+                    // never underestimates the L2 total (ceiling ≥ totalFee), preserving the L2 fix.
+                    val evmCeiling = if (isEvm && tier.maxFeePerGas != null && evmGasLimit != null) {
+                        tier.maxFeePerGas!! * evmGasLimit + (tier.l1DataFee ?: BigInteger.ZERO)
+                    } else null
+                    // Non-EVM (or an older backend without maxFeePerGas) keeps the context-aware total.
+                    val feeRaw = evmCeiling ?: tier.totalFee ?: dto.totalFee ?: tier.estimatedCost ?: BigInteger.ZERO
                     FeeData(
                         level = level,
                         feeInSmallestUnit = feeRaw.toBigDecimal(),

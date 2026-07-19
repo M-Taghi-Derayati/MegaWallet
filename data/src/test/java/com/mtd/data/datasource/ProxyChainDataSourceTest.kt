@@ -165,6 +165,22 @@ class ProxyChainDataSourceTest {
     }
 
     @Test
+    fun `EVM fee options reserve the maxFeePerGas ceiling, not gasPrice estimatedCost`() = runTest {
+        // The node reserves gasLimit × maxFeePerGas (+ l1DataFee) up-front. Using the gasPrice-based
+        // estimatedCost under-reserves and makes a MAX native send exceed the balance on broadcast.
+        // Expected ceiling = 21000 × 100 + 5 = 2_100_005 (estimatedCost 1_890_000 would be the bug).
+        server.enqueue(
+            MockResponse().setBody(
+                """{"ok":true,"networkId":"evm","data":{"unit":"wei","feeModel":"gas","gasLimit":"21000","tiers":{"standard":{"gasPrice":"90","maxFeePerGas":"100","maxPriorityFeePerGas":"2","estimatedCost":"1890000","l1DataFee":"5","estimatedSeconds":30}}}}"""
+            )
+        )
+        val res = dataSource.getFeeOptions("0x1", "0x2", null, BigInteger("1000"))
+        val fees = (res as ResultResponse.Success).data
+        assertEquals(1, fees.size)
+        assertEquals(BigInteger("2100005"), fees[0].feeInSmallestUnit.toBigInteger())
+    }
+
+    @Test
     fun `422 simulation reverted on broadcast path`() = runTest {
         every { network.chainId } returns 11155111L
         server.enqueue(
