@@ -45,14 +45,22 @@ class SocketRefreshMapperTest {
     }
 
     @Test
-    fun `tx new refreshes history scoped to the reverse-mapped network`() {
+    fun `tx new refreshes history (scoped) and the wallet balance`() {
         val events = map(
             SocketEvent.TxNew(
                 id = "f2", eventId = "e2", txHash = "0xabc",
                 networkId = "sepolia", addressIdentityId = "aid", cursor = "c2"
             )
         )
-        assertEquals(listOf(AppEvent.TransactionHistoryNeedsRefresh(networkName = "SEPOLIA")), events)
+        // A new tx moves the balance too, so tx.new also triggers a wallet refresh (safety net for a
+        // missing/late balance.invalidated).
+        assertEquals(
+            listOf(
+                AppEvent.TransactionHistoryNeedsRefresh(networkName = "SEPOLIA"),
+                AppEvent.WalletNeedsRefresh
+            ),
+            events
+        )
     }
 
     @Test

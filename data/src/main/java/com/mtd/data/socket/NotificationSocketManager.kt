@@ -8,6 +8,7 @@ import androidx.core.app.ActivityCompat
 import com.mtd.core.notification.EventDeduplicationCache
 import com.mtd.core.notification.NotificationService
 import com.mtd.core.notification.TransactionSoundPlayer
+import com.mtd.core.utils.BalanceFormatter
 import com.mtd.data.BuildConfig
 import com.mtd.data.di.ForWebSocket
 import com.mtd.domain.interfaceRepository.IAppEventBus
@@ -303,7 +304,8 @@ class NotificationSocketManager @Inject constructor(
                     txHash = payload.optStringOrNull("txHash"),
                     networkId = payload.optStringOrNull("networkId"),
                     addressIdentityId = payload.optStringOrNull("addressIdentityId"),
-                    cursor = payload.optStringOrNull("cursor")
+                    cursor = payload.optStringOrNull("cursor"),
+                    descriptor = payload.parseTxDescriptor()
                 )
                 "balance.invalidated" -> SocketEvent.BalanceInvalidated(
                     id = id,
@@ -368,17 +370,16 @@ class NotificationSocketManager @Inject constructor(
         }
 
         when (event) {
-            // A monitored address is involved in a new tx (incoming or outgoing — the thin signal
-            // doesn't distinguish, and it carries no amount/token). Surface a generic alert in the
-            // foreground too so the user gets an immediate ping the moment funds move. The paired
-            // dispatchRefreshFor() already refreshes history, so the list updates behind the alert.
-            // Foreground (WS): the sound was already played above, so post a SILENT notification to
-            // avoid doubling the alert sound. Item 3.
-            is SocketEvent.TxNew -> notificationService.showTransactionNotification(
-                "تراکنش جدید",
-                "یک تراکنش جدید روی آدرس شما ثبت شد.",
-                silent = true
-            )
+            // A monitored address is involved in a new tx. When the thin signal carries a display hint we
+            // show the real amount/direction ("مبلغ ۱.۵ USDT دریافت شد."); otherwise a generic alert. The
+            // paired dispatchRefreshFor() already refreshes history+balance behind the alert. Foreground
+            // (WS): the sound was already played above, so post a SILENT notification to avoid doubling the
+            // alert sound. Item 3.
+            is SocketEvent.TxNew -> {
+                val (title, body) = TransactionNotificationText.forTx(event.descriptor)
+                    ?: ("تراکنش جدید" to "یک تراکنش جدید روی آدرس شما ثبت شد.")
+                notificationService.showTransactionNotification(title, body, silent = true)
+            }
             is SocketEvent.TxStatusChanged -> notifyForTxStatus(event.status)
             is SocketEvent.TxStatusUpdated -> notifyForTxStatus(event.status)
             is SocketEvent.GrowthFeeShareAccrued -> notificationService.showTradeNotification(
@@ -410,6 +411,25 @@ class NotificationSocketManager @Inject constructor(
 
     private fun JSONObject.optLongOrNull(key: String): Long? =
         if (has(key) && !isNull(key)) optLong(key).takeIf { it > 0 } else null
+
+    private fun JSONObject.optIntOrNull(key: String): Int? =
+        if (has(key) && !isNull(key)) optInt(key, Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE } else null
+
+    /** The optional tx.new display hint; null when the server sent none of the hint fields. */
+    private fun JSONObject.parseTxDescriptor(): TxDescriptor? {
+        val direction = optStringOrNull("direction")
+        val amountRaw = optStringOrNull("amountRaw")
+        val tokenSymbol = optStringOrNull("tokenSymbol")
+        if (direction == null && amountRaw == null && tokenSymbol == null) return null
+        return TxDescriptor(
+            direction = direction,
+            assetKind = optStringOrNull("assetKind"),
+            asset = optStringOrNull("asset"),
+            amountRaw = amountRaw,
+            tokenSymbol = tokenSymbol,
+            tokenDecimal = optIntOrNull("tokenDecimal")
+        )
+    }
 
     private companion object {
         const val NORMAL_CLOSURE = 1000
@@ -481,6 +501,38 @@ internal object SocketRefreshMapper {
 }
 
 /**
+ * Pure builder for the user-facing tx notification text from a [TxDescriptor]. Shared by the foreground
+ * (WS, [NotificationSocketManager]) and background (FCM data-only, [PushMessageHandler]) paths so both show
+ * identical wording. Returns null when the descriptor is absent/insufficient, so callers can fall back to a
+ * generic alert. Amount formatting reuses [BalanceFormatter] for consistency with the rest of the app.
+ */
+internal object TransactionNotificationText {
+
+    fun forTx(descriptor: TxDescriptor?): Pair<String, String>? {
+        val d = descriptor ?: return null
+        val symbol = d.tokenSymbol?.takeIf { it.isNotBlank() } ?: "دارایی"
+        val amount = formatAmount(d.amountRaw, d.tokenDecimal)
+        val amountAndSymbol = if (amount != null) "$amount $symbol" else symbol
+        return when (d.direction?.lowercase()) {
+            "in" -> "دریافت وجه" to "مبلغ $amountAndSymbol دریافت شد."
+            "out" -> "ارسال وجه" to "مبلغ $amountAndSymbol ارسال شد."
+            "self" -> "انتقال داخلی" to "یک انتقال بین حساب‌های شما ثبت شد."
+            else -> null
+        }
+    }
+
+    private fun formatAmount(amountRaw: String?, decimals: Int?): String? {
+        val raw = amountRaw?.takeIf { it.isNotBlank() } ?: return null
+        val dec = decimals ?: return null
+        return try {
+            BalanceFormatter.formatBalance(java.math.BigDecimal(java.math.BigInteger(raw), dec), dec)
+        } catch (e: Exception) {
+            null
+        }
+    }
+}
+
+/**
  * Realtime frames the client surfaces, aligned to the relayer's WS contract (§8 of
  * `ANDROID_SERVER_INTEGRATION.md`). Two generations coexist:
  *
@@ -493,6 +545,21 @@ internal object SocketRefreshMapper {
  *
  * All money fields stay raw `String` (BigInt-as-String invariant) — never parsed to Long/Double here.
  */
+/**
+ * Best-effort display hint carried on `tx.new` (realtime-event-contract.md §2). Lets the client show an
+ * immediate "received 1.5 USDT" preview / notification without waiting for the re-fetch. NOT the source of
+ * truth — the cursor-driven refresh is; every field may be absent on older/native-only rows. `amountRaw` is
+ * RAW base units (never a float); format with `tokenDecimal`. Over FCM every value arrives stringified.
+ */
+data class TxDescriptor(
+    val direction: String? = null,   // "in" (deposit) | "out" (withdraw) | "self"
+    val assetKind: String? = null,   // "token" | "native"
+    val asset: String? = null,       // token contract; "" for native
+    val amountRaw: String? = null,   // RAW base units
+    val tokenSymbol: String? = null,
+    val tokenDecimal: Int? = null
+)
+
 sealed interface SocketEvent {
     /** Envelope frame id (`{ id, name, ts, payload }`). Welcome frame = `"welcome"`. */
     val id: String?
@@ -509,14 +576,16 @@ sealed interface SocketEvent {
         val heartbeatMs: Long? = null
     ) : SocketEvent
 
-    /** `tx.new` — a monitored address is involved in a new transaction. → refresh history. */
+    /** `tx.new` — a monitored address is involved in a new transaction. → refresh history + balance. */
     data class TxNew(
         override val id: String?,
         override val eventId: String?,
         val txHash: String?,
         val networkId: String?,
         val addressIdentityId: String?,
-        val cursor: String?
+        val cursor: String?,
+        /** Optional best-effort display hint (realtime-event-contract.md §2); null on older/native-only rows. */
+        val descriptor: TxDescriptor? = null
     ) : SocketEvent
 
     /** `balance.invalidated` — a specific `(walletId, networkId, assetId)` balance is stale. → refresh that asset. */

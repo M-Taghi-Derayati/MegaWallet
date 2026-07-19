@@ -79,7 +79,10 @@ class PushMessageHandler @Inject constructor(
      */
     private fun fallbackNotificationFor(event: SocketEvent): Pair<String, String>? = when (event) {
         is SocketEvent.TxNew ->
-            "تراکنش جدید" to "یک تراکنش جدید روی آدرس شما ثبت شد."
+            // Prefer the real amount/direction from the thin-signal hint (FCM is now DATA-ONLY — the server
+            // sends no title/body), falling back to a generic alert when the hint is absent.
+            TransactionNotificationText.forTx(event.descriptor)
+                ?: ("تراکنش جدید" to "یک تراکنش جدید روی آدرس شما ثبت شد.")
         is SocketEvent.TxStatusUpdated -> when (event.status?.uppercase()) {
             "SUCCESS" -> "تراکنش موفق" to "تراکنش شما با موفقیت ثبت شد."
             "FAILED", "TIMEOUT" -> "تراکنش ناموفق" to "تراکنش شما تکمیل نشد."
@@ -111,6 +114,22 @@ class PushMessageHandler @Inject constructor(
         }
     }
 
+    /** The optional tx.new display hint from the flat FCM map (every value arrives stringified). */
+    private fun parseTxDescriptor(data: Map<String, String>): TxDescriptor? {
+        val direction = data["direction"]?.takeIf { it.isNotBlank() }
+        val amountRaw = data["amountRaw"]?.takeIf { it.isNotBlank() }
+        val tokenSymbol = data["tokenSymbol"]?.takeIf { it.isNotBlank() }
+        if (direction == null && amountRaw == null && tokenSymbol == null) return null
+        return TxDescriptor(
+            direction = direction,
+            assetKind = data["assetKind"]?.takeIf { it.isNotBlank() },
+            asset = data["asset"]?.takeIf { it.isNotBlank() },
+            amountRaw = amountRaw,
+            tokenSymbol = tokenSymbol,
+            tokenDecimal = data["tokenDecimal"]?.toIntOrNull()
+        )
+    }
+
     /** Builds a [SocketEvent] from the flat FCM data map (mirrors [NotificationSocketManager]'s parser). */
     private fun parseFcmData(data: Map<String, String>): SocketEvent? {
         val name = data["name"] ?: data["type"] ?: return null
@@ -123,7 +142,8 @@ class PushMessageHandler @Inject constructor(
                 txHash = data["txHash"],
                 networkId = data["networkId"],
                 addressIdentityId = data["addressIdentityId"],
-                cursor = data["cursor"]
+                cursor = data["cursor"],
+                descriptor = parseTxDescriptor(data)
             )
             "balance.invalidated" -> SocketEvent.BalanceInvalidated(
                 id = id,
