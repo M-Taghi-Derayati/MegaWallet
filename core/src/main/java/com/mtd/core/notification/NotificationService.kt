@@ -63,13 +63,18 @@ class NotificationService @Inject constructor(
     fun showTradeNotification(title: String, message: String) =
         show(CHANNEL_ID_TRADE, title, message)
 
-    /** New-transaction/deposit alerts — plays the custom bundled sound via [CHANNEL_ID_DEPOSIT]. */
+    /**
+     * New-transaction/deposit alerts on [CHANNEL_ID_DEPOSIT]. `silent = false` lets the channel play the
+     * custom bundled sound (background/closed via FCM). `silent = true` suppresses THIS notification's
+     * sound — used on the foreground WS path, where [TransactionSoundPlayer] plays the sound explicitly
+     * so it is audible in-app without doubling up. Item 3.
+     */
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
-    fun showDepositNotification(title: String, message: String) =
-        show(CHANNEL_ID_DEPOSIT, title, message)
+    fun showTransactionNotification(title: String, message: String, silent: Boolean = false) =
+        show(CHANNEL_ID_DEPOSIT, title, message, silent)
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
-    private fun show(channelId: String, title: String, message: String) {
+    private fun show(channelId: String, title: String, message: String, silent: Boolean = false) {
         // برای اندروید ۱۳ به بالا، به اجازه نوتیفیکیشن نیاز داریم
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             // در یک اپ واقعی، باید کاربر را برای دادن اجازه هدایت کنیم
@@ -82,6 +87,7 @@ class NotificationService @Inject constructor(
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setAutoCancel(true)
+            .setSilent(silent)
 
         // یک ID منحصر به فرد برای هر نوتیفیکیشن
         notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())

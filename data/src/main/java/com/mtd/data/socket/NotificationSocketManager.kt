@@ -7,6 +7,7 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import com.mtd.core.notification.EventDeduplicationCache
 import com.mtd.core.notification.NotificationService
+import com.mtd.core.notification.TransactionSoundPlayer
 import com.mtd.data.BuildConfig
 import com.mtd.data.di.ForWebSocket
 import com.mtd.domain.interfaceRepository.IAppEventBus
@@ -58,6 +59,7 @@ import kotlin.math.pow
 class NotificationSocketManager @Inject constructor(
     @ForWebSocket private val okHttpClient: OkHttpClient,
     private val notificationService: NotificationService,
+    private val transactionSoundPlayer: TransactionSoundPlayer,
     private val tokenStore: ITokenStore,
     private val dedupeCache: EventDeduplicationCache,
     private val appEventBus: IAppEventBus,
@@ -352,6 +354,11 @@ class NotificationSocketManager @Inject constructor(
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     private fun handleNotification(event: SocketEvent) {
+        // The in-app sound needs no POST_NOTIFICATIONS. Play it (this path is foreground-only — the
+        // socket is disconnected in the background) BEFORE the permission gate, so a deposit is audible
+        // in-app even if the user declined notifications; the notification below stays silent. Item 3.
+        if (event is SocketEvent.TxNew) transactionSoundPlayer.play()
+
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
@@ -365,9 +372,12 @@ class NotificationSocketManager @Inject constructor(
             // doesn't distinguish, and it carries no amount/token). Surface a generic alert in the
             // foreground too so the user gets an immediate ping the moment funds move. The paired
             // dispatchRefreshFor() already refreshes history, so the list updates behind the alert.
-            is SocketEvent.TxNew -> notificationService.showDepositNotification(
+            // Foreground (WS): the sound was already played above, so post a SILENT notification to
+            // avoid doubling the alert sound. Item 3.
+            is SocketEvent.TxNew -> notificationService.showTransactionNotification(
                 "تراکنش جدید",
-                "یک تراکنش جدید روی آدرس شما ثبت شد."
+                "یک تراکنش جدید روی آدرس شما ثبت شد.",
+                silent = true
             )
             is SocketEvent.TxStatusChanged -> notifyForTxStatus(event.status)
             is SocketEvent.TxStatusUpdated -> notifyForTxStatus(event.status)

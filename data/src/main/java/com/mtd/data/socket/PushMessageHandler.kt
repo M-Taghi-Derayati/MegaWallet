@@ -104,7 +104,8 @@ class PushMessageHandler @Inject constructor(
             return
         }
         if (isDeposit) {
-            notificationService.showDepositNotification(title, body)
+            // Background/closed: let the deposit channel play the custom sound (silent = false).
+            notificationService.showTransactionNotification(title, body, silent = false)
         } else {
             notificationService.showTradeNotification(title, body)
         }
