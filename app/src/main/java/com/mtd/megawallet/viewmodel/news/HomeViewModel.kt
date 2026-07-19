@@ -377,13 +377,20 @@ class HomeViewModel @Inject constructor(
     private fun refreshSingleAssetBalance(event: AppEvent.WalletAssetNeedsRefresh) {
         val wallet = getActiveWalletUseCase() ?: return
         val network = networkCatalog.getNetworkInfoById(event.networkId) ?: return
-        val targetConfigs = assetCatalog.getAssetConfigsForNetwork(event.networkId).filter { config ->
-            config.id == event.assetId ||
-                if (event.contractAddress.isNullOrBlank()) {
-                    config.contractAddress == null
-                } else {
-                    config.contractAddress.equals(event.contractAddress, ignoreCase = true)
-                }
+        val networkConfigs = assetCatalog.getAssetConfigsForNetwork(event.networkId)
+        // Match the invalidated asset by local id, by symbol (the server sends e.g. "usdt", never our
+        // composite "USDT-SEPOLIA" id), or by contract when the event carries one. The previous logic fell
+        // through to `contractAddress == null` whenever no contract was present, which silently refreshed the
+        // NATIVE asset instead of the token — so a token balance.invalidated never updated its balance.
+        val targetConfigs = networkConfigs.filter { config ->
+            config.id.equals(event.assetId, ignoreCase = true) ||
+                config.symbol.equals(event.assetId, ignoreCase = true) ||
+                (!event.contractAddress.isNullOrBlank() &&
+                    config.contractAddress.equals(event.contractAddress, ignoreCase = true))
+        }.ifEmpty {
+            // Unknown/blank assetId (vocabulary mismatch or a coarse signal) → refresh the whole network
+            // rather than guess; a missing assetId must never silently skip the balance update.
+            networkConfigs
         }
 
         if (targetConfigs.isEmpty()) return
