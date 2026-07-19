@@ -263,7 +263,24 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   per-network `if(PROXY)` branches. **Acceptance:** single routing point; DIRECT/PROXY behaviorally equal.
   **Rollback:** revert. **Regression:** all sends. **Testing:** send matrix DIRECT×PROXY × EVM/TRON/UTXO.
 
-### TASK-36 — Smart transport failover (PROXY ⇄ DIRECT auto-switch on error) — 🆕 Planned
+### TASK-36 — Smart transport failover (PROXY ⇄ DIRECT auto-switch on error) — ✅ v1 implemented (reads-only)
+- **Done (2026-07-18):** added `TransportFailover.kt` (data/datasource) with three pieces:
+  `TransportErrorClassifier.isFailoverWorthy()` (transport/server → yes: IOException, HTTP 408/425/429/5xx,
+  `ApiError.UpstreamUnavailable/InternalError/ServiceUnavailable/RateLimited/NetworkFamilyUnsupported/UnsupportedOperation/Unknown`;
+  business → no: validation, insufficient-credit, revert, broadcast-rejected, …), a best-effort
+  `TransportHealthTracker` circuit breaker (N consecutive failures → open for a cooldown → try alternate
+  first), and `TransportFailoverChainDataSource` — an `IChainDataSource` decorator that retries **reads** on
+  the other transport when the preferred one hits a failover-worthy error, surfacing the preferred error when
+  both fail. **Broadcast is never failed over** (a re-sign on the other transport could double-spend) —
+  `sendTransaction` goes to preferred only. Wired in `ChainDataSourceFactory.create()` behind
+  `FAILOVER_ENABLED` (kill switch); the alternate source is built lazily. The user's saved mode stays the
+  *preferred* transport. Unit test `TransportFailoverTest` (:data, MockK) covers the classifier + decorator
+  (success passthrough, transient failover, business no-failover, both-fail, no broadcast failover, open-circuit
+  order). **Not built here** — inspection-verified. **Verify on-device:** force PROXY to fail (bad base URL) →
+  balances/history still load via DIRECT; a genuine validation error is not masked; sends never double-fire.
+- **Deferred to v2:** effective-vs-preferred mode surfaced to the UI (badge), broadcast failover gated on a
+  stable idempotency key, and TASK-18's full single-routing-point consolidation (the decorator sidesteps it).
+- **Original spec below.**
 - **Problem (user request):** the transport mode is a single persisted user preference
   (`DefaultBlockchainConnectionModeProvider`, read synchronously via `IBlockchainConnectionModeProvider.currentMode()`).
   If the selected transport is unhealthy — the centralized Mobile Blockchain Proxy (`/api/mobile/v1`) is
@@ -608,6 +625,42 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   `amount ?: BigInteger.ONE` (raw). **Modules:** data. **Files:** `TronDataSource.kt`. **Not built here** —
   inspection-verified. **Verify on-device (DIRECT):** history still loads if the primary explorer is down;
   TRC-20 fee preview is sane for the actual amount.
+
+### TASK-42 — Optimistic pending tx survives lazy-history reset (regression from TASK-33) — ✅ Fixed
+- **Problem (user, item 2):** a just-sent tx no longer appeared as PENDING in history. TASK-33 gated the
+  optimistic-pending insert behind `isScreenVisible`, but a send happens from the **Send** screen (History
+  hidden) → the `TransactionHistoryNeedsRefresh(pendingTransaction=…)` event hit the `else` branch and the
+  pending was dropped; and even if inserted, `loadHistory` clears + reloads from the backend (which hasn't
+  indexed it yet) on `onScreenShown`.
+- **Fix:** `TransactionHistoryViewModel` now keeps optimistic pendings in a SEPARATE `_localPending`
+  StateFlow, and the public `transactions` is `combine(_transactions, _localPending)` → merged for display.
+  Pendings are captured on the event regardless of visibility, survive every reload, are filtered out once
+  the backend returns the same hash, respect the current network filter, and age out after 30 min. Never
+  cached/paginated. **Files:** `TransactionHistoryViewModel.kt`. **Verify:** send a tx (any screen) → open
+  History → it shows PENDING immediately; on confirmation it flips to the real row (no dupe).
+
+### TASK-43 — Transaction sound in-app AND when closed (custom sound both paths) — ✅ Fixed
+- **Problem (user, item 3):** the deposit sound wasn't reliably heard in-app (foreground), and the FCM
+  (closed) path used the **trade** channel (default sound), not the custom deposit sound.
+- **Fix:** new `TransactionSoundPlayer` (core) plays `res/raw/deposit_alert` via a self-releasing
+  `MediaPlayer` (USAGE_NOTIFICATION_EVENT). Foreground WS path (`NotificationSocketManager`, socket is
+  foreground-only) plays it explicitly BEFORE the POST_NOTIFICATIONS gate and posts a **silent**
+  notification (no double sound, audible even if notifications were declined). Background/closed FCM path
+  (`PushMessageHandler`) posts on the deposit channel with `silent = false` so the channel plays the custom
+  sound. `NotificationService.showDepositNotification` → `showTransactionNotification(title, msg, silent)`.
+  **Files:** `TransactionSoundPlayer.kt` (new), `NotificationService.kt`, `NotificationSocketManager.kt`,
+  `PushMessageHandler.kt`. **Verify:** foreground incoming tx → sound in-app; app closed → FCM push plays
+  the custom sound.
+
+### TASK-44 — Generalize deferred-refresh-on-entry to all tab screens (item 4) — ✅ Fixed (wallet + history)
+- **Problem (user, item 4):** a refresh signal (socket/FCM) that arrives while a screen isn't the visible
+  tab should be applied when the user enters that screen — for **all** screens. Only History did this
+  (TASK-33); `HomeViewModel` (wallet) refreshed eagerly in the background.
+- **Fix:** `HomeViewModel` now tracks `isScreenVisible` + a coalesced `pendingRefreshOnShow`; while hidden,
+  `WalletNeedsRefresh`/`WalletAssetNeedsRefresh` are deferred and applied in `onScreenShown()`. `MainScreen`
+  drives `onScreenShown/Hidden` from `selectedTab == WALLET` (alongside the existing HISTORY wiring). Send is
+  a transient overlay (always visible when in use) → out of scope. **Files:** `HomeViewModel.kt`,
+  `MainScreen.kt`. **Verify:** on History tab, trigger a balance change → wallet updates only on returning to it.
 
 ### TASK-38 — Signed config bundle bootstrap (network/asset catalog from server) — ✅ Already implemented (verify)
 - **Server doc §3:** drive the network/asset catalog + `networkId`s from a **signed** server bundle instead
