@@ -48,7 +48,17 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
 
 ## Sprint 1 — Performance
 
-### TASK-08 — Centralize fonts into theme (kill 185 FontFamily allocations)
+### TASK-08 — Centralize fonts into theme (kill 185 FontFamily allocations) — ✅ Implemented (verify visual parity)
+- **Status:** ✅ Implemented (commit c9f649c) — new `common_ui/theme/Fonts.kt` holds hoisted, process-once
+  font-family `val`s; all ~185 inline `FontFamily(Font(R.font.x, …))` sites across 33 UI files now reference
+  them, and the now-unused `Font`/`FontFamily`/`FontWeight` imports were removed. Each `val` is a **verbatim
+  hoist** of the exact inline expression (same resource + same declared `FontWeight`), so single-font
+  faux-bold synthesis and rendering are byte-identical — the only collapse is `Font(x)` ≡
+  `Font(x, FontWeight.Normal)`. The custom multi-weight **IranSans** family is also wired into `Typography`
+  (was `FontFamily.Default`). Covers IranSans (light/regular/bold), Inter (regular/medium/bold), Vazirmatn
+  (medium/bold). **Not built here** (Gradle unavailable) — inspection-verified. **Verify on-device:** visual
+  parity light/dark on key screens (numerals via Inter, Persian via IranSans); the `Typography` default
+  change specifically needs a screenshot pass. `grep 'FontFamily(Font(' app/**/ui` is now 0.
 - **Problem:** 185 inline `FontFamily(Font(...))` re-allocate per recomposition. **Root cause:**
   `Typography` uses `FontFamily.Default`; custom fonts never wired. **TD:** 12 (CU-1).
 - **Files:** `common_ui/theme/Type.kt`, all `ui/**` Text call sites. **Modules:** common_ui, app. **Deps:** none.
