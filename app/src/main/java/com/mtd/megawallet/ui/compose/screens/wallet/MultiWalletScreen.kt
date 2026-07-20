@@ -70,8 +70,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -96,6 +94,9 @@ import com.mtd.megawallet.viewmodel.news.AppLockViewModel
 import com.mtd.megawallet.viewmodel.news.MultiWalletViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.IranSansRegularMedium
 
 
 private val PremiumSpringInt = spring<IntOffset>(
@@ -271,7 +272,7 @@ fun MultiWalletScreen(
                     text = "کیف پول‌های شما",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.tertiary,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                    fontFamily = IranSansBold,
                     modifier = Modifier
                         .padding(horizontal = 24.dp)
                         .graphicsLayer { alpha = contentAlpha }
@@ -406,7 +407,7 @@ fun MultiWalletScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiary,
                         textAlign = TextAlign.Center,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                        fontFamily = IranSansRegular,
                         fontSize = 14.sp
                     )
                 }
@@ -691,7 +692,7 @@ private fun MultiWalletHeader(
                 text = "کیف پول‌ها",
                 style = MaterialTheme.typography.titleLarge,
                 color = contentColor,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                fontFamily = IranSansBold
             )
             IconButton(onClick = onBackClick, modifier = Modifier.size(40.dp)) {
                 Icon(
@@ -791,12 +792,7 @@ private fun AddWalletBottomSheet(
                         text = "کیف جدید",
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(
-                            Font(
-                                R.font.iransansmobile_fa_regular,
-                                FontWeight.Medium
-                            )
-                        )
+                        fontFamily = IranSansRegularMedium
                     )
 
                     IconButton(
@@ -888,7 +884,7 @@ private fun AddWalletItem(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                fontFamily = IranSansRegular
             )
             Text(
                 text = subtitle,
@@ -896,7 +892,7 @@ private fun AddWalletItem(
                 style = MaterialTheme.typography.bodySmall,
                 lineHeight = 17.sp,
                 fontSize = 12.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                fontFamily = IranSansRegular
             )
         }
     }

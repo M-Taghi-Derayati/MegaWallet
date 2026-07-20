@@ -44,15 +44,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.screens.createwallet.WALLET_COLORS
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansRegular
 
 @Composable
 fun WalletManagementMenuContent(
@@ -184,7 +183,7 @@ fun WalletRecoveryMethodsContent(
                 text = "روش های پشتیبان",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.tertiary,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                fontFamily = IranSansRegular
             )
             Spacer(modifier = Modifier.weight(1f))
 
@@ -193,7 +192,7 @@ fun WalletRecoveryMethodsContent(
                     text = "$completedCount از 3 ",
                     color = MaterialTheme.colorScheme.tertiary,
                     fontSize = 14.sp,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                    fontFamily = IranSansBold
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 RecoveryProgressCircle(completedCount = completedCount)
@@ -262,7 +261,7 @@ private fun BackupStatusItem(
                 text = " پشتیبان تهیه شده",
                 color = MaterialTheme.colorScheme.tertiary,
                 fontSize = 16.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                fontFamily = IranSansBold
             )
             Spacer(modifier = Modifier.weight(1f))
             Icon(
@@ -292,7 +291,7 @@ private fun BackupStatusItem(
                 text = "کپی پشتیبان تهیه نشده",
                 color = MaterialTheme.colorScheme.tertiary,
                 fontSize = 14.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                fontFamily = IranSansBold
             )
             Spacer(modifier = Modifier.weight(1f))
             Box(
@@ -306,7 +305,7 @@ private fun BackupStatusItem(
                     text = "همین حالا",
                     color = Color.White,
                     fontSize = 11.sp,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                    fontFamily = IranSansBold
                 )
             }
         }
@@ -343,7 +342,7 @@ private fun DetailMenuItem(
             text = title,
             color = MaterialTheme.colorScheme.tertiary,
             style = MaterialTheme.typography.bodyLarge,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+            fontFamily = IranSansRegular
         )
         Spacer(modifier = Modifier.weight(1f))
         Icon(
@@ -445,7 +444,7 @@ private fun RecoveryMethodItem(
                     text = title,
                     color = MaterialTheme.colorScheme.tertiary.copy(alpha = alpha),
                     style = MaterialTheme.typography.titleMedium,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                    fontFamily = IranSansBold
                 )
                 if (badge != null) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -457,7 +456,7 @@ private fun RecoveryMethodItem(
                             .padding(horizontal = 8.dp, vertical = 2.dp),
                         color = MaterialTheme.colorScheme.onTertiary.copy(alpha = alpha),
                         fontSize = 10.sp,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                        fontFamily = IranSansRegular
                     )
                 }
             }
@@ -466,7 +465,7 @@ private fun RecoveryMethodItem(
                 text = subtitle,
                 color = MaterialTheme.colorScheme.onTertiary.copy(alpha = alpha),
                 style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                fontFamily = IranSansRegular,
                 lineHeight = 18.sp
             )
         }

@@ -48,8 +48,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
@@ -67,6 +65,8 @@ import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 import com.mtd.megawallet.viewmodel.news.ReceiveViewModel
 import java.util.EnumMap
+import com.mtd.common_ui.theme.InterRegular
+import com.mtd.common_ui.theme.IranSansRegular
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -166,7 +166,7 @@ fun NetworkChip(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = contentColor,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                fontFamily = IranSansRegular
             )
 
             val localIcon = remember(item.symbol, item.id) {
@@ -249,7 +249,7 @@ fun ReceiveCard(
                         text = "شبکه‌های تحت پشتیبانی",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onTertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                        fontFamily = IranSansRegular
                     )
                 }
             }
@@ -298,7 +298,7 @@ fun ReceiveCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.tertiary,
                         textAlign = TextAlign.Center,
-                        fontFamily = FontFamily(Font(R.font.inter_regular)),
+                        fontFamily = InterRegular,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -442,7 +442,7 @@ private fun ReceiveActionButton(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.tertiary,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+            fontFamily = IranSansRegular
         )
     }
 }

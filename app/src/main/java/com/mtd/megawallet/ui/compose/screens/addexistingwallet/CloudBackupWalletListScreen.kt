@@ -39,9 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +47,8 @@ import com.mtd.common_ui.R
 import com.mtd.domain.model.CloudWalletItem
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.TopHeader
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansBoldExtraBold
 
 
 @Composable
@@ -192,7 +191,7 @@ fun WalletListItem(
                     Text(
                         text = wallet.name,
                         style = MaterialTheme.typography.titleMedium,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.ExtraBold)),
+                        fontFamily = IranSansBoldExtraBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.End,
                         fontSize = 17.sp
@@ -224,7 +223,7 @@ fun WalletListItem(
                         Text(
                             text = "${wallet.balanceUsdt} تتر ",
                             style = MaterialTheme.typography.titleSmall,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                            fontFamily = IranSansBoldBold,
                             color = walletColor,
                             fontSize = 14.sp
                         )

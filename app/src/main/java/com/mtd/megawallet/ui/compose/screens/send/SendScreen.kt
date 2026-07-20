@@ -70,8 +70,6 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,6 +100,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
+import com.mtd.common_ui.theme.InterBold
+import com.mtd.common_ui.theme.InterBoldBold
+import com.mtd.common_ui.theme.InterMedium
+import com.mtd.common_ui.theme.InterRegular
+import com.mtd.common_ui.theme.InterRegularMedium
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.IranSansRegularBold
+import com.mtd.common_ui.theme.IranSansRegularMedium
 
 
 @Composable
@@ -381,7 +389,7 @@ private fun RecipientInputSection(
                     Text(
                         text = "ارسال به",
                         color = MaterialTheme.colorScheme.onTertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                        fontFamily = IranSansRegular,
                         fontSize = 14.sp
                     )
                 }
@@ -414,7 +422,7 @@ private fun RecipientInputSection(
                                 text = displayAddress,
                                 color = Color.White,
                                 fontSize = 15.sp,
-                                fontFamily = FontFamily(Font(R.font.inter_regular)),
+                                fontFamily = InterRegular,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 textAlign = TextAlign.Right,
@@ -430,7 +438,7 @@ private fun RecipientInputSection(
                             textStyle = TextStyle(
                                 color = if (showInvalidAddressError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
                                 fontSize = 15.sp,
-                                fontFamily = FontFamily(Font(R.font.inter_regular)),
+                                fontFamily = InterRegular,
                                 textAlign = TextAlign.Right
                             ),
                             decorationBox = { inner ->
@@ -438,7 +446,7 @@ private fun RecipientInputSection(
                                     Text(
                                         text = "آدرس مقصد را وارد کنید",
                                         color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.5f),
-                                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                        fontFamily = IranSansRegular,
                                         fontSize = 15.sp,
                                         textAlign = TextAlign.Right,
                                         modifier = Modifier.fillMaxWidth()
@@ -496,7 +504,7 @@ private fun RecipientInputSection(
                                 Text(
                                     text = "جایگذاری",
                                     color = MaterialTheme.colorScheme.tertiary,
-                                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                    fontFamily = IranSansRegular,
                                     fontSize = 14.sp
                                 )
                             }
@@ -510,7 +518,7 @@ private fun RecipientInputSection(
                 Text(
                     text = "آدرس وارد شده معتبر نیست",
                     color = MaterialTheme.colorScheme.error,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                    fontFamily = IranSansRegular,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Right,
                     modifier = Modifier.fillMaxWidth()
@@ -707,7 +715,7 @@ private fun AmountDisplaySection(
                         fontSize = 52.sp,
                         color = amountColor,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily(Font(R.font.inter_bold))
+                        fontFamily = InterBold
                     ),
                     maxLines = 1,
                     softWrap = false
@@ -724,7 +732,7 @@ private fun AmountDisplaySection(
                             fontSize = WalletScreenConstants.CURRENCY_SYMBOL_FONT_SIZE,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Medium))
+                            fontFamily = InterRegularMedium
                         ),
                         modifier = Modifier.padding(top = WalletScreenConstants.CURRENCY_SYMBOL_PADDING_TOP)
                     )
@@ -749,7 +757,7 @@ private fun AmountDisplaySection(
                 text = equivalent,
                 color = subColor,
                 fontSize = 16.sp,
-                fontFamily = FontFamily(Font(R.font.inter_medium))
+                fontFamily = InterMedium
             )
             Spacer(modifier = Modifier.width(6.dp))
             Icon(
@@ -771,7 +779,7 @@ private fun AmountDisplaySection(
                 Text(
                     text = "موجودی کافی نیست",
                     color = MaterialTheme.colorScheme.error,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                    fontFamily = IranSansRegular,
                     fontSize = 14.sp
                 )
             }
@@ -879,13 +887,13 @@ private fun AssetInfoCard(
                     text = asset.faName?:"",
                     color = MaterialTheme.colorScheme.tertiary,
                     fontSize = 16.sp,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                    fontFamily = IranSansRegular
                 )
                 Text(
                     text = "${asset.balance} ${asset.symbol}",
                     color = MaterialTheme.colorScheme.onTertiary,
                     fontSize = 13.sp,
-                    fontFamily = FontFamily(Font(R.font.inter_medium))
+                    fontFamily = InterMedium
                 )
             }
             
@@ -899,7 +907,7 @@ private fun AssetInfoCard(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     color = MaterialTheme.colorScheme.tertiary,
                     fontSize = 14.sp,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                    fontFamily = IranSansRegular
                 )
             }
         }
@@ -938,7 +946,7 @@ private fun NumericKeypad(onKeyPress: (String) -> Unit) {
                                 text = key,
                                 color = MaterialTheme.colorScheme.tertiary,
                                 fontSize = 24.sp,
-                                fontFamily = FontFamily(Font(R.font.inter_bold))
+                                fontFamily = InterBold
                             )
                         }
                     }
@@ -981,14 +989,14 @@ private fun ScanAddressRow(onScanClick: () -> Unit) {
             Text(
                 text = "QR اسکن کد",
                 color = MaterialTheme.colorScheme.tertiary,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium)),
+                fontFamily = IranSansRegularMedium,
                 fontSize = 17.sp,
                 textAlign = TextAlign.Right
             )
             Text(
                 text = "برای اسکن آدرس ضربه بزنید",
                 color = MaterialTheme.colorScheme.onTertiary,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                fontFamily = IranSansRegular,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Right
             )
@@ -1008,7 +1016,7 @@ private fun HintState(
         Text(
             text = text,
             color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onTertiary,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+            fontFamily = IranSansRegular,
             fontSize = 14.sp
         )
     }
@@ -1159,7 +1167,7 @@ private fun AssetListItems(
                 text = asset.faName ?: asset.name,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                fontFamily = IranSansBoldBold,
                 color = MaterialTheme.colorScheme.tertiary,
                 modifier = Modifier
             )
@@ -1177,12 +1185,7 @@ private fun AssetListItems(
                         text = balanceAmount,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(
-                                Font(
-                                    R.font.iransansmobile_fa_regular,
-                                    FontWeight.Bold
-                                )
-                            )
+                            fontFamily = IranSansRegularBold
                         ),
                         animationDuration = WalletScreenConstants.ASSET_ANIMATION_DURATION
                     )
@@ -1196,7 +1199,7 @@ private fun AssetListItems(
                     text = asset.symbol,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = MaterialTheme.colorScheme.onTertiary,
-                        fontFamily = FontFamily(Font(R.font.inter_bold, FontWeight.Bold))
+                        fontFamily = InterBoldBold
                     )
                 )
             }
@@ -1215,12 +1218,7 @@ private fun AssetListItems(
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(
-                            Font(
-                                R.font.inter_regular,
-                                FontWeight.Medium
-                            )
-                        )
+                        fontFamily = InterRegularMedium
                     ),
                     animationDuration = WalletScreenConstants.ASSET_ANIMATION_DURATION
                 )
@@ -1230,12 +1228,7 @@ private fun AssetListItems(
                         fontWeight = FontWeight.Bold,
                         fontSize = WalletScreenConstants.ASSET_PRICE_SYMBOL_FONT_SIZE,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(
-                            Font(
-                                R.font.inter_regular,
-                                FontWeight.Medium
-                            )
-                        )
+                        fontFamily = InterRegularMedium
                     ),
                     modifier = Modifier.padding(start = WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END)
                 )
@@ -1319,7 +1312,7 @@ fun ChooseBalanceBottomSheet(
                     Text(
                         text = "انتخاب موجودی",
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                        fontFamily = IranSansBold,
                         fontSize = 20.sp
                     )
                     IconButton(
@@ -1394,7 +1387,7 @@ private fun ChooseBalanceRow(
                 Text(
                     text = asset.networkFaName ?: asset.networkName.removePrefix("on ").replaceFirstChar { it.uppercase() },
                     color = MaterialTheme.colorScheme.tertiary,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                    fontFamily = IranSansRegular,
                     fontSize = 17.sp
                 )
             }
@@ -1404,7 +1397,7 @@ private fun ChooseBalanceRow(
                 Text(
                     text = asset.balance,
                     color = MaterialTheme.colorScheme.tertiary,
-                    fontFamily = FontFamily(Font(R.font.inter_regular)),
+                    fontFamily = InterRegular,
                     fontSize = 17.sp,
                     textAlign = TextAlign.End
                 )

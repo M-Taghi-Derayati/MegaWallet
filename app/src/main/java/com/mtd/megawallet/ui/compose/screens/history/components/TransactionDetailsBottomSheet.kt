@@ -60,9 +60,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -88,6 +85,12 @@ import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import java.math.BigDecimal
 import java.math.BigInteger
+import com.mtd.common_ui.theme.InterMediumMedium
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansLightMedium
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.IranSansRegularBold
+import com.mtd.common_ui.theme.IranSansRegularMedium
 
 private const val DETAIL_SHEET_TRANSITION_MS = 360
 
@@ -360,7 +363,7 @@ private fun TransactionHeader(
                     )
                 }",
                 fontSize = 15.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Bold)),
+                fontFamily = IranSansRegularBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -368,7 +371,7 @@ private fun TransactionHeader(
             Text(
                 text = viewModel.formatTimelineSubmitted(transaction),
                 fontSize = 13.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                fontFamily = IranSansRegular,
                 color = Color(0xFF8F8F96),
                 modifier = Modifier.padding(top = 2.dp)
             )
@@ -516,7 +519,7 @@ private fun AmountBlock(
             Text(
                 text = cryptoAmount,
                 fontSize = if (large) 14.sp else 16.sp,
-                fontFamily = FontFamily(Font(R.font.inter_medium, FontWeight.Medium)),
+                fontFamily = InterMediumMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
@@ -560,7 +563,7 @@ private fun StatusActionButton(
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Center,
             fontSize = 15.sp,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Bold)),
+            fontFamily = IranSansRegularBold,
             color = if (expanded) MaterialTheme.colorScheme.background else style.accent
         )
         if (expanded) {
@@ -602,7 +605,7 @@ private fun SummaryRow(
         Text(
             text = label,
             fontSize = 15.sp,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+            fontFamily = IranSansRegular,
             color = Color(0xFF8F8F96),
             modifier = Modifier.weight(1f)
         )
@@ -621,7 +624,7 @@ private fun SummaryRow(
             Text(
                 text = value,
                 fontSize = 15.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Bold)),
+                fontFamily = IranSansRegularBold,
                 color = MaterialTheme.colorScheme.tertiary,
                 textAlign = TextAlign.Start,
                 maxLines = 1,
@@ -667,14 +670,14 @@ private fun StatusSummaryRow(
         Text(
             text = style.statusLabel,
             fontSize = 15.sp,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Bold)),
+            fontFamily = IranSansRegularBold,
             color = style.accent,
             modifier = Modifier.weight(1f)
         )
         Text(
             text = formatStatusDate(viewModel, transaction),
             fontSize = 12.sp,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_light, FontWeight.Medium)),
+            fontFamily = IranSansLightMedium,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.End,
             maxLines = 1,
@@ -698,7 +701,7 @@ private fun GeneralDetailsCard(
         Text(
             text = "عمومی",
             fontSize = 13.sp,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+            fontFamily = IranSansBoldBold,
             color = Color(0xFF8F8F96),
             modifier = Modifier.padding(vertical = 8.dp)
         )
@@ -736,7 +739,7 @@ private fun TokenTransfersCard(
         Text(
             text = "انتقال توکن",
             fontSize = 13.sp,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+            fontFamily = IranSansBoldBold,
             color = Color(0xFF8F8F96),
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
@@ -790,7 +793,7 @@ private fun DetailRow(
         Text(
             text = label,
             fontSize = 14.sp,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium)),
+            fontFamily = IranSansRegularMedium,
             color = Color(0xFF8F8F96),
             modifier = Modifier.weight(1f)
         )
@@ -809,7 +812,7 @@ private fun DetailRow(
             Text(
                 text = value.ifBlank { "-" },
                 fontSize = 14.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                fontFamily = IranSansBoldBold,
                 color = if (accent) Color(0xFF4AA8FF) else MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.End,
                 maxLines = 1,

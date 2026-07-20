@@ -28,13 +28,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.InterBold
+import com.mtd.common_ui.theme.IranSansRegular
 
 @Composable
 fun ExploreScreen() {
@@ -199,7 +199,7 @@ fun ExploreScreen() {
             text = "dApp Browser",
             color = MaterialTheme.colorScheme.tertiary,
             fontSize = 15.sp,
-            fontFamily = FontFamily(Font(R.font.inter_bold)),
+            fontFamily = InterBold,
             letterSpacing = (-0.02).sp,
             textAlign = TextAlign.Center
         )
@@ -210,7 +210,7 @@ fun ExploreScreen() {
             text = "این بخش در دست توسعه است",
             color = MaterialTheme.colorScheme.onTertiary,
             fontSize = 12.sp,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+            fontFamily = IranSansRegular,
             textAlign = TextAlign.Center
         )
     }

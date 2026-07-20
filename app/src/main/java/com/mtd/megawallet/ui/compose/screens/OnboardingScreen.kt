@@ -20,14 +20,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mtd.megawallet.ui.compose.components.FloatingShapesBackground
 import com.mtd.common_ui.R as commonui
+import com.mtd.common_ui.theme.IranSansRegularMedium
 
 /**
  * صفحه خوش‌آمدگویی (Onboarding Screen) که اولین صفحه بعد از Splash است.
@@ -95,7 +93,7 @@ fun OnboardingScreen(
                     style = MaterialTheme.typography.displayMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onBackground,
-                    fontFamily = FontFamily(Font(commonui.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily = IranSansRegularMedium
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -104,7 +102,7 @@ fun OnboardingScreen(
                     style = MaterialTheme.typography.labelMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.tertiary,
-                    fontFamily = FontFamily(Font(commonui.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily = IranSansRegularMedium
                 )
             }
 
@@ -123,7 +121,7 @@ fun OnboardingScreen(
                     "ساخت کیف پول جدید",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimary,//TODO اینجا مشکل هاور داره روی متن دکمه
-                    fontFamily = FontFamily(Font(commonui.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily = IranSansRegularMedium
                 )
             }
 
@@ -143,7 +141,7 @@ fun OnboardingScreen(
                     "من کیف پول دارم",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.tertiary,
-                    fontFamily = FontFamily(Font(commonui.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily = IranSansRegularMedium
                 )
             }
 

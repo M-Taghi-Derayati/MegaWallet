@@ -34,9 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +41,8 @@ import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.TopHeader
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
+import com.mtd.common_ui.theme.IranSansLightLight
+import com.mtd.common_ui.theme.IranSansRegular
 
 /**
  * Terms and conditions data.
@@ -121,7 +120,7 @@ fun TermsPart(
             text = "لطفاً با دقت تمام موارد را بررسی کنید، این موارد برای امنیت دارایی شما حیاتی هستند",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onTertiary,
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.iransansmobile_fa_light, FontWeight.Light)),
+            fontFamily = IranSansLightLight,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Right,
             fontSize = 12.sp
@@ -194,7 +193,7 @@ private fun TermItem(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.tertiary,
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.iransansmobile_fa_regular, FontWeight.Normal)),
+            fontFamily = IranSansRegular,
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 12.dp),

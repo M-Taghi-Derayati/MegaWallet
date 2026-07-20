@@ -89,7 +89,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -117,6 +116,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 import com.mtd.common_ui.R as common
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansBoldExtraBold
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.IranSansRegularLight
 
 enum class BackupAnimationState {
     IDLE, PROCESSING, SUCCESS
@@ -393,12 +397,7 @@ fun GeneratingAnimation(
                                 else 
                                     "کیف پول شما با موفقیت ایمن شد",
                                 style = MaterialTheme.typography.titleLarge.copy(
-                                    fontFamily = FontFamily(
-                                        Font(
-                                            common.font.iransansmobile_fa_bold,
-                                            FontWeight.ExtraBold
-                                        )
-                                    )
+                                    fontFamily = IranSansBoldExtraBold
                                 ),
                                 color = MaterialTheme.colorScheme.tertiary,
                                 textAlign = TextAlign.Center
@@ -412,12 +411,7 @@ fun GeneratingAnimation(
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onTertiary,
-                                fontFamily = FontFamily(
-                                    Font(
-                                        common.font.iransansmobile_fa_regular,
-                                        FontWeight.Light
-                                    )
-                                ),
+                                fontFamily = IranSansRegularLight,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -433,12 +427,7 @@ fun GeneratingAnimation(
                                 else 
                                     "در حال ایمن‌سازی اطلاعات شما",
                                 style = MaterialTheme.typography.titleLarge.copy(
-                                    fontFamily = FontFamily(
-                                        Font(
-                                            common.font.iransansmobile_fa_bold,
-                                            FontWeight.ExtraBold
-                                        )
-                                    )
+                                    fontFamily = IranSansBoldExtraBold
                                 ),
                                 color = MaterialTheme.colorScheme.tertiary,
                                 textAlign = TextAlign.Center
@@ -453,12 +442,7 @@ fun GeneratingAnimation(
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onTertiary,
-                                fontFamily = FontFamily(
-                                    Font(
-                                        common.font.iransansmobile_fa_regular,
-                                        FontWeight.Light
-                                    )
-                                ),
+                                fontFamily = IranSansRegularLight,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -471,12 +455,7 @@ fun GeneratingAnimation(
                             Text(
                                 text = "عبارت بازیابی خود را یادداشت کنید",
                                 style = MaterialTheme.typography.titleLarge.copy(
-                                    fontFamily = FontFamily(
-                                        Font(
-                                            common.font.iransansmobile_fa_bold,
-                                            FontWeight.ExtraBold
-                                        )
-                                    )
+                                    fontFamily = IranSansBoldExtraBold
                                 ),
                                 color = MaterialTheme.colorScheme.tertiary,
                                 textAlign = TextAlign.Center
@@ -486,12 +465,7 @@ fun GeneratingAnimation(
                                 text = "این کلید ها برای دیدن شما است لطفا این موارد را با کسی اشتراک نگذارید",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onTertiary,
-                                fontFamily = FontFamily(
-                                    Font(
-                                        common.font.iransansmobile_fa_regular,
-                                        FontWeight.Light
-                                    )
-                                ),
+                                fontFamily = IranSansRegularLight,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -519,12 +493,7 @@ fun GeneratingAnimation(
                         Text(
                             text = readyText,
                             style = MaterialTheme.typography.titleLarge.copy(
-                                fontFamily = FontFamily(
-                                    Font(
-                                        common.font.iransansmobile_fa_bold,
-                                        FontWeight.ExtraBold
-                                    )
-                                )
+                                fontFamily = IranSansBoldExtraBold
                             ),
                             color = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.padding(bottom = 24.dp)
@@ -538,12 +507,7 @@ fun GeneratingAnimation(
                                 else -> "در حال ایجاد کیف پول شما"
                             },
                             style = MaterialTheme.typography.titleMedium,
-                            fontFamily = FontFamily(
-                                Font(
-                                    common.font.iransansmobile_fa_bold,
-                                    FontWeight.Normal
-                                )
-                            ),
+                            fontFamily = IranSansBold,
                             color = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.padding(bottom = textPadding)
                         )
@@ -741,12 +705,7 @@ fun GeneratingAnimation(
                     else 
                         "در حال تولید کلیدهای رمزنگاری",
                     color = MaterialTheme.colorScheme.onTertiary,
-                    fontFamily = FontFamily(
-                        Font(
-                            common.font.iransansmobile_fa_regular,
-                            FontWeight.Light
-                        )
-                    ),
+                    fontFamily = IranSansRegularLight,
                     modifier = Modifier.padding(top = textPadding),
                     textAlign = TextAlign.Center,
                     fontSize = 14.sp
@@ -775,12 +734,7 @@ fun GeneratingAnimation(
                         }
                     },
                     color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.8f),
-                    fontFamily = FontFamily(
-                        Font(
-                            common.font.iransansmobile_fa_regular,
-                            FontWeight.Normal
-                        )
-                    ),
+                    fontFamily = IranSansRegular,
                     modifier = Modifier.padding(top = 16.dp),
                     textAlign = TextAlign.Center,
                     fontSize = 12.sp
@@ -1152,12 +1106,7 @@ private fun BackupButton(
                     },
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily(
-                        Font(
-                            common.font.iransansmobile_fa_bold,
-                            FontWeight.ExtraBold
-                        )
-                    ),
+                    fontFamily = IranSansBoldExtraBold,
                     maxLines = 1,
                     overflow = TextOverflow.Clip
                 )
@@ -1181,7 +1130,7 @@ private fun WalletInfoColumn(
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = Color.White,
-            fontFamily = FontFamily(Font(common.font.iransansmobile_fa_bold, FontWeight.Normal)),
+            fontFamily = IranSansBold,
             fontSize = 20.sp
         )
         if (isLoading) {
@@ -1198,12 +1147,7 @@ private fun WalletInfoColumn(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Normal,
                 color = Color.White.copy(alpha = 0.8f),
-                fontFamily = FontFamily(
-                    Font(
-                        common.font.iransansmobile_fa_regular,
-                        FontWeight.Normal
-                    )
-                ),
+                fontFamily = IranSansRegular,
                 fontSize = 16.sp
             )
         }
@@ -1249,12 +1193,7 @@ private fun BackupTipChip() {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
-                fontFamily = FontFamily(
-                    Font(
-                        common.font.iransansmobile_fa_bold,
-                        FontWeight.Normal
-                    )
-                ),
+                fontFamily = IranSansBold,
                 textAlign = TextAlign.Right,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -1263,12 +1202,7 @@ private fun BackupTipChip() {
                 text = "«پشتیبان‌گیری» به معنای ذخیره کلمات بازیابی در مکانی امن و تحت کنترل شماست تا دارایی‌تان همیشه ایمن بماند",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.65f),
-                fontFamily = FontFamily(
-                    Font(
-                        common.font.iransansmobile_fa_regular,
-                        FontWeight.Normal
-                    )
-                ),
+                fontFamily = IranSansRegular,
                 textAlign = TextAlign.Right,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -1295,12 +1229,7 @@ private fun BackupOptionsContent(
                 textAlign = TextAlign.Center,
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.tertiary,
-                fontFamily = FontFamily(
-                    Font(
-                        common.font.iransansmobile_fa_regular,
-                        FontWeight.Light
-                    )
-                ),
+                fontFamily = IranSansRegularLight,
                 modifier = Modifier.padding(bottom = 22.dp)
             )
 
@@ -1337,12 +1266,7 @@ private fun BackupOptionsContent(
                 textAlign = TextAlign.Center,
                 fontSize = AnimationConstants.BACKUP_OPTIONS_WARNING_SIZE,
                 color = MaterialTheme.colorScheme.onTertiary,
-                fontFamily = FontFamily(
-                    Font(
-                        common.font.iransansmobile_fa_regular,
-                        FontWeight.Light
-                    )
-                ),
+                fontFamily = IranSansRegularLight,
             )
         }
     }
@@ -1397,12 +1321,7 @@ private fun BackupOptionItem(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(
-                            Font(
-                                common.font.iransansmobile_fa_bold,
-                                FontWeight.Bold
-                            )
-                        )
+                        fontFamily = IranSansBoldBold
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
@@ -1424,12 +1343,7 @@ private fun BackupOptionItem(
                             color = if (isPopular) themeColor else
                                 MaterialTheme.colorScheme.onSurface,
                             fontSize = AnimationConstants.BACKUP_OPTION_BADGE_TEXT_SIZE,
-                            fontFamily = FontFamily(
-                                Font(
-                                    common.font.iransansmobile_fa_bold,
-                                    FontWeight.Bold
-                                )
-                            )
+                            fontFamily = IranSansBoldBold
                         )
                     }
                 }
@@ -1439,12 +1353,7 @@ private fun BackupOptionItem(
                     color = MaterialTheme.colorScheme.onTertiary,
                     fontSize = AnimationConstants.BACKUP_OPTION_DESCRIPTION_TEXT_SIZE,
                     modifier = Modifier.padding(top = 4.dp),
-                    fontFamily = FontFamily(
-                        Font(
-                            common.font.iransansmobile_fa_regular,
-                            FontWeight.Normal
-                        )
-                    )
+                    fontFamily = IranSansRegular
                 )
             }
         }

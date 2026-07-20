@@ -15,9 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,6 +22,8 @@ import com.mtd.common_ui.R
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.TopHeader
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.IranSansRegularLight
 
 /**
  * Component for wallet name input step in create wallet flow.
@@ -58,7 +57,7 @@ fun NameInputPart(
                     text = "کیف پول جدید من",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.5f),
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal)),
+                    fontFamily = IranSansRegular,
                     modifier = Modifier.fillMaxWidth(),
                     fontSize = 22.sp,
                     textAlign = TextAlign.Right
@@ -73,7 +72,7 @@ fun NameInputPart(
                     color = MaterialTheme.colorScheme.tertiary,
                     textAlign = TextAlign.Right,
                     fontSize = 22.sp,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal))
+                    fontFamily = IranSansRegular
                 ),
                 cursorBrush = SolidColor(viewModel.selectedColor),
                 singleLine = true
@@ -86,7 +85,7 @@ fun NameInputPart(
             text = "نام مستعار شما خصوصی است و فقط برای شما قابل مشاهده است. شما می‌توانید آن را بعداً در هر زمانی تغییر دهید.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.7f),
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light)),
+            fontFamily = IranSansRegularLight,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Right
         )

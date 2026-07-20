@@ -56,9 +56,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +74,9 @@ import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.megawallet.viewmodel.news.HomeViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansRegular
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -188,7 +188,7 @@ fun TransactionHistoryScreen(
                             ) {
                                 Text(
                                     text = errorMessage.orEmpty(),
-                                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                    fontFamily = IranSansRegular,
                                     color = MaterialTheme.colorScheme.error,
                                     textAlign = TextAlign.Center
                                 )
@@ -213,12 +213,7 @@ fun TransactionHistoryScreen(
                                     Text(
                                         text = row.title,
                                         fontSize = 18.sp,
-                                        fontFamily = FontFamily(
-                                            Font(
-                                                R.font.iransansmobile_fa_bold,
-                                                FontWeight.Bold
-                                            )
-                                        ),
+                                        fontFamily = IranSansBoldBold,
                                         color = MaterialTheme.colorScheme.tertiary,
                                         modifier = Modifier.padding(
                                             horizontal = 24.dp,
@@ -313,7 +308,7 @@ private fun HistoryStaleSourcesBanner() {
         Text(
             text = "برخی شبکه‌ها به‌روز نشدند؛ ممکن است تاریخچه ناقص باشد.",
             color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+            fontFamily = IranSansRegular,
             fontSize = 13.sp
         )
     }
@@ -351,7 +346,7 @@ private fun HistoryNetworkInputSection(
                 Text(
                     text = "شبکه",
                     color = MaterialTheme.colorScheme.onTertiary,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                    fontFamily = IranSansRegular,
                     fontSize = 14.sp
                 )
             }
@@ -374,7 +369,7 @@ private fun HistoryNetworkInputSection(
                     text = option.displayTitle(),
                     color = Color.White,
                     fontSize = 15.sp,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                    fontFamily = IranSansRegular,
                     maxLines = 1,
                     modifier = Modifier.weight(1f)
                 )
@@ -454,7 +449,7 @@ private fun ChooseHistoryNetworkBottomSheet(
                     Text(
                         text = "انتخاب شبکه",
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                        fontFamily = IranSansBold,
                         fontSize = 20.sp
                     )
 
@@ -528,7 +523,7 @@ private fun ChooseHistoryNetworkRow(
                     Text(
                         text = option.displayTitle(),
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                        fontFamily = IranSansRegular,
                         fontSize = 17.sp
                     )
 
@@ -541,7 +536,7 @@ private fun ChooseHistoryNetworkRow(
                             } else {
                                 MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
                             },
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                            fontFamily = IranSansRegular,
                             fontSize = 12.sp
                         )
                     }

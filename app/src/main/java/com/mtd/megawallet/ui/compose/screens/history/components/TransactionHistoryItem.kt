@@ -29,9 +29,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +40,11 @@ import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
 import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
 import com.mtd.common_ui.theme.Green
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
+import com.mtd.common_ui.theme.InterMedium
+import com.mtd.common_ui.theme.InterRegular
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansLight
+import com.mtd.common_ui.theme.IranSansRegularBold
 
 @Composable
 fun TransactionHistoryItem(
@@ -193,14 +195,14 @@ fun TransactionHistoryItemContent(
                     Text(
                         text = primaryLabel,
                         fontSize = 13.sp,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_light)),
+                        fontFamily = IranSansLight,
                         color = Color(0xFF8F8F96)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = counterpartyLabel,
                         fontSize = 13.sp,
-                        fontFamily = FontFamily(Font(R.font.inter_medium)),
+                        fontFamily = InterMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1
                     )
@@ -208,7 +210,7 @@ fun TransactionHistoryItemContent(
                 Text(
                     text = assetTitle,
                     fontSize = 16.sp,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Bold)),
+                    fontFamily = IranSansRegularBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 2.dp)
                 )
@@ -220,7 +222,7 @@ fun TransactionHistoryItemContent(
                 Text(
                     text = amountText,
                     fontSize = 16.sp,
-                    fontFamily = FontFamily(Font(R.font.inter_medium)),
+                    fontFamily = InterMedium,
                     color = if (isOutgoing) Color(0xFF8F8F96) else Green,
                     textAlign = TextAlign.End
                 )
@@ -228,7 +230,7 @@ fun TransactionHistoryItemContent(
                     Text(
                         text = it,
                         fontSize = 12.sp,
-                        fontFamily = FontFamily(Font(R.font.inter_regular)),
+                        fontFamily = InterRegular,
                         color = Color(0xFFB0B0B8),
                         modifier = Modifier.padding(top = 2.dp)
                     )
@@ -262,7 +264,7 @@ internal fun AssetAvatar(
             Text(
                 text = fallbackLabel.take(1).uppercase(),
                 fontSize = 18.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                fontFamily = IranSansBoldBold,
                 color = Color(0xFF222222)
             )
         }

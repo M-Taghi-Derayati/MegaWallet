@@ -66,8 +66,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -94,6 +92,13 @@ import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.mtd.common_ui.theme.InterRegular
+import com.mtd.common_ui.theme.InterRegularBold
+import com.mtd.common_ui.theme.InterRegularMedium
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansBoldMedium
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.IranSansRegularMedium
 
 @Composable
 fun AssetDetailScreen(
@@ -394,7 +399,7 @@ private fun AssetDetailHeader(
                         text = asset.faName ?: asset.name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                        fontFamily = IranSansBoldBold,
                         color = MaterialTheme.colorScheme.tertiary,
                         fontSize = 20.sp
                     )
@@ -404,7 +409,7 @@ private fun AssetDetailHeader(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Right,
-                        fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Bold)),
+                        fontFamily = InterRegularBold,
                         color = MaterialTheme.colorScheme.onTertiary,
                         fontSize = 18.sp
                     )
@@ -498,7 +503,7 @@ private fun AssetDetailTopSection(
                             text = date,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onTertiary,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                            fontFamily = IranSansRegular
                         )
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -515,7 +520,7 @@ private fun AssetDetailTopSection(
                                 text = priceChangeText,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = changeColor,
-                                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Medium))
+                                fontFamily = IranSansBoldMedium
                             )
                         }
                     }
@@ -685,7 +690,7 @@ private fun AssetDetailChartSection(
             Text(
                 "خطا در دریافت اطلاعات نمودار",
                 color = MaterialTheme.colorScheme.onTertiary,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium)),
+                fontFamily = IranSansRegularMedium,
                 style = MaterialTheme.typography.bodyMedium
             )
         }
@@ -735,7 +740,7 @@ private fun AssetDetailTimeframeSelector(
                     } else {
                         MaterialTheme.colorScheme.onTertiary
                     },
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily = IranSansRegularMedium
                 )
             }
         }
@@ -769,7 +774,7 @@ private fun AssetDetailBottomSection(asset: AssetItem) {
                             text = "ارزش دارایی (تتری)",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onTertiary,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                            fontFamily = IranSansRegular
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         AutoResizeBalanceRows(
@@ -799,7 +804,7 @@ private fun AssetDetailBottomSection(asset: AssetItem) {
                             text = "ارزش دارایی (تومان)",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onTertiary,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                            fontFamily = IranSansRegular
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         AutoResizeBalanceRows(
@@ -852,14 +857,14 @@ private fun AssetDetailBreakdownSection(asset: AssetItem) {
                         text = "موجودی کل",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onTertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                        fontFamily = IranSansRegular
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = asset.balance,
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Bold))
+                        fontFamily = InterRegularBold
                     )
                 }
 
@@ -905,7 +910,7 @@ private fun AssetDetailBreakdownSection(asset: AssetItem) {
                     text = if (isExpanded) "عدم نمایش جزئیات" else "مشاهده شبکه‌ها",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onTertiary,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily = IranSansRegularMedium
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
@@ -946,7 +951,7 @@ private fun BreakdownListItem(subAsset: AssetItem, percentage: Float) {
                 text = subAsset.networkFaName ?: subAsset.networkName.removePrefix("on ").replaceFirstChar { it.uppercase() },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.tertiary,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                fontFamily = IranSansRegularMedium
             )
         }
 
@@ -955,14 +960,14 @@ private fun BreakdownListItem(subAsset: AssetItem, percentage: Float) {
                 text = "${percentage.toInt()}%",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onTertiary,
-                fontFamily = FontFamily(Font(R.font.inter_regular))
+                fontFamily = InterRegular
             )
             Spacer(modifier = Modifier.width(16.dp))
             Text(
                 text = subAsset.balance,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.tertiary,
-                fontFamily = FontFamily(Font(R.font.inter_regular))
+                fontFamily = InterRegular
             )
         }
     }
@@ -997,7 +1002,7 @@ internal fun AutoResizeBalanceRows(
                         lineHeight = USDTFontSize,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Medium))
+                        fontFamily = InterRegularMedium
                     )
                 } else {
                     MaterialTheme.typography.titleMedium.copy(
@@ -1005,7 +1010,7 @@ internal fun AutoResizeBalanceRows(
                         fontWeight = FontWeight.Bold,
                         lineHeight = TMNFontSize,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                        fontFamily = IranSansRegularMedium
                     )
                 },
                 modifier = Modifier.padding(top = WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END)
@@ -1020,19 +1025,9 @@ internal fun AutoResizeBalanceRows(
                     lineHeight = textSize,
                     color = MaterialTheme.colorScheme.tertiary,
                     fontFamily = when (displayCurrency) {
-                        HomeUiState.DisplayCurrency.USDT -> FontFamily(
-                            Font(
-                                R.font.inter_regular,
-                                FontWeight.Medium
-                            )
-                        )
+                        HomeUiState.DisplayCurrency.USDT -> InterRegularMedium
 
-                        HomeUiState.DisplayCurrency.IRR -> FontFamily(
-                            Font(
-                                R.font.iransansmobile_fa_regular,
-                                FontWeight.Medium
-                            )
-                        )
+                        HomeUiState.DisplayCurrency.IRR -> IranSansRegularMedium
                     },
                     letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
                 ),

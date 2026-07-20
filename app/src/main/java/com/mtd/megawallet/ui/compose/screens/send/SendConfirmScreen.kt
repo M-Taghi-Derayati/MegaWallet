@@ -98,8 +98,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -128,6 +126,11 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import kotlin.math.min
 import kotlin.math.roundToInt
+import com.mtd.common_ui.theme.InterBold
+import com.mtd.common_ui.theme.InterMedium
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.IranSansRegularMedium
 
 @Composable
 fun SendConfirmScreen(
@@ -370,7 +373,7 @@ private fun InternalSendConfirmScreen(
                 Text(
                     text = if (isSuccess) "تراکنش با موفقیت ارسال شد" else "در حال ارسال تراکنش...",
                     color = if (isSuccess) Color(0xFF34C759) else MaterialTheme.colorScheme.tertiary,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                    fontFamily = IranSansBold,
                     fontSize = 18.sp,
                     textAlign = TextAlign.Center
                 )
@@ -379,7 +382,7 @@ private fun InternalSendConfirmScreen(
                     Text(
                         text = "لطفاً چند لحظه منتظر بمانید",
                         color = MaterialTheme.colorScheme.onTertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                        fontFamily = IranSansRegular,
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center
                     )
@@ -434,13 +437,13 @@ private fun InternalSendConfirmScreen(
                         Text(
                             text = "تأیید تراکنش به",
                             color = MaterialTheme.colorScheme.onTertiary,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                            fontFamily = IranSansRegular,
                             fontSize = 15.sp
                         )
                         Text(
                             text = recipientName ?: displayAddress,
                             color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                            fontFamily = IranSansBold,
                             fontWeight = FontWeight.Bold,
                             fontSize = 24.sp,
                             maxLines = 1,
@@ -477,7 +480,7 @@ private fun InternalSendConfirmScreen(
                                         Text(
                                             text = displayCrypto,
                                             color = if (isAmountTooSmall) MaterialTheme.colorScheme.error else animatedPrimaryColor,
-                                            fontFamily = FontFamily(Font(R.font.inter_bold)),
+                                            fontFamily = InterBold,
                                             fontSize = 15.sp
                                         )
                                     }
@@ -491,14 +494,14 @@ private fun InternalSendConfirmScreen(
                                         Text(
                                             text = displayUsd,
                                             color = animatedPrimaryColor,
-                                            fontFamily = FontFamily(Font(R.font.inter_bold)),
+                                            fontFamily = InterBold,
                                             fontSize = 15.sp
                                         )
                                         if (displayIrr.isNotBlank()) {
                                             Text(
                                                 text = "≈ $displayIrr",
                                                 color = animatedSecondaryColor,
-                                                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                                fontFamily = IranSansRegular,
                                                 fontSize = 12.sp
                                             )
                                         }
@@ -521,7 +524,7 @@ private fun InternalSendConfirmScreen(
                                         Text(
                                             text = asset.networkFaName ?: "نامشخص",
                                             color = MaterialTheme.colorScheme.tertiary,
-                                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                            fontFamily = IranSansRegular,
                                             fontSize = 15.sp
                                         )
                                     }
@@ -635,7 +638,7 @@ private fun InternalSendConfirmScreen(
                             Text(
                                 text = message,
                                 color = MaterialTheme.colorScheme.error,
-                                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                fontFamily = IranSansRegular,
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
@@ -711,13 +714,13 @@ private fun ConfirmDetailRow(label: String, value: String? = null, valueLeft: (@
         Text(
             text = label, 
             color = MaterialTheme.colorScheme.onTertiary, 
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+            fontFamily = IranSansRegular,
             fontSize = 14.sp,
             modifier = Modifier.padding(top = 2.dp)
         )
         if (valueLeft != null) valueLeft()
         else if (value != null) {
-            Text(text = value, color = MaterialTheme.colorScheme.tertiary, fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)), fontSize = 15.sp)
+            Text(text = value, color = MaterialTheme.colorScheme.tertiary, fontFamily = IranSansBold, fontSize = 15.sp)
         }
     }
 }
@@ -1070,7 +1073,7 @@ private fun CreditFeeSection(
                 text = "پرداخت اعتباری",
                 color = Color.White,
                 fontSize = 15.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium)) ,
+                fontFamily = IranSansRegularMedium ,
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -1241,7 +1244,7 @@ private fun GaslessBanner(
                             enabled -> Color(0xFFCBC6FF)
                             else -> MaterialTheme.colorScheme.tertiary
                         },
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                        fontFamily = IranSansBold,
                         fontSize = 13.sp
                     )
                     Text(
@@ -1252,7 +1255,7 @@ private fun GaslessBanner(
                             else -> "ارسال معمولی با کارمزد شبکه"
                         },
                         color = if (enabled && !hasError) Color.White else MaterialTheme.colorScheme.onTertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                        fontFamily = IranSansRegular,
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -1390,7 +1393,7 @@ private fun FeeSection(
                             Text(
                                 text = if (gasless) compactCryptoZeros(gaslessAmount ?: "...") else compactCryptoZeros(option?.feeAmountDisplay ?: "..."),
                                 color = if (gasless) Color(0xFF9C8FFF) else primaryColor,
-                                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                fontFamily = IranSansRegular,
                                 fontSize = 18.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -1401,7 +1404,7 @@ private fun FeeSection(
                                 Text(
                                     text = option.feeAmountUsdDisplay,
                                     color = secondaryColor.copy(alpha = 1f),
-                                    fontFamily = FontFamily(Font(R.font.inter_medium)),
+                                    fontFamily = InterMedium,
                                     fontSize = 13.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1411,7 +1414,7 @@ private fun FeeSection(
                                 Text(
                                     text = "≈ ${option.feeAmountIrrDisplay}",
                                     color = secondaryColor.copy(alpha = 0.8f),
-                                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                    fontFamily = IranSansRegular,
                                     fontSize = 12.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1428,7 +1431,7 @@ private fun FeeSection(
                         Text(
                             text = if (isAmountTooSmall) "مقدار ارسالی کمتر از کارمزد است" else "موجودی کافی نیست",
                             color = MaterialTheme.colorScheme.error, 
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)), 
+                            fontFamily = IranSansRegular, 
                             fontSize = 12.sp
                         )
                         Spacer(Modifier.width(4.dp))
@@ -1439,7 +1442,7 @@ private fun FeeSection(
                         Text(
                             text = if (useGasless) "هزینه نهایی گس‌لس" else "تخمین کارمزد",
                             color = MaterialTheme.colorScheme.onTertiary,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                            fontFamily = IranSansRegular,
                             fontSize = 13.sp
                         )
                     }
@@ -1459,7 +1462,7 @@ private fun FeeSection(
                                 Text(
                                     text = level ?: "نامشخص",
                                     color = primaryColor,
-                                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                    fontFamily = IranSansRegular,
                                     fontSize = 15.sp
                                 )
                             }
@@ -1474,7 +1477,7 @@ private fun FeeSection(
                                 Text(
                                     text = time ?: "",
                                     color = MaterialTheme.colorScheme.error,
-                                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                    fontFamily = IranSansRegular,
                                     fontSize = 12.sp
                                 )
                             }
@@ -1503,7 +1506,7 @@ private fun PolicyMetaChip(text: String) {
         Text(
             text = text,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+            fontFamily = IranSansRegular,
             fontSize = 9.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -1534,7 +1537,7 @@ private fun PolicyBadge(
         Text(
             text = text,
             color = content,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+            fontFamily = IranSansRegular,
             fontSize = 10.sp
         )
     }
@@ -1801,7 +1804,7 @@ fun ConfirmSliderButton(
                                 color = Color(0xFF8E8E93),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium,
-                                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                                fontFamily = IranSansRegular,
                             )
                         }
                     }
@@ -1815,7 +1818,7 @@ fun ConfirmSliderButton(
                         text = text,
                         color = Color(0xFFAEAEB2),
                         fontSize = 15.sp,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                        fontFamily = IranSansRegular,
                         fontWeight = FontWeight.Medium
                     )
                 }

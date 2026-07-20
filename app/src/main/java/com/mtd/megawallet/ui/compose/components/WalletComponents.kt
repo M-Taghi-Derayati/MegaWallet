@@ -46,9 +46,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -58,6 +56,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
 import com.mtd.common_ui.theme.Green
+import com.mtd.common_ui.theme.IranSansRegularLight
+import com.mtd.common_ui.theme.VazirmatnMediumBold
+import com.mtd.common_ui.theme.VazirmatnMediumLight
+import com.mtd.common_ui.theme.VazirmatnMediumMedium
 
 /**
  * کارت‌های انیمیشنی که در بالای صفحه "افزودن کیف پول موجود" به صورت پشته‌ای نمایش داده می‌شوند.
@@ -221,7 +223,7 @@ fun WalletStackCardBackWordKeys(
                         fontSize = 16.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
-                        fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light))
+                        fontFamily = VazirmatnMediumLight
                     )
                 }
             }
@@ -283,7 +285,7 @@ fun WalletStackCardBackPrivateKey(
                         fontSize = 16.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
-                        fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light))
+                        fontFamily = VazirmatnMediumLight
                     )
                 }
             }
@@ -309,7 +311,7 @@ fun PrivateKeyWallet(
             style = MaterialTheme.typography.bodySmall,
             color = Color.White.copy(alpha = 0.7f),
             fontSize = 18.sp,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light))
+            fontFamily = IranSansRegularLight
         )
         Spacer(modifier = Modifier.height(10.dp))
         Text(
@@ -470,7 +472,7 @@ fun WalletOptionItem(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = if (enabled) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onTertiary,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Bold)),
+                fontFamily = VazirmatnMediumBold,
                 textAlign = TextAlign.Start // RTL
             )
             Text(
@@ -479,7 +481,7 @@ fun WalletOptionItem(
                 color = MaterialTheme.colorScheme.onTertiary,
                 maxLines = 2,
                 lineHeight = 16.sp,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium)),
+                fontFamily = VazirmatnMediumMedium,
                 textAlign = TextAlign.Start // RTL
             )
         }

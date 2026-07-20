@@ -29,8 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -41,6 +39,7 @@ import com.mtd.megawallet.ui.compose.screens.addexistingwallet.manualimport.Inpu
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.manualimport.ValidationState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.mtd.common_ui.theme.IranSansRegular
 
 @Composable
 fun ManualBackupVerifier(
@@ -203,7 +202,7 @@ private fun VerifyPhrasesContent(
             text = "شماره این کلمه را انتخاب کنید",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.tertiary,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+            fontFamily = IranSansRegular,
             modifier = Modifier.padding(top = 18.dp)
         )
 

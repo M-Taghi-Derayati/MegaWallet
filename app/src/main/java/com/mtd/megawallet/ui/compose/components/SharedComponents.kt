@@ -13,14 +13,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.VazirmatnBold
+import com.mtd.common_ui.theme.VazirmatnMedium
+import com.mtd.common_ui.theme.VazirmatnMediumLight
 
 /**
  * Primary button component used throughout the app.
@@ -71,7 +73,7 @@ fun PrimaryButton(
                 color =LocalContentColor.current,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold))
+                fontFamily = IranSansBoldBold
             )
         }
     }
@@ -114,7 +116,7 @@ fun TitleText(
         text = text,
         style = MaterialTheme.typography.headlineLarge,
         fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily(Font(R.font.vazirmatn_bold, FontWeight.Normal)),
+        fontFamily = VazirmatnBold,
         modifier = modifier.fillMaxWidth(),
         fontSize = fontSize
     )
@@ -134,7 +136,7 @@ fun SubtitleText(
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
-        fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light)),
+        fontFamily = VazirmatnMediumLight,
         color = color,
         modifier = modifier.fillMaxWidth(),
         fontSize = fontSize
@@ -155,7 +157,7 @@ fun BodyText(
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
-        fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Normal)),
+        fontFamily = VazirmatnMedium,
         color = color,
         modifier = modifier,
         fontSize = fontSize

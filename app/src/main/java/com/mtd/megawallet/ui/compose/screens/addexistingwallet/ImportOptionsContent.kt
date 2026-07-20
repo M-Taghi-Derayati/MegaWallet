@@ -12,13 +12,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
 import com.mtd.megawallet.ui.compose.components.WalletOptionItem
+import com.mtd.common_ui.theme.VazirmatnBoldBold
+import com.mtd.common_ui.theme.VazirmatnMediumLight
 
 /**
  * Content showing import options (seed phrase or private key).
@@ -37,7 +36,7 @@ fun ImportOptionsContent(
             text = "انتخاب روش وارد کردن",
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.tertiary,
-            fontFamily = FontFamily(Font(R.font.vazirmatn_bold, FontWeight.Bold))
+            fontFamily = VazirmatnBoldBold
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -45,7 +44,7 @@ fun ImportOptionsContent(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onTertiary,
             textAlign = TextAlign.Center,
-            fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Light))
+            fontFamily = VazirmatnMediumLight
         )
         Spacer(modifier = Modifier.height(32.dp))
         Column {

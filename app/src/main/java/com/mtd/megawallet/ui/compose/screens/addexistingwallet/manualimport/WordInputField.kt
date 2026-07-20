@@ -38,14 +38,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.mtd.common_ui.R
 import kotlin.math.abs
+import com.mtd.common_ui.theme.VazirmatnMediumMedium
 
 /**
  * Animated input card for word entry.
@@ -192,7 +190,7 @@ private fun InputCard(
                     text = (index + 1).toString(),
                     style = MaterialTheme.typography.titleMedium,
                     color = if (isDark) Color.Gray else Color(0xFF9E9E9E),
-                    fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium)),
+                    fontFamily = VazirmatnMediumMedium,
                     modifier = Modifier.padding(end = 10.dp, start = 15.dp)
                 )
             } else {
@@ -210,7 +208,7 @@ private fun InputCard(
                 textStyle = TextStyle(
                     fontSize = 18.sp,
                     color = contentColor,
-                    fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium))
+                    fontFamily = VazirmatnMediumMedium
                 ),
                 placeholder = {
                     Text(
@@ -218,7 +216,7 @@ private fun InputCard(
                         style = TextStyle(
                             color = if (isDark) Color.Gray.copy(alpha = 0.5f) else Color.LightGray,
                             fontSize = 18.sp,
-                            fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium))
+                            fontFamily = VazirmatnMediumMedium
                         )
                     )
                 },

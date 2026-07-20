@@ -27,9 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,6 +34,7 @@ import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.TopHeader
 import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
+import com.mtd.common_ui.theme.IranSansRegularLight
 
 /**
  * Available wallet colors for selection.
@@ -107,7 +105,7 @@ fun ColorSelectionPart(
             text = "این رنگ در کارت ها، نمودارها و برخی دکمه ها نمایش داده می شود",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.7f),
-            fontFamily = FontFamily(Font(com.mtd.common_ui.R.font.iransansmobile_fa_regular, FontWeight.Light)),
+            fontFamily = IranSansRegularLight,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             fontSize = 12.sp

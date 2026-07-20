@@ -55,8 +55,6 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -75,6 +73,13 @@ import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
 import com.mtd.megawallet.viewmodel.news.HomeViewModel
 import java.math.BigDecimal
+import com.mtd.common_ui.theme.InterBoldBold
+import com.mtd.common_ui.theme.InterRegularMedium
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansLight
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.IranSansRegularBold
+import com.mtd.common_ui.theme.IranSansRegularMedium
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -170,7 +175,7 @@ fun WalletScreens(
                                                             style = MaterialTheme.typography.titleMedium,
                                                             color = MaterialTheme.colorScheme.tertiary,
                                                             fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
-                                                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                                                            fontFamily = IranSansRegular
                                                         )
                                                     })
                                             }
@@ -187,14 +192,14 @@ fun WalletScreens(
                                             text = "تتر: ",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onTertiary,
-                                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_light))
+                                            fontFamily = IranSansLight
                                         )
                                         Text(
                                             text = "${state.tetherPriceIrr} تومان",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.tertiary,
-                                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                                            fontFamily = IranSansRegular
                                         )
                                     }
                                 }
@@ -311,7 +316,7 @@ private fun TotalBalanceSection(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = WalletScreenConstants.TOTAL_BALANCE_FONT_SIZE,
                                 color = MaterialTheme.colorScheme.onTertiary,
-                                fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Medium)),
+                                fontFamily = InterRegularMedium,
                                 letterSpacing = WalletScreenConstants.TOTAL_BALANCE_HIDDEN_LETTER_SPACING
                             ),
                             modifier = Modifier
@@ -473,7 +478,7 @@ private fun AssetListItems(
                     text = asset.faName ?: asset.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                    fontFamily = IranSansBoldBold,
                     color = MaterialTheme.colorScheme.tertiary,
                     modifier = Modifier
                 )
@@ -508,12 +513,7 @@ private fun AssetListItems(
                                 text = balanceAmount,
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = MaterialTheme.colorScheme.tertiary,
-                                    fontFamily = FontFamily(
-                                        Font(
-                                            R.font.iransansmobile_fa_regular,
-                                            FontWeight.Bold
-                                        )
-                                    )
+                                    fontFamily = IranSansRegularBold
                                 ),
                                 animationDuration = WalletScreenConstants.ASSET_ANIMATION_DURATION
                             )
@@ -528,7 +528,7 @@ private fun AssetListItems(
                         text = asset.symbol,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onTertiary,
-                            fontFamily = FontFamily(Font(R.font.inter_bold, FontWeight.Bold))
+                            fontFamily = InterBoldBold
                         )
                     )
                 }
@@ -563,19 +563,9 @@ private fun AssetListItems(
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.tertiary,
                                     fontFamily = when (displayCurrency) {
-                                        HomeUiState.DisplayCurrency.USDT -> FontFamily(
-                                            Font(
-                                                R.font.inter_regular,
-                                                FontWeight.Medium
-                                            )
-                                        )
+                                        HomeUiState.DisplayCurrency.USDT -> InterRegularMedium
 
-                                        HomeUiState.DisplayCurrency.IRR -> FontFamily(
-                                            Font(
-                                                R.font.iransansmobile_fa_regular,
-                                                FontWeight.Medium
-                                            )
-                                        )
+                                        HomeUiState.DisplayCurrency.IRR -> IranSansRegularMedium
                                     }
                                 ),
                                 animationDuration = WalletScreenConstants.ASSET_ANIMATION_DURATION,
@@ -588,12 +578,7 @@ private fun AssetListItems(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = WalletScreenConstants.ASSET_PRICE_SYMBOL_FONT_SIZE,
                                         color = MaterialTheme.colorScheme.tertiary,
-                                        fontFamily = FontFamily(
-                                            Font(
-                                                R.font.inter_regular,
-                                                FontWeight.Medium
-                                            )
-                                        )
+                                        fontFamily = InterRegularMedium
                                     ),
                                     modifier = Modifier.padding(start = WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END)
                                 )
@@ -605,12 +590,7 @@ private fun AssetListItems(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = WalletScreenConstants.ASSET_PRICE_SYMBOL_FONT_SIZE,
                                         color = MaterialTheme.colorScheme.tertiary,
-                                        fontFamily = FontFamily(
-                                            Font(
-                                                R.font.iransansmobile_fa_regular,
-                                                FontWeight.Medium
-                                            )
-                                        )
+                                        fontFamily = IranSansRegularMedium
                                     ),
                                     modifier = Modifier.padding(start = WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END)
                                 )
@@ -628,7 +608,7 @@ private fun AssetListItems(
                     } else {
                         MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
                     },
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily = IranSansRegularMedium
                 )
             }
         }
@@ -670,19 +650,9 @@ private fun AutoResizeBalanceRow(
                     fontSize = textSize,
                     color = MaterialTheme.colorScheme.tertiary,
                     fontFamily = when (displayCurrency) {
-                        HomeUiState.DisplayCurrency.USDT -> FontFamily(
-                            Font(
-                                R.font.inter_regular,
-                                FontWeight.Medium
-                            )
-                        )
+                        HomeUiState.DisplayCurrency.USDT -> InterRegularMedium
 
-                        HomeUiState.DisplayCurrency.IRR -> FontFamily(
-                            Font(
-                                R.font.iransansmobile_fa_regular,
-                                FontWeight.Medium
-                            )
-                        )
+                        HomeUiState.DisplayCurrency.IRR -> IranSansRegularMedium
                     },
                     letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
                 ),
@@ -698,7 +668,7 @@ private fun AutoResizeBalanceRow(
                         fontSize = WalletScreenConstants.CURRENCY_SYMBOL_FONT_SIZE,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(Font(R.font.inter_regular, FontWeight.Medium))
+                        fontFamily = InterRegularMedium
                     ),
                     modifier = Modifier.padding(top = WalletScreenConstants.CURRENCY_SYMBOL_PADDING_TOP)
                 )
@@ -712,7 +682,7 @@ private fun AutoResizeBalanceRow(
                         fontSize = WalletScreenConstants.TOMAN_FONT_SIZE,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                        fontFamily = IranSansRegularMedium
                     ),
                     modifier = Modifier.padding(top = WalletScreenConstants.TOMAN_PADDING_TOP)
                 )

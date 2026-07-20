@@ -20,15 +20,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
 import com.mtd.domain.model.core.Bip39Words
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
+import com.mtd.common_ui.theme.IranSansRegularLight
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -86,7 +84,7 @@ fun ManualImportWordKeys(
                 "کلید های بازیابی شما",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onTertiary,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light)),
+                fontFamily = IranSansRegularLight,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
             Spacer(modifier = Modifier.height(15.dp))

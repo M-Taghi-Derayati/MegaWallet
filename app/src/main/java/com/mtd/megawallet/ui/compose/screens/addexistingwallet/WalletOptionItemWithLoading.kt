@@ -22,13 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.VazirmatnMediumBold
+import com.mtd.common_ui.theme.VazirmatnMediumMedium
 
 /**
  * Wallet option item with loading indicator.
@@ -80,7 +79,7 @@ fun WalletOptionItemWithLoading(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.tertiary,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Bold)),
+                fontFamily = VazirmatnMediumBold,
                 textAlign = TextAlign.Start
             )
             Text(
@@ -89,7 +88,7 @@ fun WalletOptionItemWithLoading(
                 color = MaterialTheme.colorScheme.onTertiary,
                 maxLines = 2,
                 lineHeight = 16.sp,
-                fontFamily = FontFamily(Font(R.font.vazirmatn_medium, FontWeight.Medium)),
+                fontFamily = VazirmatnMediumMedium,
                 textAlign = TextAlign.Start
             )
         }

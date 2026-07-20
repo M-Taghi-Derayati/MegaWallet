@@ -28,14 +28,12 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.IranSansRegularLight
 
 
 @Composable
@@ -74,7 +72,7 @@ fun InputManualSection(modifier: Modifier = Modifier, text:String="", icon: Imag
                 color =  MaterialTheme.colorScheme.onTertiary,
                 fontSize = 15.sp,
                 textAlign = TextAlign.Center,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light)),
+                fontFamily = IranSansRegularLight,
                 modifier=Modifier.clickable(onClick = onClick, indication = null, interactionSource = null)
             )
             Spacer(modifier = Modifier.width(10.dp))

@@ -38,14 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
 import com.mtd.domain.security.AppLockManager
+import com.mtd.common_ui.theme.IranSansRegularMedium
 
 @Composable
 fun LockedFingerprintOverlay(
@@ -84,7 +82,7 @@ fun LockedFingerprintOverlay(
                     text = "قفل شده",
                     color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.95f),
                     style = MaterialTheme.typography.titleMedium,
-                    fontFamily =  FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily =  IranSansRegularMedium
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
@@ -106,7 +104,7 @@ fun LockedFingerprintOverlay(
                         text = "ورود با اثر انگشت",
                         color = MaterialTheme.colorScheme.tertiary,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontFamily =  FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                        fontFamily =  IranSansRegularMedium
                     )
                 }
             }
@@ -165,7 +163,7 @@ fun PasscodeKeypadSheet(
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.tertiary,
                     textAlign = TextAlign.Center,
-                    fontFamily =  FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily =  IranSansRegularMedium
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -173,7 +171,7 @@ fun PasscodeKeypadSheet(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.76f),
                     textAlign = TextAlign.Center,
-                    fontFamily =  FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                    fontFamily =  IranSansRegularMedium
                 )
 
                 Spacer(modifier = Modifier.height(22.dp))
@@ -204,7 +202,7 @@ fun PasscodeKeypadSheet(
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
-                        fontFamily =  FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                        fontFamily =  IranSansRegularMedium
                     )
                 } else if (!errorMessage.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(10.dp))
@@ -213,7 +211,7 @@ fun PasscodeKeypadSheet(
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
-                        fontFamily =  FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium))
+                        fontFamily =  IranSansRegularMedium
                     )
                 }
 
@@ -274,7 +272,7 @@ fun PasscodeKeypadSheet(
                             text = cancelLabel,
                             color =  MaterialTheme.colorScheme.tertiary,
                             style = MaterialTheme.typography.bodyLarge,
-                            fontFamily =  FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium)),
+                            fontFamily =  IranSansRegularMedium,
                             modifier = Modifier.clickable { it() }
                         )
                     } ?: Spacer(modifier = Modifier.size(1.dp))
@@ -282,7 +280,7 @@ fun PasscodeKeypadSheet(
                         text = "خروج از اپ",
                         color = MaterialTheme.colorScheme.tertiary,
                         style = MaterialTheme.typography.bodyLarge,
-                        fontFamily =  FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Medium)),
+                        fontFamily =  IranSansRegularMedium,
                         modifier = Modifier.clickable { onExitApp() }
                     )
                 }

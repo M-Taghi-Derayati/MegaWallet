@@ -20,13 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansRegular
 
 @Composable
 fun TransactionHistoryEmptyState(
@@ -71,7 +70,7 @@ fun TransactionHistoryEmptyState(
             Text(
                 text = "هیچ تراکنشی یافت نشد",
                 fontSize = 18.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                fontFamily = IranSansBoldBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
@@ -82,7 +81,7 @@ fun TransactionHistoryEmptyState(
                 text = "واریزها، برداشت ها و انتقال های در انتظار شما در اینجا نمایش داده خواهند شد",
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular)),
+                fontFamily = IranSansRegular,
                 color = MaterialTheme.colorScheme.onTertiary,
                 textAlign = TextAlign.Center
             )

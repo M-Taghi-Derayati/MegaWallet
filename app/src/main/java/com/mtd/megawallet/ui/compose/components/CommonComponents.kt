@@ -21,9 +21,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Dp
@@ -31,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansRegularLight
 
 @Composable
 fun TopHeader(
@@ -52,7 +51,7 @@ fun TopHeader(
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.tertiary,
             textAlign = titleTextAlign,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold))
+            fontFamily = IranSansBoldBold
         )
         if (subtitle.isNotBlank()) {
             Spacer(modifier = Modifier.height(5.dp))
@@ -61,7 +60,7 @@ fun TopHeader(
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = subtitleTextAlign,
                 color = MaterialTheme.colorScheme.onTertiary,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light))
+                fontFamily = IranSansRegularLight
             )
         }
     }
@@ -154,7 +153,7 @@ fun BottomSecuritySection(
                 color = MaterialTheme.colorScheme.onTertiary.copy(0.9f),
                 textAlign = TextAlign.Center,
                 fontSize = 10.sp,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Light)),
+                fontFamily = IranSansRegularLight,
                 modifier = Modifier
                     .padding(10.dp)
                     .fillMaxWidth()

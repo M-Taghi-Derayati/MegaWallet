@@ -50,8 +50,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.mtd.common_ui.R
@@ -61,6 +59,8 @@ import com.mtd.megawallet.ui.compose.components.InputManualSection
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 import com.mtd.megawallet.ui.compose.screens.wallet.ManualBackupVerifier
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansRegular
 
 @Composable
 fun SecretRevealOverlay(
@@ -290,7 +290,7 @@ fun SecretRecoveryPromptBottomSheet(
                         text = titleText,
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                        fontFamily = IranSansBold
                     )
 
                     IconButton(
@@ -316,7 +316,7 @@ fun SecretRecoveryPromptBottomSheet(
                     text = descriptionText,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onTertiary,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+                    fontFamily = IranSansRegular
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -380,7 +380,7 @@ private fun SecurityPoint(icon: ImageVector, text: String) {
             text = text,
             color = MaterialTheme.colorScheme.onTertiary,
             style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular))
+            fontFamily = IranSansRegular
         )
     }
 }

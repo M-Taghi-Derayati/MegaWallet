@@ -53,8 +53,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,6 +63,9 @@ import com.mtd.megawallet.ui.compose.components.AnimatedFlipCard
 import com.mtd.megawallet.ui.compose.components.FlipCardTargets
 import com.mtd.megawallet.ui.compose.components.PrivateKeyWallet
 import com.mtd.megawallet.ui.compose.components.SeedPhraseGrid
+import com.mtd.common_ui.theme.InterMedium
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansLight
 
 private val PremiumSpring = spring<Float>(
     dampingRatio = 0.82f,
@@ -330,7 +331,7 @@ private fun WalletCardContent(
                     text = walletName,
                     color = if (isEditingNickname) Color.Transparent else Color.White,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                    fontFamily = IranSansBold,
                     maxLines = 1,
                     fontSize = if (isSmall) 14.sp else 25.sp
                 )
@@ -348,7 +349,7 @@ private fun WalletCardContent(
                     text = balance,
                     color = Color.White.copy(alpha = 0.85f),
                     style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily(Font(R.font.inter_medium)),
+                    fontFamily = InterMedium,
                     fontSize = if (isSmall) 12.sp else 22.sp
                 )
 
@@ -367,7 +368,7 @@ private fun WalletCardContent(
                                 color = Color.White,
                                 style = TextStyle(
                                     fontSize = 11.sp,
-                                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                                    fontFamily = IranSansBold,
                                     platformStyle = PlatformTextStyle(includeFontPadding = false)
                                 )
                             )
@@ -387,7 +388,7 @@ private fun WalletCardContent(
                                 color = Color.White,
                                 style = TextStyle(
                                     fontSize = 11.sp,
-                                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                                    fontFamily = IranSansBold,
                                     platformStyle = PlatformTextStyle(includeFontPadding = false)
                                 )
                             )
@@ -434,7 +435,7 @@ private fun WalletCardContent(
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             color = Color.White,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                            fontFamily = IranSansBold,
                             fontSize = if (isSmall) 14.sp else 25.sp
                         ),
                         cursorBrush = SolidColor(Color.White),
@@ -448,7 +449,7 @@ private fun WalletCardContent(
                                         "نام کیف پول",
                                         color = Color.White.copy(alpha = 0.5f),
                                         fontSize = if (isSmall) 14.sp else 25.sp,
-                                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                                        fontFamily = IranSansBold
                                     )
                                 }
                                 innerTextField()
@@ -469,7 +470,7 @@ private fun WalletCardContent(
                         text = "",
                         color = Color.White.copy(alpha = 0.85f),
                         style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily(Font(R.font.inter_medium)),
+                        fontFamily = InterMedium,
                         fontSize = if (isSmall) 12.sp else 22.sp
                     )
 
@@ -486,7 +487,7 @@ private fun WalletCardContent(
                             color = MaterialTheme.colorScheme.onTertiary,
                             style = TextStyle(
                                 fontSize = 11.sp,
-                                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold))
+                                fontFamily = IranSansBold
                             )
                         )
                     }
@@ -519,7 +520,7 @@ private fun WalletCardContent(
                             text = if(walletName.isNotEmpty()) walletName.take(1).uppercase() else "",
                             color = Color.White,
                             style = MaterialTheme.typography.titleSmall,
-                            fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold)),
+                            fontFamily = IranSansBold,
                             fontWeight = FontWeight.Bold,
                             fontSize = if (isSmall) 12.sp else 20.sp
                         )
@@ -551,7 +552,7 @@ private fun WalletCardContent(
                                 "کپی آدرس",
                                 color = Color.White.copy(alpha = 0.8f),
                                 fontSize = 14.sp,
-                                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_light))
+                                fontFamily = IranSansLight
                             )
                         }
                     }

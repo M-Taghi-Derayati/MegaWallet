@@ -33,9 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -47,6 +44,8 @@ import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.TopHeader
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansRegular
 
 enum class CloudPasswordMode {
     CREATE_NEW_BACKUP,
@@ -135,7 +134,7 @@ fun CloudBackupPasswordScreen(
                     },
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.5f),
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal)),
+                    fontFamily = IranSansRegular,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Right,
                     fontSize = 20.sp
@@ -154,7 +153,7 @@ fun CloudBackupPasswordScreen(
                         color = MaterialTheme.colorScheme.tertiary,
                         textAlign = TextAlign.Right,
                         fontSize = 18.sp,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal))
+                        fontFamily = IranSansRegular
                     ),
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(
@@ -189,7 +188,7 @@ fun CloudBackupPasswordScreen(
                 text = errorMessage,
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFFEF4444),
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal)),
+                fontFamily = IranSansRegular,
                 textAlign = TextAlign.Right,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -222,7 +221,7 @@ fun CloudBackupPasswordScreen(
                         text = strengthLabel,
                         style = MaterialTheme.typography.labelMedium,
                         color = labelColor,
-                        fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                        fontFamily = IranSansBoldBold,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(end = 8.dp)
                     )
@@ -235,7 +234,7 @@ fun CloudBackupPasswordScreen(
                     text = "برای یک رمز قوی، از ۱۰ کاراکتر یا بیشتر به همراه عدد و یک کاراکتر ویژه (!@#...) استفاده کنید",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiary,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_regular, FontWeight.Normal)),
+                    fontFamily = IranSansRegular,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Right,
                     lineHeight = 16.sp

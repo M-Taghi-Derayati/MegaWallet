@@ -71,8 +71,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -105,6 +103,9 @@ import com.mtd.megawallet.viewmodel.news.HomeViewModel
 import com.mtd.megawallet.viewmodel.news.MainScreenViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.mtd.common_ui.theme.IranSansBoldBold
+import com.mtd.common_ui.theme.IranSansBoldMedium
+import com.mtd.common_ui.theme.IranSansLightLight
 
 
 /**
@@ -810,7 +811,7 @@ private fun MainHeader(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.tertiary,
-                    fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Bold)),
+                    fontFamily = IranSansBoldBold,
                     fontSize = MainScreenConstants.WALLET_NAME_FONT_SIZE
                 )
 
@@ -1142,7 +1143,7 @@ fun FabMenuItem(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_bold, FontWeight.Medium)),
+                fontFamily = IranSansBoldMedium,
                 color = Color.White,
                 fontSize = 16.sp
             )
@@ -1150,7 +1151,7 @@ fun FabMenuItem(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray,
-                fontFamily = FontFamily(Font(R.font.iransansmobile_fa_light, FontWeight.Light)),
+                fontFamily = IranSansLightLight,
                 lineHeight = MainScreenConstants.FAB_MENU_ITEM_DESCRIPTION_LINE_HEIGHT,
                 fontSize = 13.sp
             )
