@@ -11,6 +11,7 @@ import com.mtd.core.notification.TransactionSoundPlayer
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.data.BuildConfig
 import com.mtd.data.di.ForWebSocket
+import com.mtd.data.utils.ExponentialBackoff
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.ITokenStore
@@ -36,7 +37,6 @@ import timber.log.Timber
 import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.pow
 
 /**
  * Phase 5 (KAN-NEW-03) — realtime push transport. Replaces the 4-second polling loop with a single
@@ -150,9 +150,12 @@ class NotificationSocketManager @Inject constructor(
     private fun scheduleReconnect() {
         if (!shouldBeConnected) return
         reconnectAttempts++
-        // 2s, 4s, 8s, 16s, … capped at 60s.
-        val delayMillis = (RECONNECT_BASE_MS * 2.0.pow(reconnectAttempts - 1)).toLong()
-            .coerceAtMost(RECONNECT_MAX_MS)
+        // 2s, 4s, 8s, 16s, … capped at 60s — via the shared backoff schedule (single source of truth).
+        val delayMillis = ExponentialBackoff.delayForAttempt(
+            attempt = reconnectAttempts - 1,
+            baseDelayMs = RECONNECT_BASE_MS.toLong(),
+            maxDelayMs = RECONNECT_MAX_MS
+        )
         Timber.w("[NotificationSocket] Reconnecting in ${delayMillis / 1000}s.")
         reconnectJob?.cancel()
         reconnectJob = scope.launch {

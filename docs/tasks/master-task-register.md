@@ -741,9 +741,18 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
     `IGaslessRouteResolver.relayPrefixFor(networkId, familyDefault)` extension (in `GaslessRouteResolver.kt`);
     each coordinator keeps a one-line wrapper carrying its own family default (`"evm"`/`"tron"`), so **all
     call sites are unchanged and behavior is identical**.
-  - ⏳ **Remaining:** duplicated backoff (socket inline vs `ExponentialBackoff` util), hex-parse,
-    prepare→broadcast boilerplate ×5, SmartFee/CreditFee copy-paste — deferred (touch the send path; safer
-    with build/on-device verification available).
+  - ✅ **socket reconnect backoff dup** (2026-07-19) — `NotificationSocketManager.scheduleReconnect` inlined
+    `(RECONNECT_BASE_MS * 2.0.pow(reconnectAttempts - 1)).coerceAtMost(RECONNECT_MAX_MS)`, duplicating the
+    schedule that `ExponentialBackoff` already owns. Replaced with the pure companion
+    `ExponentialBackoff.delayForAttempt(reconnectAttempts - 1, RECONNECT_BASE_MS.toLong(), RECONNECT_MAX_MS)`
+    — **behavior-identical** (same 2s→4s→…→60s curve, same overflow saturation), removed the now-unused
+    `kotlin.math.pow` import. Isolated to reconnect scheduling (NOT the send path). Covered by
+    `ExponentialBackoffTest`.
+  - ⏳ **Deferred (crypto / send path — need build + on-device verification):** hex-parse helpers
+    (`AbstractUtxoNetwork.hexToBytes/toHexString` vs `TronUtils.bytesToHex` — tiny, in two **different**
+    crypto domains: BTC tx serialization vs TRON address encoding, so merging risks address/signing
+    regressions for a cosmetic win), prepare→broadcast boilerplate ×5, and SmartFee/CreditFee copy-paste.
+    These stay deferred until a build/device is available to validate.
 - **Problem:** duplicated backoff/hex-parse, prepare→broadcast boilerplate ×5, SmartFee/CreditFee copy-paste,
   `relayPrefixFor` dup. **TD:** code-review cleanup set. **Priority:** P3 · **Est:** 1 · **Risk:** Low.
 - **Testing:** existing tests green; behavior unchanged.
