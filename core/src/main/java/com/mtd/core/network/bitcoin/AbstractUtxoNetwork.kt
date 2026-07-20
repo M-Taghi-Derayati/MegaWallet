@@ -3,6 +3,7 @@ package com.mtd.core.network.bitcoin
 
 
 import com.mtd.core.network.BlockchainNetwork
+import com.mtd.core.utils.toHexString
 import com.mtd.domain.model.core.NetworkConfig
 import com.mtd.domain.model.core.WalletKey
 import org.bitcoinj.base.LegacyAddress
@@ -138,7 +139,3 @@ abstract class AbstractUtxoNetwork(
 
 
 }
-
-// توابع کمکی برای تبدیل هگز
-private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
-private fun String.hexToBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
