@@ -730,6 +730,34 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   succeeds. **Known residual:** if gas rises between GET `/fees/options` and POST `/prepare`, the server
   reserves more at prepare and MAX can still fail (drift) — add a small buffer to the MAX deduction if seen.
 
+### TASK-48 — Multi-wallet monitoring: enroll all wallets under the device-owner sub — ⏳ Spec ready, impl deferred
+- **Problem:** deposits to a wallet other than the FCM device-owner wallet never surface (no FCM/socket).
+  Confirmed by server code (2026-07-21): **routing is STRICTLY by the subscribing JWT `sub`** — `fcmService`
+  token lookup is `{active:true, $or:[{userId},{walletAddress}]}` (`fcmService.js` `_identityFilter`), WS
+  `socketsFor` the same; **no `deviceId` fan-out**. Today each wallet enrolls only its own addresses under
+  its **own** `sub` (`SubscribeMonitoringUseCase`), and the device token stays under the first wallet's `sub`
+  → other wallets' addresses are owned by other subs → no delivery.
+- **Resolution (no auth change):** `POST /monitoring/subscribe` is **trust-the-caller** (server answer
+  Q2=(a) — binds any submitted `{address,networkId}` to `req.auth.sub`, no ownership proof). So the
+  **device-owner wallet's JWT can enroll EVERY wallet's addresses** and bind them all to the one anchor
+  `sub` == the device's `sub`. No non-active-wallet JWT minting, no auth-layer change (the deferred
+  auth refactor is NOT needed).
+- **Change:** rework `SubscribeMonitoringUseCase` from "each wallet enrolls its own addresses under its own
+  sub" to "the **device-owner** wallet enrolls **all** wallets' `(address, networkId)` under the anchor sub."
+  **Modules:** data (+ app call site). **Files:** `SubscribeMonitoringUseCase`, `MonitoringRepositoryImpl`,
+  call site in `WalletSessionAuthCoordinator`. Test: update `SubscribeMonitoringUseCaseTest` (:data).
+- **Constraints (all three or it silently breaks):**
+  1. **One sub per address** — replace the per-wallet-own-sub enrollment, don't add on top; an address under
+     two subs → **multi-owner ambiguous → address-only fallback → no cross-wallet delivery**.
+  2. **`MOBILE_PROXY_REQUIRE_AUTH=true`** on the target env, else `req.auth` empty → `sub=""` → every address
+     bound to an empty owner. `true` in testnet template since `22fb530`; **mainnet default OFF** — confirm.
+  3. **Address gathering** — non-active wallets are metadata-only (`getAllWallets()` → `keys=emptyList()`);
+     collecting all addresses needs per-wallet key derivation, and enrollment must run while the
+     **device-owner** wallet is the active session (caller sub == anchor).
+- **Deps/gate:** needs a build + on-device verification + the env flag. **Priority:** P1 (gates multi-wallet
+  realtime/deposit coverage). See memory `monitoring-sub-routing-open-question` (resolved),
+  [[refresh-and-monitoring-policy]], [[server-integration-doc]]. Pairs with TASK-32/TASK-34.
+
 ---
 
 ## Sprint 6 — Optional / Hygiene
