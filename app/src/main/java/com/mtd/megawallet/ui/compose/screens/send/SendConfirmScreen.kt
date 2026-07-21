@@ -336,7 +336,7 @@ private fun InternalSendConfirmScreen(
             StaggeredSection(visible = headerVisible, delayMs = 0) {
                 UnifiedHeader(
                     onBack = { handleBack() },
-                    modifier = Modifier.alpha(contentAlpha)
+                    modifier = Modifier.graphicsLayer { alpha = contentAlpha }
                 )
             }
 
@@ -368,7 +368,7 @@ private fun InternalSendConfirmScreen(
                         )
                     }
 
-                    Column(modifier = Modifier.alpha(contentAlpha)) {
+                    Column(modifier = Modifier.graphicsLayer { alpha = contentAlpha }) {
                         Spacer(Modifier.height(16.dp))
                         Text(
                             text = "تأیید تراکنش به",
@@ -407,7 +407,7 @@ private fun InternalSendConfirmScreen(
                         isAmountTooSmall = isAmountTooSmall,
                         primaryColor = animatedPrimaryColor,
                         secondaryColor = animatedSecondaryColor,
-                        modifier = Modifier.fillMaxWidth().alpha(contentAlpha)
+                        modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = contentAlpha }
                     )
                 }
 
@@ -451,7 +451,7 @@ private fun InternalSendConfirmScreen(
 
                 // Fee Section
                 StaggeredSection(visible = feeVisible, delayMs = 0) {
-                    Column(modifier = Modifier.alpha(contentAlpha)) {
+                    Column(modifier = Modifier.graphicsLayer { alpha = contentAlpha }) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), thickness = 0.5.dp)
                         Spacer(Modifier.height(12.dp))
 
@@ -499,7 +499,7 @@ private fun InternalSendConfirmScreen(
 
             // Warning
             StaggeredSection(visible = buttonVisible, delayMs = 0) {
-                Box(modifier = Modifier.alpha(contentAlpha)) {
+                Box(modifier = Modifier.graphicsLayer { alpha = contentAlpha }) {
                     BottomSecuritySection(message = "قبل از تأیید، جزئیات را بررسی کنید. تراکنش‌ های بلاکچین برگشت ‌پذیر نیستند")
                 }
             }
