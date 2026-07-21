@@ -127,7 +127,6 @@ private fun InternalSendConfirmScreen(
     viewModel: SendViewModel
 ) {
     val isGaslessEligible = gaslessAvailability is GaslessAvailability.Available
-    var useGasless by remember { mutableStateOf(isGaslessEligible) }
     var selectedFeeIndex by remember { mutableIntStateOf(1) } // Default to Normal (index 1)
     val gaslessPreview = gaslessPreviewState as? GaslessPreviewState.Ready
     val gaslessPreviewReady = gaslessPreviewState is GaslessPreviewState.Ready
@@ -150,7 +149,11 @@ private fun InternalSendConfirmScreen(
     var buttonOffset by remember { mutableStateOf(Offset.Zero) }
     var screenCenter by remember { mutableStateOf(Offset.Zero) }
 
-    var selectedMode by remember { mutableStateOf(FeeMode.DIRECT) }
+    // selectedMode is the single source of truth for the fee path; useGasless is derived from it so
+    // the highlighted tab and the actual submit path can never diverge. Default to the gasless
+    // ("هوشمند") tab when the token is eligible, otherwise the direct on-chain fee.
+    var selectedMode by remember { mutableStateOf(if (isGaslessEligible) FeeMode.SMART else FeeMode.DIRECT) }
+    val useGasless = selectedMode == FeeMode.SMART
 
     val avatarAnimProgress by animateFloatAsState(
         targetValue = if (isProcessing) 1f else 0f,
@@ -191,9 +194,10 @@ private fun InternalSendConfirmScreen(
 
     LaunchedEffect(isGaslessEligible) {
         if (!isGaslessEligible) {
-            useGasless = false
+            // token stopped being gasless-eligible → fall back to the direct tab
+            if (selectedMode == FeeMode.SMART) selectedMode = FeeMode.DIRECT
         } else {
-            useGasless = true
+            selectedMode = FeeMode.SMART
             viewModel.refreshGaslessPreviewIfNeeded()
         }
     }
@@ -416,17 +420,27 @@ private fun InternalSendConfirmScreen(
                 // Tab Bar
                 FeeTabBar(
                     selectedMode = selectedMode,
-                    onModeChange = { selectedMode = it },
-                    tabStates =  mapOf(
+                    onModeChange = { mode ->
+                        selectedMode = mode
+                        if (mode == FeeMode.SMART) viewModel.refreshGaslessPreviewIfNeeded()
+                    },
+                    tabStates = mapOf(
                         FeeMode.DIRECT to TabState.READY,
-                        FeeMode.SMART to TabState.LOADING,
+                        FeeMode.SMART to when (gaslessAvailability) {
+                            is GaslessAvailability.Loading -> TabState.LOADING
+                            is GaslessAvailability.Available ->
+                                if (gaslessPreviewState is GaslessPreviewState.Loading) TabState.LOADING else TabState.READY
+                            is GaslessAvailability.Unavailable -> TabState.DISABLED
+                        },
+                        // اعتباری: هنوز فعال نشده (بخش اعتبار)
                         FeeMode.CREDIT to TabState.DISABLED
                     ),
                     getTabFee = { mode ->
                         when (mode) {
-                            FeeMode.DIRECT -> selectedFee?.feeAmountUsdDisplay ?: "..."
-                            FeeMode.SMART -> "ETH 1"
-                            FeeMode.CREDIT -> "ETH 1"
+                            // نمایشِ مستقلِ کارمزدِ مستقیم، حتی وقتی تبِ هوشمند فعال است
+                            FeeMode.DIRECT -> feeOptions.getOrNull(selectedFeeIndex)?.feeAmountUsdDisplay ?: "..."
+                            FeeMode.SMART -> gaslessPreview?.let { it.gaslessPolicy?.displayUsd ?: it.smartFee?.feeUsd } ?: "..."
+                            FeeMode.CREDIT -> "..."
                         }
                     }
                 )
@@ -479,8 +493,19 @@ private fun InternalSendConfirmScreen(
                                         secondaryColor = animatedSecondaryColor
                                     )
                                 }
-                                FeeMode.SMART ->{
-                                    SmartFeeSection(SmartFeeInfo("12","155","212144",""),true)
+                                FeeMode.SMART -> {
+                                    val policy = gaslessPreview?.gaslessPolicy
+                                    SmartFeeSection(
+                                        fee = SmartFeeInfo(
+                                            amount = listOfNotNull(policy?.displayAmount, policy?.displayToken)
+                                                .joinToString(" ")
+                                                .ifBlank { gaslessPreview?.smartFee?.feeUsd ?: "" },
+                                            amountUsd = policy?.displayUsd ?: gaslessPreview?.smartFee?.feeUsd ?: "",
+                                            amountIrr = policy?.displayIrr ?: "",
+                                            description = gaslessPreview?.smartFee?.reasonFa ?: policy?.reasonFa ?: ""
+                                        ),
+                                        isLoading = gaslessPreviewState !is GaslessPreviewState.Ready
+                                    )
                                 }
                                 FeeMode.CREDIT -> {
                                     CreditFeeSection(
