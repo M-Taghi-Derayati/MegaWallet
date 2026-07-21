@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -585,7 +586,7 @@ private fun VerticalFeeIndicator(selectedIndex: Int, totalOptions: Int, isLoadin
                         .background(color),
                     contentAlignment = Alignment.Center
                 ) {
-                    AnimatedVisibility(
+                    androidx.compose.animation.AnimatedVisibility(
                         visible = isSelected || isLoading,
                         enter = fadeIn(tween(300)),
                         exit = fadeOut(tween(300))
