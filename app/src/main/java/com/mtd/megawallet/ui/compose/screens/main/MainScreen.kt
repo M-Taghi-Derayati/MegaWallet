@@ -6,7 +6,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector4D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.TwoWayConverter
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -19,37 +18,17 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,31 +36,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mtd.common_ui.R
-import com.mtd.common_ui.theme.icons.AnimatedApertureIcon
-import com.mtd.common_ui.theme.icons.AnimatedClockIcon
-import com.mtd.common_ui.theme.icons.AnimatedWalletIcon
 import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.CloudWalletItem
 import com.mtd.domain.model.HomeUiState
@@ -103,9 +71,6 @@ import com.mtd.megawallet.viewmodel.news.HomeViewModel
 import com.mtd.megawallet.viewmodel.news.MainScreenViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.mtd.common_ui.theme.IranSansBoldBold
-import com.mtd.common_ui.theme.IranSansBoldMedium
-import com.mtd.common_ui.theme.IranSansLightLight
 
 
 /**
@@ -236,7 +201,7 @@ private fun MainDashboardContent(
     var showImportWalletScreen by rememberSaveable { mutableStateOf(false) }
     var pendingImportData by remember { mutableStateOf<ImportData?>(null) }
     var pendingCloudRestore by remember { mutableStateOf<CloudWalletItem?>(null) }
-    
+
     // فلگ برای تشخیص اینکه آیا از MultiWallet وارد فلوی ساخت/ایمپورت شده‌ایم
     var isFromMultiWallet by remember { mutableStateOf(false) }
     val selectedTab by mainViewModel.selectedTab.collectAsStateWithLifecycle()
@@ -601,7 +566,7 @@ private fun MainDashboardContent(
         ) {
            MultiWalletScreen(
                 onNavigateBack = { showMultiWalletScreen = false },
-                onAddNewWallet = { 
+                onAddNewWallet = {
                     // دیگر مولتی‌ولت را فورا نمی‌بندیم تا در پس‌زمینه بماند
                     isFromMultiWallet = true
                     showCreateWalletScreen = true
@@ -620,7 +585,7 @@ private fun MainDashboardContent(
             visible = showImportWalletScreen,
             enter = fadeIn(animationSpec =tween(300)) +
                     slideInVertically(
-                        initialOffsetY = { it }, 
+                        initialOffsetY = { it },
                         animationSpec =tween(500, easing = androidx.compose.animation.core.FastOutSlowInEasing)
                     ),
             exit = fadeOut(animationSpec = tween(300)) +
@@ -628,7 +593,7 @@ private fun MainDashboardContent(
             modifier = Modifier.zIndex(MainScreenConstants.ZLayer.ADD_EXISTING_WALLET)
         ) {
             AddExistingWalletScreen(
-                onBack = { 
+                onBack = {
                     showImportWalletScreen = false
                     isFromMultiWallet = false
                 },
@@ -665,7 +630,7 @@ private fun MainDashboardContent(
             CreateWalletScreen(
                 viewModel = createWalletViewModel,
                 importData = pendingImportData,
-                onBack = { 
+                onBack = {
                     if (pendingImportData != null) {
                         pendingImportData = null
                         showImportWalletScreen = true
@@ -751,426 +716,6 @@ fun MainScreenContent(
         }
     )
 }
-
-
-/**
- * Header صفحه اصلی - شبیه عکس اول
- * شامل: emoji در دایره صورتی، نام کیف، و سه آیکون در سمت راست
- */
-@Composable
-private fun MainHeader(
-    walletName: String,
-    walletColor: Color,
-    onWalletClick: () -> Unit,
-    onScanClick: () -> Unit,
-    onSearchClick: () -> Unit,
-    onMoreOptionsClick: () -> Unit,
-    onCurrencyToggle: () -> Unit,
-    connectionMode: BlockchainConnectionMode
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding(), // اضافه کردن padding برای statusbar
-        shadowElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.background)
-                .fillMaxWidth()
-                .padding(
-                    horizontal = MainScreenConstants.HEADER_PADDING_HORIZONTAL,
-                    vertical = MainScreenConstants.HEADER_PADDING_VERTICAL
-                ),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // سمت راست: دایره رنگی با emoji و نام کیف
-            Row(
-                modifier = Modifier.clickable { onWalletClick() },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MainScreenConstants.WALLET_NAME_SPACING)
-            ) {
-
-                Box(
-                    modifier = Modifier
-                        .size(MainScreenConstants.WALLET_AVATAR_SIZE)
-                        .clip(CircleShape)
-                        .background(walletColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_wallet),
-                        contentDescription = "Wallet",
-                        modifier = Modifier.size(MainScreenConstants.WALLET_ICON_SIZE)
-                    )
-                }
-
-                Text(
-                    text = walletName,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    fontFamily = IranSansBoldBold,
-                    fontSize = MainScreenConstants.WALLET_NAME_FONT_SIZE
-                )
-
-            }
-
-            // سمت چپ: سه آیکون (سه نقطه، سرچ، و یک آیکون دیگر)
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(MainScreenConstants.HEADER_SPACING),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                // آیکون سه نقطه
-                IconButton(
-                    onClick = onMoreOptionsClick,
-                    modifier = Modifier.size(MainScreenConstants.HEADER_ICON_SIZE)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More Options",
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
-                    )
-                }
-                // آیکون سرچ — تغییر حالت اتصال (PROXY سبز / DIRECT خاکستری)
-                val searchTint = when (connectionMode) {
-                    BlockchainConnectionMode.PROXY -> Color(0xFF2E7D32) // green = relayer/proxy active
-                    BlockchainConnectionMode.DIRECT -> MaterialTheme.colorScheme.tertiary
-                }
-                IconButton(
-                    onClick = onSearchClick,
-                    modifier = Modifier.size(MainScreenConstants.HEADER_ICON_SIZE)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_search),
-                        contentDescription = "Toggle connection mode (${connectionMode.name})",
-                        tint = searchTint,
-                        modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
-                    )
-                }
-                // آیکون تغییر واحد ارز (یا اسکن)
-                IconButton(
-                    onClick = onCurrencyToggle,
-                    modifier = Modifier.size(MainScreenConstants.HEADER_ICON_SIZE)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_scan),
-                        contentDescription = "Currency Toggle",
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
-                    )
-                }
-
-
-
-            }
-
-
-
-        }
-    }
-}
-
-
-/**
- * Navigation Bottom Sheet - طراحی شده دقیقاً بر اساس عکس ارسالی
- */
-@Composable
-fun MainBottomNavigation(
-    selectedTab: MainTab,
-    showHistoryPendingIndicator: Boolean = false,
-    onWalletClick: () -> Unit,
-    onHistoryClick: () -> Unit,
-    onExploreClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.background,
-        shadowElevation = 2.dp
-    ) {
-        Column(modifier = Modifier.padding(bottom = MainScreenConstants.BOTTOM_NAV_PADDING_BOTTOM)) {
-            // خط جداکننده بسیار ظریف در بالا
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(MainScreenConstants.BOTTOM_NAV_DIVIDER_HEIGHT)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant
-                    )
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        vertical = MainScreenConstants.BOTTOM_NAV_PADDING_VERTICAL,
-                        horizontal = MainScreenConstants.BOTTOM_NAV_PADDING_HORIZONTAL
-                    ),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                AnimatedApertureIcon(
-                    isFilled = selectedTab == MainTab.EXPLORE,
-                    iconSize = MainScreenConstants.BOTTOM_NAV_ICON_SIZE,
-                    onClick = onExploreClick
-                )
-                AnimatedWalletIcon(
-                    isFilled = selectedTab == MainTab.WALLET,
-                    iconSize = MainScreenConstants.BOTTOM_NAV_ICON_SIZE,
-                    onClick = onWalletClick
-                )
-
-
-
-                Box(
-                    modifier = Modifier
-                        .size(MainScreenConstants.BOTTOM_NAV_ITEM_SIZE)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onHistoryClick() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (showHistoryPendingIndicator) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(MainScreenConstants.BOTTOM_NAV_ICON_SIZE-3.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.secondary,
-                            trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = (-7).dp, y = 7.dp)
-                                .size(9.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.secondary)
-                        )
-                    }
-                    AnimatedClockIcon(
-                        isFilled = selectedTab == MainTab.HISTORY,
-                        iconSize = MainScreenConstants.BOTTOM_NAV_ICON_SIZE,
-                        onClick = onHistoryClick
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun MorphingFabMenu(
-    isExpanded: Boolean,
-    onToggle: () -> Unit,
-    onReceiveClick: () -> Unit = {},
-    onSendClick: () -> Unit = {},
-    onSwapClick: () -> Unit = {}
-) {
-    val isDark = isSystemInDarkTheme()
-
-    // استفاده از remember برای محاسبات configuration
-    val configuration = LocalConfiguration.current
-    val screenWidth = remember(configuration) {
-        configuration.screenWidthDp.dp
-    }
-    val targetExpandedWidth = remember(screenWidth) {
-        screenWidth - MainScreenConstants.FAB_EXPANDED_PADDING
-    }
-
-    // ۱. انیمیشن ابعاد و شکل
-    val width by animateDpAsState(
-        targetValue = if (isExpanded) targetExpandedWidth else MainScreenConstants.FAB_SIZE,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "Width"
-    )
-    val height by animateDpAsState(
-        targetValue = if (isExpanded) MainScreenConstants.FAB_EXPANDED_HEIGHT else MainScreenConstants.FAB_SIZE,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "Height"
-    )
-    val cornerRadius by animateDpAsState(
-        targetValue = if (isExpanded) MainScreenConstants.FAB_CORNER_RADIUS_EXPANDED else MainScreenConstants.FAB_CORNER_RADIUS_COLLAPSED,
-        label = "Corners"
-    )
-
-    // ۲. انیمیشن آلفا برای محتوا
-    val contentAlpha by animateFloatAsState(
-        targetValue = if (isExpanded) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = if (isExpanded) MainScreenConstants.FAB_ANIMATION_DURATION_EXPAND else MainScreenConstants.FAB_ANIMATION_DURATION_COLLAPSE
-        ),
-        label = "ContentAlpha"
-    )
-
-
-        Box(modifier = Modifier.fillMaxSize()) {
-            // لایه تعاملی شفاف برای بستن منو
-            if (isExpanded) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onToggle() }
-                )
-            }
-
-            // باکس اصلی (FAB که بزرگ می‌شود)
-            val fabBackgroundColor = remember(isExpanded, isDark) {
-                if (isExpanded) {
-                    MainScreenConstants.FAB_EXPANDED_BACKGROUND
-                } else {
-                    if (isDark) MainScreenConstants.FAB_COLLAPSED_DARK else Color.Black
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .padding(
-                        start = 30.dp,
-                    )
-                    .align(Alignment.BottomStart)
-                    .size(width, height)
-                    .clip(RoundedCornerShape(cornerRadius))
-                    .background(fabBackgroundColor)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { if (!isExpanded) onToggle() },
-                contentAlignment = if (isExpanded) Alignment.TopStart else Alignment.Center
-            ) {
-
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(MainScreenConstants.FAB_ADD_ICON_SIZE)
-                            .graphicsLayer { alpha = if (isExpanded) 0f else (1f - (contentAlpha)) },
-                        tint = Color.White
-                    )
-
-
-                // محتویات منو (فقط وقتی باز است)
-                if (isExpanded) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .align(Alignment.BottomEnd)
-                            .padding(MainScreenConstants.FAB_CONTENT_PADDING)
-                            .graphicsLayer { alpha = contentAlpha },
-                        verticalArrangement = Arrangement.spacedBy(MainScreenConstants.FAB_ITEM_SPACING,
-                            Alignment.CenterVertically)
-                    ) {
-                        FabMenuItem(
-                            painter = painterResource(id = R.drawable.ic_send),
-                            iconBgColor = MaterialTheme.colorScheme.secondary,
-                            title = "ارسال",
-                            description = "ارز های خود را به هر آدرسی ارسال کنید",
-                            onClick = onSendClick
-                        )
-                        FabMenuItem(
-                            painter = painterResource(id = R.drawable.ic_swap),
-                            iconBgColor = MainScreenConstants.FAB_SWAP_COLOR,
-                            title = "تبدیل",
-                            description = "ارز های خود را بدون نیاز به خروج از کیف پول، تبدیل کنید",
-                            onClick = { onToggle() }
-                        )
-                        FabMenuItem(
-                            painter = painterResource(id = R.drawable.ic_download),
-                            iconBgColor = MaterialTheme.colorScheme.primary,
-                            title = "دریافت",
-                            description = "دارایی های دیجیتال را از طریق آدرس منحصر به فرد خود دریافت کنید",
-                            onClick = onReceiveClick
-                        )
-                    }
-                }
-            }
-        }
-
-}
-
-@Composable
-fun FabMenuItem(
-    painter: Painter,
-    iconBgColor: Color,
-    title: String,
-    description: String,
-    onClick: () -> Unit
-) {
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(MainScreenConstants.FAB_MENU_ITEM_CORNER_RADIUS))
-            .background(MainScreenConstants.FAB_MENU_ITEM_BACKGROUND)
-            .clickable { onClick() }
-            .padding(MainScreenConstants.FAB_MENU_ITEM_PADDING),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(MainScreenConstants.FAB_MENU_ITEM_ICON_SIZE)
-                .clip(CircleShape)
-                .background(iconBgColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painter,
-                contentDescription = title,
-                modifier = Modifier.size(MainScreenConstants.FAB_MENU_ITEM_ICON_ICON_SIZE),
-                tint = Color.White
-            )
-        }
-
-        Spacer(modifier = Modifier.width(MainScreenConstants.FAB_MENU_ITEM_SPACING))
-
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.Start
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                fontFamily = IranSansBoldMedium,
-                color = Color.White,
-                fontSize = 16.sp
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray,
-                fontFamily = IranSansLightLight,
-                lineHeight = MainScreenConstants.FAB_MENU_ITEM_DESCRIPTION_LINE_HEIGHT,
-                fontSize = 13.sp
-            )
-        }
-    }
-}
-
-@Preview
-@Composable
-fun FabPreview(){
-    MaterialTheme(lightColorScheme()) {
-//        MorphingFabMenu(true, {})
-
-//        MainBottomNavigation(MainTab.WALLET,{},{},{})
-
-        MainHeader("تست",Color.Red,{},{},{},{},{}, BlockchainConnectionMode.DIRECT)
-    }
-}
-
 
 
 enum class MainTab {
