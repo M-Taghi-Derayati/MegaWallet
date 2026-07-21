@@ -1,17 +1,12 @@
 package com.mtd.megawallet.viewmodel.history
 
 import com.mtd.core.manager.ErrorManager
-import com.mtd.core.utils.AddressUtils
-import com.mtd.core.utils.BalanceFormatter
-import com.mtd.core.utils.DateTimeUtils.getDateHeader
 import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
-import com.mtd.domain.model.BitcoinTransaction
-import com.mtd.domain.model.EvmTransaction
 import com.mtd.domain.model.HISTORY_ALL_NETWORKS_OPTION_ID
 import com.mtd.domain.model.HistoryAddress
 import com.mtd.domain.model.HistoryNetworkOption
@@ -54,16 +49,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import java.math.BigDecimal
-import java.math.BigInteger
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
-
-private data class WalletAddressReference(
-    val name: String,
-    val color: Int
-)
 
 private const val HISTORY_CACHE_SCHEMA_VERSION = 3
 private const val HISTORY_NETWORK_STALE_MS = 10 * 60 * 1000L
@@ -74,6 +61,7 @@ private const val MAX_HISTORY_PAIRS = 25
 class TransactionHistoryViewModel @Inject constructor(
     private val networkCatalog: INetworkCatalog,
     private val assetCatalog: IAssetCatalog,
+    private val displayFormatter: TransactionDisplayFormatter,
     private val appEventBus: IAppEventBus,
     private val cacheStore: IAppCacheStore,
     private val getTransactionHistoryUseCase: GetTransactionHistoryUseCase,
@@ -788,230 +776,85 @@ class TransactionHistoryViewModel @Inject constructor(
         }
     }
 
-    fun getDateHeaders(timestampSeconds: Long): String {
-        return getDateHeader(timestampSeconds)
-    }
+    fun getDateHeaders(timestampSeconds: Long): String =
+        displayFormatter.dateHeader(timestampSeconds)
 
-    fun getHistoryDateHeader(transaction: TransactionRecord): String {
-        return if (transaction.status == TransactionStatus.PENDING) {
-            "در انتظار"
-        } else {
-            getDateHeader(transaction.timestamp)
-        }
-    }
+    fun getHistoryDateHeader(transaction: TransactionRecord): String =
+        displayFormatter.historyDateHeader(transaction)
 
-    fun formatTransactionTime(timestampSeconds: Long): String {
-        if (timestampSeconds <= 0L) return "--:--"
-        return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestampSeconds * 1000))
-    }
+    fun formatTransactionTime(timestampSeconds: Long): String =
+        displayFormatter.transactionTime(timestampSeconds)
 
-    fun formatTimelineSubmitted(transaction: TransactionRecord): String {
-        val value = transaction.submittedAt ?: transaction.timestamp
-        if (value <= 0L) return "نامشخص"
-        return "${getDateHeader(value)}, ${formatTransactionTime(value)}"
-    }
+    fun formatTimelineSubmitted(transaction: TransactionRecord): String =
+        displayFormatter.timelineSubmitted(transaction)
 
-    fun formatTimelineCompleted(transaction: TransactionRecord): String? {
-        if (transaction.status != TransactionStatus.CONFIRMED || transaction.timestamp <= 0L) return null
-        return "${getDateHeader(transaction.timestamp)}, ${formatTransactionTime(transaction.timestamp)}"
-    }
+    fun formatTimelineCompleted(transaction: TransactionRecord): String? =
+        displayFormatter.timelineCompleted(transaction)
 
-    fun formatPendingDuration(transaction: TransactionRecord): String {
-        val seconds = transaction.pendingDurationSeconds
-        if (seconds == null || seconds <= 0L) {
-            return if (transaction.status == TransactionStatus.PENDING) "در حال انجام ..." else "-"
-        }
+    fun formatPendingDuration(transaction: TransactionRecord): String =
+        displayFormatter.pendingDuration(transaction)
 
-        val minutes = seconds / 60
-        val hours = minutes / 60
-        return when {
-            hours > 0 -> "${hours}h"
-            minutes > 0 -> "${minutes}m"
-            else -> "${seconds}s"
-        }
-    }
+    fun formatTransactionAmount(transaction: TransactionRecord): String =
+        displayFormatter.transactionAmount(transaction)
 
-    fun formatTransactionAmount(transaction: TransactionRecord): String {
-        val amountDecimal = rawAmountToDecimal(transaction)
-        val symbol = transactionSymbol(transaction)
-        val formatted = BalanceFormatter.formatBalance(
-            balance = amountDecimal,
-            decimals = transactionDecimals(transaction),
-            usePersianSeparator = true
-        )
-        val signed = if (transaction.isOutgoing) formatted else formatted
-        return if (symbol.isBlank()) signed else "$signed $symbol"
-    }
+    fun formatListAmount(transaction: TransactionRecord): String =
+        displayFormatter.listAmount(transaction)
 
-    fun formatListAmount(transaction: TransactionRecord): String {
-        val amountDecimal = rawAmountToDecimal(transaction)
-        val symbol = transactionSymbol(transaction)
-        val formatted = BalanceFormatter.formatBalance(
-            balance = amountDecimal,
-            decimals = transactionDecimals(transaction),
-            usePersianSeparator = true
-        )
-        val display = if (transaction.isOutgoing) formatted else "+$formatted"
-        return if (symbol.isBlank()) display else "$display $symbol"
-    }
+    fun formatTransactionFiat(transaction: TransactionRecord): String? =
+        displayFormatter.transactionFiat(transaction)
 
-    fun formatTransactionFiat(transaction: TransactionRecord): String? {
-        val value = transaction.fiatValue ?: return null
-        return BalanceFormatter.formatUsdValue(BigDecimal.valueOf(value), false)
-    }
+    fun formatTransactionFiatDetail(transaction: TransactionRecord): String? =
+        displayFormatter.transactionFiatDetail(transaction, assetUsdPrices)
 
-    fun formatTransactionFiatDetail(transaction: TransactionRecord): String? {
-        val amount = transactionFiatValue(transaction) ?: return null
-        val formatted = BalanceFormatter.formatUsdValue(amount, false)
-        return formatted
-    }
-
-    private fun transactionFiatValue(transaction: TransactionRecord): BigDecimal? {
-        transaction.fiatValue?.let { return BigDecimal.valueOf(it).abs() }
-        val symbol = transactionSymbol(transaction).uppercase(Locale.US)
-        val price = assetUsdPrices[symbol]?.takeIf { it > BigDecimal.ZERO } ?: return null
-        return rawAmountToDecimal(transaction).abs().multiply(price)
-    }
-
-    fun formatTransactionFee(transaction: TransactionRecord): String {
-        val feeValue = transactionDetailFor(transaction)?.fee ?: transaction.fee
-        val symbol = transactionSymbol(transaction, forFee = true)
-
-        return when {
-            // TASK-16 — an unknown fee (not yet fetched, or not provided by the source) must NOT read as
-            // "0": that conflated "we don't know" with a genuine zero-fee tx. Show a neutral placeholder.
-            feeValue == null -> FEE_UNKNOWN_PLACEHOLDER
-            feeValue == BigInteger.ZERO -> "0 $symbol".trim()
-            else -> {
-                val feeDecimal = rawFeeToDecimal(transaction, feeValue)
-                val formatted = BalanceFormatter.formatBalance(
-                    balance = feeDecimal,
-                    decimals = networkDecimals(transaction),
-                    usePersianSeparator = true
-                )
-                "$formatted $symbol".trim()
-            }
-        }
-    }
+    fun formatTransactionFee(transaction: TransactionRecord): String =
+        displayFormatter.transactionFee(transaction, transactionDetailFor(transaction))
 
     fun isTransactionFeeDetailsLoading(transaction: TransactionRecord): Boolean {
         val key = transactionDetailKey(transaction) ?: return false
         return _transactionFeeDetailsLoading.value.contains(key)
     }
 
-    fun formatTronEnergyUsed(transaction: TransactionRecord): String? {
-        val tron = transaction as? TronTransaction ?: return null
-        val value = transactionDetailFor(tron)?.energyUsed ?: tron.energyUsed
-        return value?.toString()
-    }
+    fun formatTronEnergyUsed(transaction: TransactionRecord): String? =
+        displayFormatter.tronEnergyUsed(transaction, transactionDetailFor(transaction))
 
-    fun formatTronBandwidthUsed(transaction: TransactionRecord): String? {
-        val tron = transaction as? TronTransaction ?: return null
-        val value = transactionDetailFor(tron)?.bandwidthUsed ?: tron.bandwidthUsed
-        return value?.toString()
-    }
+    fun formatTronBandwidthUsed(transaction: TransactionRecord): String? =
+        displayFormatter.tronBandwidthUsed(transaction, transactionDetailFor(transaction))
 
-    fun formatTronEnergyFee(transaction: TransactionRecord): String? {
-        val fee = transactionDetailFor(transaction)?.energyFee ?: return null
-        return formatNativeFeeAmount(transaction, fee)
-    }
+    fun formatTronEnergyFee(transaction: TransactionRecord): String? =
+        displayFormatter.tronEnergyFee(transaction, transactionDetailFor(transaction))
 
-    fun formatTronNetworkFee(transaction: TransactionRecord): String? {
-        val fee = transactionDetailFor(transaction)?.networkFee ?: return null
-        return formatNativeFeeAmount(transaction, fee)
-    }
+    fun formatTronNetworkFee(transaction: TransactionRecord): String? =
+        displayFormatter.tronNetworkFee(transaction, transactionDetailFor(transaction))
 
-    fun getTransactionTypeLabel(transaction: TransactionRecord): String {
-        return if (transaction.isOutgoing) "Withdraw" else "Deposit"
-    }
+    fun getTransactionTypeLabel(transaction: TransactionRecord): String =
+        displayFormatter.transactionTypeLabel(transaction)
 
-    fun getTransactionStatusLabel(status: TransactionStatus): String {
-        return when (status) {
-            TransactionStatus.PENDING -> "Pending"
-            TransactionStatus.CONFIRMED -> "Confirmed"
-            TransactionStatus.FAILED -> "Failed"
-        }
-    }
+    fun getTransactionStatusLabel(status: TransactionStatus): String =
+        displayFormatter.statusLabel(status)
 
-    fun getNetworkDisplayName(transaction: TransactionRecord): String {
-        return networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "Network")
-            ?.faName
-            ?.takeIf { it.isNotBlank() }
-            ?: transaction.networkName?.name
-            ?: "Network"
-    }
+    fun getNetworkDisplayName(transaction: TransactionRecord): String =
+        displayFormatter.networkDisplayName(transaction)
 
-    fun getHistoryPrimaryLabel(transaction: TransactionRecord): String {
-        return when {
-            transaction.status == TransactionStatus.PENDING && transaction.isOutgoing ->     "در حال ارسال به"
-            transaction.status == TransactionStatus.PENDING ->  "در حال دریافت از"
-            transaction.isOutgoing ->  "ارسال به"
-            else ->  "دریافت از"
-        }
-    }
+    fun getHistoryPrimaryLabel(transaction: TransactionRecord): String =
+        displayFormatter.historyPrimaryLabel(transaction)
 
-    fun getHistoryCounterpartyLabel(transaction: TransactionRecord): String {
-        val address = getCounterpartyAddress(transaction) ?: return getNetworkDisplayName(transaction)
-        return walletAddressBook[address.lowercase(Locale.US)]?.name ?: shortenAddress(address)
-    }
+    fun getHistoryCounterpartyLabel(transaction: TransactionRecord): String =
+        displayFormatter.historyCounterpartyLabel(transaction, walletAddressBook)
 
-    fun isCounterpartyInternal(transaction: TransactionRecord): Boolean {
-        val address = getCounterpartyAddress(transaction) ?: return false
-        return walletAddressBook.containsKey(address.lowercase(Locale.US))
-    }
+    fun isCounterpartyInternal(transaction: TransactionRecord): Boolean =
+        displayFormatter.isCounterpartyInternal(transaction, walletAddressBook)
 
-    fun getCounterpartyAccentColor(transaction: TransactionRecord): Int? {
-        val address = getCounterpartyAddress(transaction) ?: return null
-        return walletAddressBook[address.lowercase(Locale.US)]?.color
-    }
+    fun getCounterpartyAccentColor(transaction: TransactionRecord): Int? =
+        displayFormatter.counterpartyAccentColor(transaction, walletAddressBook)
 
-    fun getHistoryAssetTitle(transaction: TransactionRecord): String {
-        val network = networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "Asset")
-        val networkId = network?.id.orEmpty()
-        val symbol = transactionSymbol(transaction)
-        
-        val contractAddr = when (transaction) {
-            is EvmTransaction -> transaction.contractAddress ?: transaction.tokenTransferDetails?.contractAddress
-            is TronTransaction -> transaction.contractAddress ?: transaction.tokenTransferDetails?.contractAddress
-            else -> null
-        }
-        
-        return resolveAssetName(networkId, contractAddr, symbol)
-    }
+    fun getHistoryAssetTitle(transaction: TransactionRecord): String =
+        displayFormatter.historyAssetTitle(transaction)
 
-    fun getHistoryAssetIconUrl(transaction: TransactionRecord): String? {
-        val network = networkCatalog.getNetworkInfoByName(transaction.networkName ?: return null)
-        val networkId = network?.id.orEmpty()
-        val symbol = transactionSymbol(transaction)
+    fun getHistoryAssetIconUrl(transaction: TransactionRecord): String? =
+        displayFormatter.historyAssetIconUrl(transaction)
 
-        val contractAddr = when (transaction) {
-            is EvmTransaction -> transaction.contractAddress ?: transaction.tokenTransferDetails?.contractAddress
-            is TronTransaction -> transaction.contractAddress ?: transaction.tokenTransferDetails?.contractAddress
-            else -> null
-        }
-
-        return resolveAssetConfig(networkId, contractAddr, symbol)?.symbol
-    }
-
-    fun buildExplorerUrl(transaction: TransactionRecord): String? {
-        val network = networkCatalog.getNetworkInfoByName(transaction.networkName ?: return null) ?: return null
-        val base = network.explorers.firstOrNull()?.trimEnd('/') ?: return null
-        return when {
-            "blockscout" in base.lowercase() -> "$base/tx/${transaction.hash}"
-            "tronscan" in base.lowercase() -> "$base/#/transaction/${transaction.hash}"
-            "mempool.space" in base.lowercase() -> base.removeSuffix("/api") + "/tx/${transaction.hash}"
-            "blockchair.com" in base.lowercase() -> "$base/transaction/${transaction.hash}"
-            "xrpscan" in base.lowercase() -> "$base/tx/${transaction.hash}"
-            "solscan" in base.lowercase() -> "$base/tx/${transaction.hash}"
-            "tonscan" in base.lowercase() -> "$base/tx/${transaction.hash}"
-            "basescan" in base.lowercase() || "etherscan" in base.lowercase() -> "$base/tx/${transaction.hash}"
-            else -> null
-        }
-    }
-
-    private fun rawAmountToDecimal(transaction: TransactionRecord): BigDecimal {
-        return BigDecimal(transaction.amount).movePointLeft(transactionDecimals(transaction))
-    }
+    fun buildExplorerUrl(transaction: TransactionRecord): String? =
+        displayFormatter.buildExplorerUrl(transaction)
 
     private fun transactionDetailFor(transaction: TransactionRecord): TransactionFeeDetails? {
         val key = transactionDetailKey(transaction) ?: return null
@@ -1060,87 +903,6 @@ class TransactionHistoryViewModel @Inject constructor(
     }
 
 
-    private fun rawFeeToDecimal(transaction: TransactionRecord, fee: BigInteger): BigDecimal {
-        return BigDecimal(fee).movePointLeft(networkDecimals(transaction))
-    }
-
-    private fun formatNativeFeeAmount(transaction: TransactionRecord, fee: BigInteger): String {
-        val formatted = BalanceFormatter.formatBalance(
-            balance = rawFeeToDecimal(transaction, fee),
-            decimals = networkDecimals(transaction),
-            usePersianSeparator = true
-        )
-        val symbol = transactionSymbol(transaction, forFee = true)
-        return "$formatted $symbol".trim()
-    }
-
-    private fun transactionDecimals(transaction: TransactionRecord): Int {
-        return when (transaction) {
-            is EvmTransaction -> transaction.tokenTransferDetails?.tokenDecimals ?: networkDecimals(transaction)
-            is TronTransaction -> transaction.tokenTransferDetails?.tokenDecimals ?: networkDecimals(transaction)
-            is BitcoinTransaction -> networkDecimals(transaction)
-        }
-    }
-
-    private fun transactionSymbol(transaction: TransactionRecord, forFee: Boolean = false): String {
-        return when (transaction) {
-            is EvmTransaction -> {
-                if (!forFee && transaction.tokenTransferDetails != null) {
-                    transaction.tokenTransferDetails!!.tokenSymbol
-                } else {
-                    networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "")?.currencySymbol.orEmpty()
-                }
-            }
-            is TronTransaction -> {
-                if (!forFee && transaction.tokenTransferDetails != null) {
-                    transaction.tokenTransferDetails!!.tokenSymbol
-                } else {
-                    networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "")?.currencySymbol.orEmpty()
-                }
-            }
-            is BitcoinTransaction -> {
-                networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "")?.currencySymbol.orEmpty()
-            }
-        }
-    }
-
-    private fun networkDecimals(transaction: TransactionRecord): Int {
-        return networkCatalog.getNetworkInfoByName(transaction.networkName ?: return 0)?.decimals ?: 0
-    }
-     fun networkId(transaction: TransactionRecord): String {
-        return networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "")?.id ?: ""
-    }
-
-    private fun getCounterpartyAddress(transaction: TransactionRecord): String? {
-        return if (transaction.isOutgoing) transaction.toAddress else transaction.fromAddress
-    }
-
-    private fun shortenAddress(address: String): String {
-        return AddressUtils.shortenAddress(address)
-    }
-
-    private fun resolveAssetName(networkId: String, contractAddress: String?, fallbackSymbol: String): String {
-        return resolveAssetConfig(networkId, contractAddress, fallbackSymbol)?.faName
-            ?.takeIf { it.isNotBlank() }
-            ?: resolveAssetConfig(networkId, contractAddress, fallbackSymbol)?.name
-            ?: fallbackSymbol
-    }
-
-    private fun resolveAssetIconUrl(networkId: String, contractAddress: String?, fallbackSymbol: String): String? {
-        return resolveAssetConfig(networkId, contractAddress, fallbackSymbol)?.symbol
-    }
-
-    private fun resolveAssetConfig(networkId: String, contractAddress: String?, fallbackSymbol: String) =
-        assetCatalog.getAssetConfigsForNetwork(networkId).find { asset ->
-            when {
-                !contractAddress.isNullOrBlank() -> asset.contractAddress.equals(contractAddress, ignoreCase = true)
-                else -> asset.contractAddress == null && asset.symbol.equals(fallbackSymbol, ignoreCase = true)
-            }
-        }
-
-    private companion object {
-        // Neutral "no data" glyph shown when a transaction's fee is unknown (not yet fetched / not
-        // reported), so it can't be mistaken for a genuine zero-fee transaction.
-        const val FEE_UNKNOWN_PLACEHOLDER = "—"
-    }
+    fun networkId(transaction: TransactionRecord): String =
+        displayFormatter.networkId(transaction)
 }
