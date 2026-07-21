@@ -126,7 +126,15 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
 - **Acceptance:** `:domain` has zero android imports; builds; unit-testable on JVM. **Rollback:** revert
   gradle. **Regression:** DI graph breaks (compile-time caught). **Testing:** full build + existing tests.
 
-### TASK-13 — Decompose top god files (incremental)
+### TASK-13 — Decompose top god files (incremental) — ✅ Implemented (top-3 screens; VMs deferred)
+- **Status:** ✅ Implemented for the three god *screens* (reviewed 2026-07-21):
+  `SendConfirmScreen` (commit 8c5b433) and `SendScreen` (7e3012d) split into focused components;
+  `MainScreen` 1178→723 (c08216c) by extracting `MainHeader`/`MainBottomNavigation`/`MorphingFabMenu`
+  into their own files (verbatim, stateless, immutable params, light/dark `@Preview` added, no dup
+  defs, same-package call sites resolve); a compile-correctness follow-up qualified `AnimatedVisibility`
+  in the send split (5109872). `MainDashboardContent` intentionally left intact (owns the morphing-bounds
+  animation + ~15 interdependent overlay-nav state vars — splitting risks recomposition/behavior). The
+  **>1000-line ViewModels** are the remaining deferred slice. Not built here — inspection-verified.
 - **Problem:** `SendConfirmScreen` 1977, `MainScreen` 1152, `SendScreen` 1472, VMs >1000. **TD:** 01,
   CU-2. **Files:** those. **Modules:** app. **Deps:** TASK-08/09 ease this.
 - **Difficulty:** High · **Est:** 5 (spread) · **Risk:** Med · **Priority:** P2.
@@ -134,7 +142,22 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
 - **Acceptance:** no UI/VM file > ~400 LOC for the top 3. **Rollback:** per-file revert. **Regression:**
   UI behavior/recomposition. **Testing:** screenshot + manual flow per screen.
 
-### TASK-14 — Move formatting/business logic into use cases
+### TASK-14 — Move formatting/business logic into use cases — 🟢 Core done (call-site cleanup deferred)
+- **Status:** 🟢 Architectural core implemented (commit 1ede891): extracted the ~25 pure display-formatting
+  methods out of the 1140-line `TransactionHistoryViewModel` into a new injected, stateless
+  `TransactionDisplayFormatter` (app/viewmodel/history). The VM keeps only state + orchestration and
+  delegates each `format*`/`get*` call, so the public API — and every composable call site — is unchanged
+  (behavior-preserving; zero UI risk). The formatter is a pure function of its inputs + the injected
+  read-only catalogs; VM-owned runtime context (on-demand fee detail, USD prices, address book) is passed
+  in explicitly, so it's unit-testable and callers can `remember(...)` off the relevant keys. New
+  `TransactionDisplayFormatterTest` (JVM/MockK) covers the fee placeholder-vs-genuine-zero split, +sign on
+  incoming, status/type/primary labels, address-book counterparty resolution, pending-duration bucketing,
+  explorer URL, asset-title symbol fallback, tron-energy fallback. Dropped the dead `resolveAssetIconUrl`.
+  Not built here (Gradle unavailable) — inspection-verified.
+- **Deferred:** the literal acceptance ("no `viewModel.format*/get*` in composition bodies") — i.e. have
+  composables read a precomputed immutable display model instead of the VM delegators. Low value / higher
+  churn, and the perf concern (CU-4) is already handled by `remember()` on the list rows + the single-tx
+  detail sheet; best done with a build. Send-stack + other-VM formatting also remain for a later pass.
 - **Problem:** formatting/tier-mapping/normalization in VMs/composables (31 in-composition calls). **TD:**
   04, CU-4. **Files:** `TransactionHistoryViewModel`, send stack, `domain/usecase/**`. **Deps:** TASK-12.
 - **Difficulty:** Med–High · **Est:** 3 · **Risk:** Med · **Priority:** P2.
@@ -206,7 +229,19 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
 - **Acceptance:** each defect has a failing→passing test. **Rollback:** per fix. **Regression:** price/fee/
   chart display. **Testing:** unit tests + manual send on TRON PROXY + Base fee check.
 
-### TASK-17 — Accessibility, dark-mode colors, RTL, previews
+### TASK-17 — Accessibility, dark-mode colors, RTL, previews — 🟡 a11y interactive-labels done; rest deferred
+- **Status:** 🟡 Partially implemented (commit bb3769e — the safe, semantics-only slice): labeled the
+  **icon-only interactive controls** that carried `contentDescription = null` (MultiWalletScreen add /
+  settings / new-wallet-sheet close, WalletCard "more options", AppUnlockScreen keypad backspace,
+  SecretRevealOverlay + ChooseBalanceBottomSheet close). Audited all 70 `contentDescription = null` sites:
+  the majority are **decorative** (asset/network badges, status glyphs, icons beside their own visible
+  text) where `null` is the correct TalkBack behavior and were intentionally left as-is — labeling them
+  would announce redundant content. Zero visual change. (One eligible control in `AnimatedBottomSheetCard`
+  was skipped because that file holds uncommitted font WIP — do it when that lands.)
+- **Deferred (need on-device screenshot / a11y-scanner / tablet verification, unavailable here):** the
+  135 hardcoded `Color(...)` → `colorScheme` migration (changes dark-mode rendering), the RTL policy pass,
+  large-font (scale 2.0) + tablet/foldable checks, and broad `@Preview` coverage (TASK-13 already added
+  previews for the extracted MainScreen leaves).
 - **Problem:** 70 `contentDescription=null`; 135 hardcoded colors; inconsistent RTL; ~8% previews. **TD:**
   CU-5, CU-6, CU-8, CU-11, TD-45 (large font/tablet). **Files:** `ui/**`, `common_ui/theme`. **Deps:** TASK-08/13.
 - **Difficulty:** Med · **Est:** 3 · **Risk:** Low · **Priority:** P2.
