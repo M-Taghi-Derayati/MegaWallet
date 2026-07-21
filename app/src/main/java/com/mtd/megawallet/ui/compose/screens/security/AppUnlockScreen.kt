@@ -246,7 +246,7 @@ fun PasscodeKeypadSheet(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Backspace,
-                                contentDescription = null,
+                                contentDescription = "حذف رقم",
                                 tint = if (!disabled && digits.isNotEmpty()) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)
                             )
                         }

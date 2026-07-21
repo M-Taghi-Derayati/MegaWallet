@@ -139,7 +139,7 @@ fun ChooseBalanceBottomSheet(
                     ) {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = null,
+                            contentDescription = "بستن",
                             tint = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(18.dp)
                         )

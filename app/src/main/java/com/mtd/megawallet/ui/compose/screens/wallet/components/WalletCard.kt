@@ -530,7 +530,7 @@ private fun WalletCardContent(
                         IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
                             Icon(
                                 Icons.Default.MoreHoriz,
-                                contentDescription = null,
+                                contentDescription = "گزینه‌های بیشتر",
                                 tint = Color.White.copy(alpha = 0.9f),
                                 modifier = Modifier.size(26.dp)
                             )

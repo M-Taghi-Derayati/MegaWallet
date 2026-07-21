@@ -683,7 +683,7 @@ private fun MultiWalletHeader(
             IconButton(onClick = onAddClick, modifier = Modifier.size(40.dp)) {
                 Icon(
                     Icons.Default.Add,
-                    contentDescription = null,
+                    contentDescription = "افزودن کیف پول",
                     tint = contentColor,
                     modifier = Modifier.size(25.dp)
                 )
@@ -697,7 +697,7 @@ private fun MultiWalletHeader(
             IconButton(onClick = onBackClick, modifier = Modifier.size(40.dp)) {
                 Icon(
                     Icons.Default.Settings,
-                    contentDescription = null,
+                    contentDescription = "تنظیمات",
                     tint = contentColor,
                     modifier = Modifier.size(25.dp)
                 )
@@ -803,7 +803,7 @@ private fun AddWalletBottomSheet(
                     ) {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = null,
+                            contentDescription = "بستن",
                             tint = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(18.dp)
                         )
