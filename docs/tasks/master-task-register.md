@@ -793,6 +793,30 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   realtime/deposit coverage). See memory `monitoring-sub-routing-open-question` (resolved),
   [[refresh-and-monitoring-policy]], [[server-integration-doc]]. Pairs with TASK-32/TASK-34.
 
+### TASK-49 — Defer animation reads to the draw phase (recomposition reduction) — 🟢 In progress
+- **Problem (user, 2026-07-21):** several continuously-running animations read their animated state
+  (`rememberInfiniteTransition().animateFloat` / `animateFloatAsState`) **inside the composable body**,
+  so the surrounding subtree recomposes on **every animation frame**. The Compose audit (Phase 2)
+  quantified the allocation/recomposition debt but never did the Phase-3 animation pass.
+- **Fix pattern (behavior-identical, low-risk):** move the per-frame state read out of composition into
+  the **draw phase** via a lambda modifier (`Modifier.graphicsLayer { … }`, `drawBehind { … }`), so the
+  node **redraws** per frame but never **recomposes**.
+- **Done:**
+  - ✅ **Shimmers** (commit becaa93) — `ShimmerWalletScreen` + `TransactionHistoryShimmer` built the
+    gradient `Brush` from `translateAnim.value` in composition (`remember(translateAnim.value){…}`),
+    recomposing the whole placeholder tree (every block + the history `LazyColumn`) each frame while
+    loading. New `Modifier.shimmerBackground(() -> Brush)` paints via `drawBehind`; each shimmer keeps
+    its gradient geometry in the lambda so the animated read is now draw-phase only.
+  - ✅ **ConfirmSliderButton** (commit 4b5633e) — the idle slider's 3 pulsing chevrons built a tinted
+    `Color` from `chevronAlpha` in composition, and applied `.alpha(textAlpha)` / `.scale(checkScale)`
+    (all animated). Moved to `graphicsLayer { alpha/scaleX/scaleY = … }`.
+- **Not built here** (Gradle unavailable) — inspection-verified; visuals identical.
+- **Candidates left (assess later):** `GeneratingAnimation` (onboarding, one-shot — low priority),
+  `FloatingShapesBackground` / `SendConfirmFeeSections` (appear to already draw via `Canvas`/drawscope —
+  verify), and `MutableInteractionSource()` without `remember` in `AnimatedBottomSheetCard` (CU-10) —
+  **blocked**: that file holds uncommitted font WIP; do it when that lands.
+- **Priority:** P2 · **Risk:** Low · **Modules:** app.
+
 ---
 
 ## Sprint 6 — Optional / Hygiene
