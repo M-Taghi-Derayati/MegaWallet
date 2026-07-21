@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +31,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.tooling.preview.Preview
 import com.mtd.megawallet.ui.compose.animations.constants.ShimmerConstants
+import com.mtd.megawallet.ui.compose.animations.shimmerBackground
 
 @Composable
 fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_COUNT) {
@@ -64,7 +64,9 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
         label = "ShimmerTranslate"
     )
 
-    val brush = remember(translateAnim.value) {
+    // خواندن مقدارِ انیمیشن داخل این lambda انجام می‌شود که در فاز draw (توسط shimmerBackground)
+    // صدا زده می‌شود؛ در نتیجه placeholder هر فریم فقط redraw می‌شود، نه recomposition کاملِ درخت.
+    val brushProvider: () -> Brush = {
         Brush.linearGradient(
             colors = shimmerColors,
             // حرکت دادن گرادیان با اندازه ثابت به جای کشیدن آن
@@ -89,7 +91,7 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
                     .width(ShimmerConstants.TOTAL_BALANCE_WIDTH)
                     .height(ShimmerConstants.TOTAL_BALANCE_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.TOTAL_BALANCE_CORNER_RADIUS))
-                    .background(brush)
+                    .shimmerBackground(brushProvider)
             )
             Spacer(modifier = Modifier.height(ShimmerConstants.TOTAL_BALANCE_SUBTITLE_SPACING))
             Box(
@@ -97,7 +99,7 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
                     .width(ShimmerConstants.TOTAL_BALANCE_SUBTITLE_WIDTH)
                     .height(ShimmerConstants.TOTAL_BALANCE_SUBTITLE_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.TOTAL_BALANCE_SUBTITLE_CORNER_RADIUS))
-                    .background(brush)
+                    .shimmerBackground(brushProvider)
             )
         }
 
@@ -113,7 +115,7 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
                     .width(ShimmerConstants.TAB_WIDTH_2)
                     .height(ShimmerConstants.TAB_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.TAB_CORNER_RADIUS))
-                    .background(brush)
+                    .shimmerBackground(brushProvider)
             )
             Spacer(modifier = Modifier.width(ShimmerConstants.TAB_SPACING))
             Box(
@@ -121,7 +123,7 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
                     .width(ShimmerConstants.TAB_WIDTH_1)
                     .height(ShimmerConstants.TAB_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.TAB_CORNER_RADIUS))
-                    .background(brush)
+                    .shimmerBackground(brushProvider)
             )
         }
 
@@ -137,14 +139,14 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
         // 3. Shimmer for Asset List Items
         Column(modifier = Modifier.padding(horizontal = ShimmerConstants.ASSET_LIST_PADDING_HORIZONTAL)) {
             repeat(shimmerItemCount) {
-                ShimmerAssetItem(brush)
+                ShimmerAssetItem(brushProvider)
             }
         }
     }
 }
 
 @Composable
-private fun ShimmerAssetItem(brush: Brush) {
+private fun ShimmerAssetItem(brushProvider: () -> Brush) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -158,7 +160,7 @@ private fun ShimmerAssetItem(brush: Brush) {
                     .width(ShimmerConstants.ASSET_PRICE_WIDTH)
                     .height(ShimmerConstants.ASSET_PRICE_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.ASSET_NAME_CORNER_RADIUS))
-                    .background(brush)
+                    .shimmerBackground(brushProvider)
             )
             Spacer(modifier = Modifier.height(ShimmerConstants.ASSET_NAME_SPACING))
             Box(
@@ -166,7 +168,7 @@ private fun ShimmerAssetItem(brush: Brush) {
                     .width(ShimmerConstants.ASSET_PERCENTAGE_WIDTH)
                     .height(ShimmerConstants.ASSET_PERCENTAGE_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.ASSET_NAME_CORNER_RADIUS))
-                    .background(brush)
+                    .shimmerBackground(brushProvider)
             )
         }
 
@@ -177,7 +179,7 @@ private fun ShimmerAssetItem(brush: Brush) {
                     .width(ShimmerConstants.ASSET_NAME_WIDTH)
                     .height(ShimmerConstants.ASSET_NAME_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.ASSET_NAME_CORNER_RADIUS))
-                    .background(brush)
+                    .shimmerBackground(brushProvider)
             )
             Spacer(modifier = Modifier.height(ShimmerConstants.ASSET_NAME_SPACING))
             Box(
@@ -185,7 +187,7 @@ private fun ShimmerAssetItem(brush: Brush) {
                     .width(ShimmerConstants.ASSET_SYMBOL_WIDTH)
                     .height(ShimmerConstants.ASSET_SYMBOL_HEIGHT)
                     .clip(RoundedCornerShape(ShimmerConstants.ASSET_NAME_CORNER_RADIUS))
-                    .background(brush)
+                    .shimmerBackground(brushProvider)
             )
         }
 
@@ -196,7 +198,7 @@ private fun ShimmerAssetItem(brush: Brush) {
             modifier = Modifier
                 .size(ShimmerConstants.ASSET_ICON_SIZE)
                 .clip(CircleShape)
-                .background(brush)
+                .shimmerBackground(brushProvider)
         )
     }
 }

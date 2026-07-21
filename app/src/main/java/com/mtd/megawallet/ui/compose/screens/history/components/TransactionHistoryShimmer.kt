@@ -34,13 +34,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.mtd.megawallet.ui.compose.animations.constants.ShimmerConstants
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
+import com.mtd.megawallet.ui.compose.animations.shimmerBackground
 
 @Composable
 fun TransactionHistoryShimmer(
     modifier: Modifier = Modifier,
     itemCount: Int = 7
 ) {
-    val brush = rememberHistoryShimmerBrush()
+    val brushProvider = rememberHistoryShimmerBrushProvider()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -49,12 +50,12 @@ fun TransactionHistoryShimmer(
     ) {
 
         item(key = "history_shimmer_header_today") {
-            HistoryShimmerHeader(brush = brush, width = 86.dp)
+            HistoryShimmerHeader(brushProvider = brushProvider, width = 86.dp)
         }
 
         items(itemCount) { index ->
             HistoryShimmerItem(
-                brush = brush,
+                brushProvider = brushProvider,
                 isPendingShape = index == 1,
                 centerPrimaryWidth = if (index % 2 == 0) 112.dp else 86.dp,
                 centerSecondaryWidth = if (index % 3 == 0) 76.dp else 104.dp,
@@ -64,12 +65,12 @@ fun TransactionHistoryShimmer(
         }
 
         item(key = "history_shimmer_header_previous") {
-            HistoryShimmerHeader(brush = brush, width = 132.dp)
+            HistoryShimmerHeader(brushProvider = brushProvider, width = 132.dp)
         }
 
         items(3) { index ->
             HistoryShimmerItem(
-                brush = brush,
+                brushProvider = brushProvider,
                 isPendingShape = false,
                 centerPrimaryWidth = if (index == 0) 94.dp else 120.dp,
                 centerSecondaryWidth = if (index == 2) 86.dp else 110.dp,
@@ -81,7 +82,7 @@ fun TransactionHistoryShimmer(
 }
 
 @Composable
-private fun rememberHistoryShimmerBrush(): Brush {
+private fun rememberHistoryShimmerBrushProvider(): () -> Brush {
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
     val shimmerColors = remember(surfaceVariant) {
         listOf(
@@ -104,24 +105,28 @@ private fun rememberHistoryShimmerBrush(): Brush {
         label = "HistoryShimmerTranslate"
     )
 
-    return remember(translateAnim.value, shimmerColors) {
-        Brush.linearGradient(
-            colors = shimmerColors,
-            start = Offset.Zero,
-            end = Offset(x = translateAnim.value, y = translateAnim.value)
-        )
+    // ساختِ گرادیان داخلِ lambda برگشتی انجام می‌شود تا translateAnim.value در فاز draw (توسط
+    // shimmerBackground) خوانده شود، نه در composition — لیست هر فریم redraw می‌شود، نه recompose.
+    return remember(shimmerColors) {
+        {
+            Brush.linearGradient(
+                colors = shimmerColors,
+                start = Offset.Zero,
+                end = Offset(x = translateAnim.value, y = translateAnim.value)
+            )
+        }
     }
 }
 
 @Composable
-private fun HistoryShimmerToolbar(brush: Brush) {
+private fun HistoryShimmerToolbar(brushProvider: () -> Brush) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 18.dp, vertical = 6.dp)
     ) {
         ShimmerBlock(
-            brush = brush,
+            brushProvider = brushProvider,
             modifier = Modifier
                 .size(40.dp)
                 .align(Alignment.CenterEnd),
@@ -132,11 +137,11 @@ private fun HistoryShimmerToolbar(brush: Brush) {
 
 @Composable
 private fun HistoryShimmerHeader(
-    brush: Brush,
+    brushProvider: () -> Brush,
     width: Dp
 ) {
     ShimmerBlock(
-        brush = brush,
+        brushProvider = brushProvider,
         modifier = Modifier
             .padding(horizontal = 24.dp, vertical = 14.dp)
             .width(width)
@@ -147,7 +152,7 @@ private fun HistoryShimmerHeader(
 
 @Composable
 private fun HistoryShimmerItem(
-    brush: Brush,
+    brushProvider: () -> Brush,
     isPendingShape: Boolean,
     centerPrimaryWidth: Dp,
     centerSecondaryWidth: Dp,
@@ -178,21 +183,21 @@ private fun HistoryShimmerItem(
     ) {
         Box(modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_SIZE)) {
             ShimmerBlock(
-                brush = brush,
+                brushProvider = brushProvider,
                 modifier = Modifier
                     .size(WalletScreenConstants.ASSET_ICON_SIZE)
                     .align(Alignment.Center),
                 shape = CircleShape
             )
             ShimmerBlock(
-                brush = brush,
+                brushProvider = brushProvider,
                 modifier = Modifier
                     .size(20.dp)
                     .align(Alignment.TopStart),
                 shape = CircleShape
             )
             ShimmerBlock(
-                brush = brush,
+                brushProvider = brushProvider,
                 modifier = Modifier
                     .size(WalletScreenConstants.ASSET_ICON_NETWORK_SIZE_SMALE)
                     .align(Alignment.BottomEnd),
@@ -205,7 +210,7 @@ private fun HistoryShimmerItem(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ShimmerBlock(
-                    brush = brush,
+                    brushProvider = brushProvider,
                     modifier = Modifier
                         .width(54.dp)
                         .height(14.dp),
@@ -213,7 +218,7 @@ private fun HistoryShimmerItem(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 ShimmerBlock(
-                    brush = brush,
+                    brushProvider = brushProvider,
                     modifier = Modifier
                         .width(centerPrimaryWidth)
                         .height(14.dp),
@@ -222,7 +227,7 @@ private fun HistoryShimmerItem(
             }
             Spacer(modifier = Modifier.height(8.dp))
             ShimmerBlock(
-                brush = brush,
+                brushProvider = brushProvider,
                 modifier = Modifier
                     .width(centerSecondaryWidth)
                     .height(18.dp),
@@ -234,7 +239,7 @@ private fun HistoryShimmerItem(
 
         Column(horizontalAlignment = Alignment.End) {
             ShimmerBlock(
-                brush = brush,
+                brushProvider = brushProvider,
                 modifier = Modifier
                     .width(amountWidth)
                     .height(18.dp),
@@ -242,7 +247,7 @@ private fun HistoryShimmerItem(
             )
             Spacer(modifier = Modifier.height(8.dp))
             ShimmerBlock(
-                brush = brush,
+                brushProvider = brushProvider,
                 modifier = Modifier
                     .width(fiatWidth)
                     .height(12.dp),
@@ -254,13 +259,13 @@ private fun HistoryShimmerItem(
 
 @Composable
 private fun ShimmerBlock(
-    brush: Brush,
+    brushProvider: () -> Brush,
     modifier: Modifier,
     shape: androidx.compose.ui.graphics.Shape
 ) {
     Box(
         modifier = modifier
             .clip(shape)
-            .background(brush)
+            .shimmerBackground(brushProvider)
     )
 }
