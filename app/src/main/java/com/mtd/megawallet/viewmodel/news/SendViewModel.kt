@@ -130,6 +130,12 @@ class SendViewModel @Inject constructor(
     private val _gaslessPreviewState = MutableStateFlow<GaslessPreviewState>(GaslessPreviewState.Idle)
     val gaslessPreviewState = _gaslessPreviewState.asStateFlow()
 
+    // کش کوتاه‌مدتِ پیش‌نمایش گس‌لس: اگر کاربر بین SMART/DIRECT سوییچ کند و دوباره روی گس‌لس بزند،
+    // تا وقتی دارایی/مقصد/مبلغ عوض نشده و از این پنجره نگذشته، سرویس‌های گس‌لس دوباره کال نمی‌شوند.
+    private val gaslessPreviewTtlMs = 30_000L
+    private var lastGaslessPreviewKey: String? = null
+    private var lastGaslessPreviewAt: Long = 0L
+
     private val _submitState = MutableStateFlow<SubmitState>(SubmitState.Idle)
     val submitState = _submitState.asStateFlow()
 
@@ -531,6 +537,15 @@ class SendViewModel @Inject constructor(
             return
         }
 
+        // اگر پیش‌نمایشِ آماده برای همین ورودی‌ها به‌تازگی گرفته شده، دوباره سرویس نزن.
+        val cacheKey = "${asset.networkId}|${asset.contractAddress.orEmpty()}|$recipient|$amountSmallest"
+        if (_gaslessPreviewState.value is GaslessPreviewState.Ready &&
+            cacheKey == lastGaslessPreviewKey &&
+            System.currentTimeMillis() - lastGaslessPreviewAt < gaslessPreviewTtlMs
+        ) {
+            return
+        }
+
         val request = runCatching {
             buildGaslessRequest(
                 asset = asset,
@@ -589,6 +604,8 @@ class SendViewModel @Inject constructor(
                         needsApprove = quote.needsApprove,
                         smartFee = quote.smartFee
                     )
+                    lastGaslessPreviewKey = cacheKey
+                    lastGaslessPreviewAt = System.currentTimeMillis()
                 }
 
                 is ResultResponse.Error -> {
