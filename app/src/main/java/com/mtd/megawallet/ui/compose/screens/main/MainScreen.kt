@@ -1,6 +1,12 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.mtd.megawallet.ui.compose.screens.main
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.testTagsAsResourceId
+import androidx.compose.ui.semantics.semantics
+import com.mtd.megawallet.ui.compose.TestTags
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector4D
@@ -339,6 +345,8 @@ private fun MainDashboardContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .semantics { testTagsAsResourceId = true } // expose Compose testTags to UiAutomator (PERF-10)
+            .testTag(TestTags.MAIN_ROOT)
             .onGloballyPositioned { fullScreenRect = it.boundsInWindow() }
             .onSizeChanged { fullHeightPx = it.height } // اندازه‌گیری ارتفاع فیزیکی
     ) {
