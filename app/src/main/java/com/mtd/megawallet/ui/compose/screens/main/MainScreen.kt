@@ -1,10 +1,8 @@
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-
 package com.mtd.megawallet.ui.compose.screens.main
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.testTagsAsResourceId
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.semantics.semantics
 import com.mtd.megawallet.ui.compose.TestTags
 import androidx.compose.animation.ExperimentalSharedTransitionApi
