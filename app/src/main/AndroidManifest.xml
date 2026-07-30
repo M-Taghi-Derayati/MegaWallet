@@ -55,10 +55,14 @@
             </intent-filter>
         </service>
 
-        <!-- Route notification-type FCM messages to the existing "trade_notifications" channel. -->
+        <!-- TASK-59 — the channel Firebase itself uses when a push carries a `notification` payload
+             (our own data-only pushes pick their channel in PushMessageHandler). This pointed at the
+             default-sound trade channel, so such a push could never play the deposit sound. It now
+             resolves to the same versioned id NotificationService creates — never re-type the literal
+             here; both sides read core's notification_channels.xml. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="trade_notifications" />
+            android:value="@string/notification_channel_id_deposit" />
 
     </application>
 

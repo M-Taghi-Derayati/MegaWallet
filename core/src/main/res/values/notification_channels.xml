@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TASK-59 — notification channel ids live here, NOT as Kotlin string literals, because the deposit
+  channel id is referenced from two places that must never drift apart:
+    1. NotificationService (creates the channel and posts to it), and
+    2. the app manifest's `com.google.firebase.messaging.default_notification_channel_id` meta-data
+       (the channel Firebase itself uses when a push carries a `notification` payload).
+  They previously disagreed — the manifest pointed at the default-sound trade channel — so a
+  Firebase-rendered transaction push could never play the deposit sound.
+-->
+<resources>
+    <string name="notification_channel_id_trade" translatable="false">trade_notifications</string>
+
+    <!--
+      Versioned on purpose. A channel's sound and importance are IMMUTABLE once the system has created
+      it, and channel state survives uninstall/reinstall, so shipping a new id is the only way to
+      repair installs whose deposit channel ended up silent. Bump the suffix ONLY when the sound or
+      importance must change, and add the previous id to `legacy_deposit_channel_ids` below so the dead
+      entry is removed from the user's notification settings.
+    -->
+    <string name="notification_channel_id_deposit" translatable="false">deposit_notifications_v2</string>
+
+    <string-array name="legacy_deposit_channel_ids" translatable="false">
+        <item>deposit_notifications</item>
+    </string-array>
+</resources>
