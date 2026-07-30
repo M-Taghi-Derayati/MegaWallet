@@ -533,7 +533,9 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
 - **Fix:**
   - `MegaFirebaseMessagingService` (`@AndroidEntryPoint`) declared in the manifest with the
     `com.google.firebase.MESSAGING_EVENT` filter + a `default_notification_channel_id` meta-data pointing at
-    the existing `trade_notifications` channel.
+    the existing `trade_notifications` channel. **(Corrected by TASK-59 — that default was wrong: the trade
+    channel has the system default sound, so a Firebase-rendered push could never play the deposit sound.
+    It now resolves to the versioned deposit channel.)**
   - `FcmTokenRegistrar` (app) — registers the token via `INotificationRepository.registerDevice` **after auth**
     (`WalletSessionAuthCoordinator.syncToken()`, needs the JWT for identity) and on Firebase `onNewToken`;
     persists the last-registered token (`IUserPreferencesRepository.getRegisteredFcmToken`) to skip unchanged
@@ -709,7 +711,7 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   processed LIVE (item-4 intent still met via its StateFlow on entry). **History keeps the gating** (it writes
   no shared cache), so item 4 stands where it's correct. **Files:** `HomeViewModel.kt`, `MainScreen.kt`.
 
-### TASK-38 — Signed config bundle bootstrap (network/asset catalog from server) — ✅ Already implemented (verify)
+### TASK-38 — Signed config bundle bootstrap (network/asset catalog from server) — 🟡 Components exist but are NOT wired (corrected 2026-07-30)
 - **Server doc §3:** drive the network/asset catalog + `networkId`s from a **signed** server bundle instead
   of hardcoding: `GET /config/public-key` (pin), `GET /config/bundle` (`{version,networks,assets,signature}`,
   secp256k1-verify before trusting), `GET /config/version` (cheap re-fetch poll), `GET /capabilities`
@@ -721,7 +723,14 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   `WalletRepositoryImpl`. So §3 is satisfied: the local JSON is now the **seed/offline fallback**, not the
   source of truth. **Verify on-device:** first launch fetches + signature-verifies the server bundle (pinned
   key), a `config/version` bump triggers a re-fetch, and an invalid signature is rejected (falls back to the
-  last-good/local seed, never trusts an unverified bundle). No new work unless verification finds a gap.
+  last-good/local seed, never trusts an unverified bundle).
+- **⚠️ Correction (2026-07-30) — §3 is NOT satisfied.** All the components above exist and are unit-tested,
+  but **nothing consumes them**: `ConfigManager.getValidatedConfig()` has a single caller (a fire-and-forget
+  warm-up in `MegaWalletApplication.kt:74`) and `BlockchainRegistry.registerNetwork` / `AssetRegistry.registerAsset`
+  have **no callers outside the registries**. The registries are seeded at DI time from the **local**
+  `networks.json`/`assets.json` (`core/di/CryptoModule.kt`), which is therefore still the source of truth —
+  the server bundle is fetched, verified, cached, and then **ignored**. Two further blockers (testnet-only
+  filter, closed `NetworkName` enum) are documented with the fix plan in **TASK-53**. Work tracked there.
 
 ### TASK-45 — Balance stays stale on every screen after a send (shared-cache + signal targeting) — ✅ Fixed
 - **Problem (user, 2026-07-19):** after a withdrawal the balance was correct on-chain but **every** screen —
@@ -853,6 +862,349 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
 - **Problem:** duplicated backoff/hex-parse, prepare→broadcast boilerplate ×5, SmartFee/CreditFee copy-paste,
   `relayPrefixFor` dup. **TD:** code-review cleanup set. **Priority:** P3 · **Est:** 1 · **Risk:** Low.
 - **Testing:** existing tests green; behavior unchanged.
+
+---
+
+## Sprint 7 — User-requested batch (2026-07-30)
+
+Nine items handed over by the owner. Each was grounded against the code before being written up; where
+the investigation already produced an answer (TASK-53) it is recorded here rather than left open.
+
+### TASK-50 — Swap/convert transactions as a row type in history
+- **Problem (user, item 1):** the history feed has no representation for a **swap/convert** transaction.
+  A swap shows up (at best) as one or two unrelated transfer rows, so the user can't see "X → Y".
+- **Root cause:** `TransactionRecord` (`domain/model/TransactionRecord.kt`) is a sealed class with
+  **per-network** variants only (`EvmTransaction`/`TronTransaction`/`BitcoinTransaction`) and no notion of
+  transaction *kind* — direction is a single `isOutgoing: Boolean`. There is no swap variant, no
+  `SwapDetails`, and `HistoryItemDto`/`HistoryItemMapper` never emit one.
+- **Design:** add an optional `swapDetails: SwapDetails?` (from/to symbol, from/to raw amount + decimals,
+  provider, rate) to the existing variants — **do not** add a 4th sealed variant (every `when` over the
+  sealed class in data/app would have to change; the per-network split is a *transport* axis, kind is
+  orthogonal). `TransactionDisplayFormatter` gains `historySwapLabel(...)` + a swap branch in
+  `historyPrimaryLabel`/`listAmount`; the row and `TransactionDetailsBottomSheet` render "1.5 ETH → 4,200 USDT".
+- **Gate:** the unified `/history` feed must mark swap txs. Confirm the server contract first — if
+  `/history` has no swap marker, the only local signal is our own outgoing swap (from TASK-2's Swap flow),
+  which we can persist optimistically like `_localPending` in `TransactionHistoryViewModel`.
+- **Files:** `domain/model/TransactionRecord.kt`, `data/dto/HistoryItemDto.kt` (nested-shape deserializer —
+  see TASK-39), `HistoryItemMapper`, `data/formatter/TransactionDisplayFormatter.kt`,
+  `screens/history/components/TransactionDetailsBottomSheet.kt` + the row composable.
+  **Modules:** domain, data, app. **Deps:** pairs with **TASK-2** (Swap UI); server marker.
+- **Difficulty:** Med · **Est:** 1.5 · **Risk:** Low–Med (touches the shared history model) · **Priority:** P2.
+- **Acceptance:** a swap tx renders as one row with both legs and a swap glyph; non-swap rows unchanged.
+  **Rollback:** null `swapDetails` ⇒ today's rendering. **Regression:** every history row type.
+  **Testing:** extend `TransactionDisplayFormatterTest` (:app) with a swap fixture + a MockWebServer
+  `/history` swap item.
+
+### TASK-51 — Explorer link per network is built but never opened
+- **Problem (user, item 2):** the user can't open a transaction on its block explorer from history.
+- **Root cause:** the URL builder **exists and is exposed but has zero UI call sites.**
+  `TransactionDisplayFormatter.buildExplorerUrl` (`data/formatter/TransactionDisplayFormatter.kt:265`)
+  is delegated by `TransactionHistoryViewModel:846` — and nothing in `ui/**` ever calls it. There is no
+  `LocalUriHandler`/`ACTION_VIEW` anywhere in the Compose tree (grep over `app/.../ui`: 0 hits).
+  Two further defects in the builder itself:
+  1. it only reads `network.explorers.firstOrNull()` — same single-explorer weakness fixed for Tron reads
+     in TASK-41;
+  2. the family match is a **substring `when` over the base URL** with a hard `else -> null`, so any
+     explorer host not in the hardcoded list (blockscout/tronscan/mempool.space/blockchair/xrpscan/
+     solscan/tonscan/basescan/etherscan) silently yields **no link** — including any explorer that arrives
+     via the server config bundle (see TASK-53).
+- **Do:** (1) add an "مشاهده در اکسپلورر" action to `TransactionDetailsBottomSheet` that opens the URL via
+  `LocalUriHandler.current.openUri(...)`, hidden when the builder returns null; (2) drive the path template
+  from the network config instead of substring-sniffing the host — add an optional `explorerTxPath`
+  (e.g. `/tx/{hash}`, `/#/transaction/{hash}`) to `NetworkConfig`/`networks.json`, keeping the current
+  `when` only as the fallback for configs that don't carry it; (3) fall back across `explorers` in order.
+- **Files:** `data/formatter/TransactionDisplayFormatter.kt`,
+  `screens/history/components/TransactionDetailsBottomSheet.kt`, `core/src/main/assets/networks.json`,
+  `NetworkConfig`. **Modules:** data, core, app. **Deps:** none.
+- **Difficulty:** Low · **Est:** 0.75 · **Risk:** Low · **Priority:** P1 (user-visible gap, cheap).
+- **Acceptance:** opening a tx on EVM/TRON/BTC each opens the correct explorer URL in the browser; an
+  unknown/unset explorer shows no dead button. **Rollback:** hide the action. **Regression:** detail-sheet
+  layout. **Testing:** extend `TransactionDisplayFormatterTest` per family + a config-driven template case;
+  on-device tap per network.
+
+### TASK-52 — Copy addresses (and hash) from the transaction detail
+- **Problem (user, item 3):** addresses in a transaction can't be copied.
+- **Root cause:** `TransactionDetailsBottomSheet` renders `DetailRow`/`SummaryRow` as plain `Text` — no
+  clipboard action anywhere in `screens/history/**` (grep: 0 clipboard hits). The pattern already exists
+  elsewhere: `ReceiveScreen.kt:79,134` and `SecretRevealOverlay.kt:85,161`.
+- **Note (do this consistently):** the two existing call sites use **different APIs** — `LocalClipboard`
+  (+ `nativeClipboard`) in `ReceiveScreen`/`SendScreen` vs the deprecated `LocalClipboardManager` in
+  `SecretRevealOverlay`. Pick `LocalClipboard` and add a small shared `copyToClipboard(...)` helper in
+  `ui/compose/components/` rather than a third variant.
+- **Do:** make the from/to address rows + the tx hash copyable (tap or a trailing copy icon), with the
+  existing top-snackbar confirmation ("کپی شد") and a `contentDescription` on the icon (TASK-17 policy).
+  On Android 13+ the OS shows its own copy toast — don't double-toast.
+- **Files:** `screens/history/components/TransactionDetailsBottomSheet.kt` (`DetailRow`/`SummaryRow`/
+  `buildGeneralRows`), new shared clipboard helper. **Modules:** app. **Deps:** none.
+- **Difficulty:** Low · **Est:** 0.5 · **Risk:** Low · **Priority:** P1 (cheap, pairs with TASK-51).
+- **Acceptance:** long-press/tap copies the full (un-truncated) address; snackbar confirms.
+  **Rollback:** revert. **Regression:** sheet layout/scroll. **Testing:** on-device paste-check per row.
+
+### TASK-53 — Server-bundle networks are NOT displayed (investigation answered: **no**)
+- **Question (user, item 4):** if a network exists in the server config bundle but not in the device's
+  local file, does the app show it?
+- **Answer: no — and there are three independent blockers.** Verified 2026-07-30:
+  1. **The verified bundle is never applied.** `ConfigManager.getValidatedConfig()` has exactly **one**
+     consumer: a fire-and-forget warm-up in `MegaWalletApplication.kt:74`. `BlockchainRegistry.registerNetwork`
+     / `AssetRegistry.registerAsset` have **no callers outside the registries themselves**. The registries are
+     built in `core/di/CryptoModule.kt` (`provideBlockchainRegistry` → `loadNetworksFromAssets(context)`,
+     `provideAssetRegistry` → `loadAssetsFromAssets(context)`) — i.e. **local `networks.json`/`assets.json` only**.
+  2. **A testnet-only filter.** `BlockchainRegistry.loadNetworksFromAssets` (`:279`) does
+     `configs.filter { it.isTestnet == true }` — mainnet configs are dropped even from the local file.
+  3. **`NetworkName` is a closed enum** (`domain/model/core/NetworkType.kt:14`, 23 constants). Even with
+     1 and 2 fixed, a server network whose name isn't a compile-time constant can't be represented — the
+     whole domain keys on `NetworkName`, and `INetworkCatalog.getNetworkInfoByName` would never match.
+- **⚠️ This corrects TASK-38**, which is marked "✅ Already implemented (verify)". The *components*
+  (`ConfigApiService`, `Secp256k1ConfigSignatureVerifier`, `ConfigManager`, `ConfigCacheStore`,
+  `LocalConfigAssetProvider`) all exist and are unit-tested — but they are **not wired into the registries**,
+  so the local JSON is still the source of truth, not a seed. TASK-38 status downgraded to 🟡 below.
+- **Do (staged, blockers in order):** (1) feed the validated bundle into the registries — a
+  `registry.applyConfig(bundle)` that re-registers networks/assets from the verified bundle, ordered before
+  first wallet read (`MegaWalletApplication` warm-up already awaits it; make the registries observe it
+  rather than snapshot at DI time); (2) replace the `isTestnet == true` filter with the build-flavour /
+  env-appropriate predicate; (3) decide the `NetworkName` question — either keep the enum and **skip
+  unknown networks with a logged warning** (safe, small, preserves type-safety) or migrate the domain to a
+  string `networkId` key (large, ripples through every `when(NetworkName)`). **Recommend (3a) for now**
+  and raise the migration as its own task if the server really needs to add chains without an app update.
+- **Files:** `core/di/CryptoModule.kt`, `core/registry/BlockchainRegistry.kt`, `core/registry/AssetRegistry.kt`,
+  `data/config/ConfigManager.kt`, `MegaWalletApplication.kt`, `domain/model/core/NetworkType.kt`.
+  **Modules:** core, data, app, (domain if the key migrates). **Deps:** TASK-38.
+- **Difficulty:** Med–High · **Est:** 2 (3 if the enum migrates) · **Risk:** **High** — the registries seed
+  key derivation and address validation; a bad network entering the registry is a correctness/funds risk.
+  Signature verification must gate registration (never register an unverified bundle). · **Priority:** P1.
+- **Acceptance:** a network present only in the signed bundle appears in the app (or is *deliberately and
+  visibly* skipped with a log); an unverified/tampered bundle registers nothing and falls back to the local
+  seed. **Rollback:** feature-flag `applyConfig` off ⇒ today's local-only behavior. **Regression:** all key
+  derivation, address validation, balance reads. **Testing:** `ConfigManagerOfflineFirstTest` extended with
+  an apply step; a bundle-only network fixture; on-device first-launch + tampered-signature run.
+
+### TASK-54 — USDT price inconsistent / stale across screens
+- **Problem (user, item 5):** the USDT price differs between sections and doesn't update consistently.
+- **Root cause (three independent price paths, no single source of truth):**
+  1. `HomeViewModel` is the only writer of the shared `asset_balance_*` cache and stamps `priceUsdRaw` onto
+     each `AssetItem` (`HomeViewModel.kt:305,457-516`) — with an explicit "keep the previous price if the new
+     one is null" fallback (`:457-466`), so a failed fetch silently persists a stale price indefinitely.
+  2. `TransactionHistoryViewModel:182` builds its **own** `symbol→price` map from whatever assets happen to
+     be loaded (`filter { priceUsdRaw > ZERO }.associate { symbol.uppercase() to priceUsdRaw }`) — keyed by
+     **symbol**, so USDT on two networks collapses to one arbitrary entry.
+  3. `SendViewModel:1064-1077` resolves the price a **third** way (native short-circuit, then a lookup).
+  Compounding it: `SendTokenList.kt:305-320` synthesizes an *average* price across networks for the grouped
+  row. For USDT specifically this is worst-case — it's held on several chains under composite ids
+  (`USDT-SEPOLIA`) while the server keys prices by bare symbol (`usdt`), the same id/symbol mismatch class
+  that caused **TASK-45**.
+- **Do:** make one component own price state — a `PriceCache`/`IPriceRepository` (data) keyed by the
+  **canonical asset id with a symbol fallback** (mirror TASK-45's "id OR symbol OR contract" matcher), with
+  an explicit TTL and a `null`-means-unknown contract (no silent stale carry-forward). All three consumers
+  read from it; delete the local maps. Stablecoins are the acceptance canary (USDT should read identically
+  on wallet / detail / send / history).
+- **Files:** `viewmodel/HomeViewModel.kt`, `viewmodel/history/TransactionHistoryViewModel.kt`,
+  `viewmodel/SendViewModel.kt`, `screens/send/SendTokenList.kt`,
+  `data/repository/MarketDataRepositoryImpl.kt`, `data/datasource/RelayerPriceDataSource.kt`.
+  **Modules:** data, app. **Deps:** relates to **TASK-35** (`change24h`, server-blocked) and **TASK-45**.
+- **Difficulty:** Med · **Est:** 1.5 · **Risk:** Med (money display) · **Priority:** P1.
+- **Acceptance:** USDT shows the same price on wallet list, asset detail, send, and history at the same
+  instant; a failed price fetch shows a stale-marker/placeholder rather than a silently frozen number.
+  **Rollback:** per consumer. **Regression:** every fiat display + MAX-send math. **Testing:** JVM tests for
+  the resolver (multi-network USDT, id-vs-symbol mismatch, TTL expiry, null-price handling).
+
+### TASK-55 — Token list from server search (assets not in the bundle)
+- **Problem (user, item 6):** tokens outside the config bundle should be findable via server search; the
+  section doesn't work.
+- **Current state:** it doesn't exist at all. There is **no search UI anywhere** in `ui/**` (0 hits for a
+  search field), **no** search endpoint on `ConfigApiService`/`MobileProxyApiService`, and `ExploreScreen.kt`
+  — the natural home — is a placeholder animation with no data. `AssetRegistry` is local-`assets.json`-only
+  (see TASK-53).
+- **Owner confirms the server exposes a search endpoint** — first step is to pull its exact path/params/
+  response from the server contract doc (`ANDROID_SERVER_INTEGRATION.md`, server repo `docs/`).
+- **Do:** (1) transcribe the endpoint contract into `docs/`; (2) DTO + service method + an
+  `IAssetSearchRepository` (interface in `domain/interfaceRepository/`) + impl in `data`, routed like the
+  other proxy calls; (3) a debounced search UI in `ExploreScreen` (reuse `SendTokenList`'s row) with
+  empty/loading/error states; (4) decide what "adding" a found token means — display-only, or persisted
+  into a user token list that the wallet screen merges with the registry (persist via
+  `IUserPreferencesRepository`, mirroring the connection-mode pref).
+- **⚠️ Security:** a server/user-supplied token is **untrusted input** — validate the contract address per
+  network (`INetworkCatalog.isValidAddressForNetworkId` exists), never let a searched token override a
+  bundled asset's identity, and show a "not in verified list" marker. A spoofed USDT is a funds risk.
+- **Files:** new DTO + `AssetSearchApiService` + `AssetSearchRepositoryImpl` + DI (`DataModule`/`NetworkModule`),
+  `domain/interfaceRepository/IAssetSearchRepository.kt`, `screens/explore/ExploreScreen.kt` + a new
+  `ExploreViewModel : BaseViewModel`. **Modules:** domain, data, app. **Deps:** TASK-53 (shares the
+  bundle-vs-server asset question).
+- **Difficulty:** Med · **Est:** 2 · **Risk:** Med (untrusted token metadata) · **Priority:** P2.
+- **Acceptance:** searching a known symbol returns server results; selecting one shows it correctly (right
+  network/decimals/contract) and is clearly marked as unverified; an invalid contract is rejected.
+  **Rollback:** hide the Explore entry. **Regression:** none (additive). **Testing:** MockWebServer search
+  fixtures (hit/empty/error), address-validation unit tests.
+
+### TASK-56 — USD ⇄ Toman toggle icon on MainScreen
+- **Problem (user, item 7):** no way to see values in Toman; everything is USD.
+- **Current state:** `domain/model/CurrencyRate.kt` already models `baseCurrency`/`quoteCurrency`/`rate` and
+  `MarketDataRepositoryImpl` provides rates, and `RelayerPriceDto` already carries an `irr` field — but
+  `BalanceFormatter.formatUsdValue` (`core/utils/`) and `data/formatter/TransactionDisplayFormatter` are
+  **hardcoded USD**, so no display honours a currency choice.
+- **Do:** add the toggle control to `screens/main/MainHeader.kt` (extracted in TASK-13) driven by
+  `MainScreenViewModel`; the selected currency is the **same pref** as the Settings "fiat currency" item —
+  build it once in the shared prefs/formatter layer, not twice. Toman vs Rial is a **display divisor of 10**
+  on the server's IRR value — decide and centralize it (`IRR/10 = Toman`), never per call site.
+- **Files:** `screens/main/MainHeader.kt`, `viewmodel/MainScreenViewModel.kt`,
+  `core/utils/BalanceFormatter.kt`, `data/formatter/TransactionDisplayFormatter.kt`,
+  `IUserPreferencesRepository` (+impl). **Modules:** core, data, app, domain.
+  **Deps:** **TASK S §2.2-D** (fiat-currency pref) — do that pref first, this is its second entry point;
+  **TASK-54** (one price source) should land first or the toggle will surface the inconsistency.
+- **Difficulty:** Med · **Est:** 1 (0.5 on top of TASK S) · **Risk:** Med (money display) · **Priority:** P2.
+- **Acceptance:** one tap switches **every** fiat display (wallet total, per-asset, detail, send, history) to
+  Toman with Persian digit grouping and back; the choice survives process death.
+  **Rollback:** hide the icon (pref defaults USD). **Regression:** all fiat formatting. **Testing:** JVM
+  formatter tests for both currencies incl. rounding; on-device sweep of every fiat surface.
+
+### TASK-57 — Custom error surface: show every error the user needs to know
+- **Problem (user, item 8):** errors that matter to the user are inconsistently surfaced.
+- **Current state:** the machinery exists — `core/manager/ErrorManager` (+ `ErrorMapper`,
+  `ApiErrorMessageMapper`, `AppError`/`ApiError` in `domain/model/error/`), `BaseViewModel` observes it
+  (`:31`, `showErrorSnackbar` `:141`, `showSnackbarMessage` `:156`), and `TopSnackbarViewHelper` renders the
+  custom top snackbar (`:58`) plus an `ErrorDetailDialog` (`:178`). The gap is **coverage and quality**, not
+  plumbing. Confirmed leak: `MultiWalletViewModel.deleteWallet` (`:153`) does
+  `errorManager.showSnackbar(result.toString() ?: "خطا در حذف کیف پول")` — it shows the **raw
+  `ResultResponse.Error` object's `toString()`**, and the `?:` is dead (`toString()` is non-null), so the
+  Persian fallback never fires.
+- **Do:** (1) audit every `ResultResponse.Error` / `catch` site in `viewmodel/**` for swallowed or
+  raw-dumped errors; (2) route all of them through `ErrorMapper` → a **user-facing Persian message** with the
+  technical detail behind the existing "جزئیات" dialog; (3) define severity policy — silent-log vs snackbar
+  vs blocking dialog — and apply it uniformly (a failed background price refresh must not nag; a failed send
+  must block); (4) never surface a raw exception/DTO string, and never leak addresses, keys, or signed
+  payloads into a message (TASK-25 PII rule).
+- **Files:** `core/manager/ErrorManager.kt`, `domain/model/error/*`, `app/core/BaseViewModel.kt`,
+  `app/core/TopSnackbarViewHelper.kt`, `components/ErrorDetailDialog.kt`, all `viewmodel/**` error branches.
+  **Modules:** core, domain, app. **Deps:** none.
+- **Difficulty:** Med · **Est:** 1.5 · **Risk:** Low · **Priority:** P1 (user-facing quality + a real defect).
+- **Acceptance:** no user-visible raw `toString()`/stack text remains; every error branch either logs
+  deliberately or shows a mapped Persian message; the detail dialog carries the technical text.
+  **Rollback:** per call site. **Regression:** error UX everywhere. **Testing:** JVM tests on `ErrorMapper`
+  coverage per `ApiError` variant; force-fail each major flow on-device.
+
+### TASK-58 — Wallet deletion UI is incomplete (no confirmation, no auth, raw error)
+- **Problem (user, item 9):** deleting a wallet is not properly built out.
+- **Current state — this is a data-loss hazard.** `MultiWalletScreen.kt:350` and `:498` call
+  `viewModel.deleteWallet(id)` **directly from the tap handler**: no confirmation dialog, no
+  "have you backed up your seed?" gate, no app-lock/biometric re-auth (`AuthPurpose.SENSITIVE_ACTION`
+  exists and is used elsewhere), no undo. For a **non-custodial** wallet, deleting an unbacked-up wallet is
+  **irreversible loss of funds** — a single mis-tap in the expanded card destroys it. Additional gaps:
+  the error path dumps a raw object (see TASK-57), and nothing handles deleting the **active** wallet or the
+  **last** wallet (what becomes active? does the app return to onboarding?).
+- **Do:** (1) a confirmation flow: destructive-styled dialog naming the wallet, an explicit backup-state
+  warning when `manualBackup`/`cloudBackup` is false (the flags exist —
+  `updateWalletBackupStatusUseCase`), and a type-to-confirm or hold-to-confirm for unbacked wallets
+  (`ConfirmSliderButton` already exists); (2) require re-auth via the existing sensitive-action gate;
+  (3) define + implement active-wallet and last-wallet semantics — `DeleteWalletUseCase`
+  (`domain/usecase/wallet/WalletManagementUseCases.kt:48`) already prunes the monitoring-enrollment id
+  (TASK-32), verify it also clears keys, cached balances, and session state; (4) mapped error message
+  (TASK-57); (5) success feedback + list refresh (already done via `loadWallets(forceRefresh = true)`).
+- **Files:** `screens/wallet/MultiWalletScreen.kt` (+ `WalletManagementPanel.kt`),
+  `viewmodel/MultiWalletViewModel.kt:145`, `domain/usecase/wallet/WalletManagementUseCases.kt`,
+  `data/repository/WalletRepositoryImpl.kt:348`. **Modules:** app, domain, data. **Deps:** TASK-57 (errors).
+- **Difficulty:** Med · **Est:** 1.5 · **Risk:** **High (irreversible data/funds loss)** · **Priority:** **P0**
+  — of this batch, ship this one first.
+- **Acceptance:** deletion always requires an explicit confirmation + re-auth; an unbacked-up wallet warns
+  distinctly; deleting the active/last wallet leaves the app in a coherent state (no orphaned session,
+  keys, cache, or monitoring enrollment). **Rollback:** revert UI (leaves today's unguarded path — not
+  acceptable to ship). **Regression:** wallet list, active-wallet switch, session/JWT, key cache.
+  **Testing:** JVM tests for the use case's cleanup; on-device delete of active / non-active / last wallet,
+  and cancel-at-each-step.
+
+### TASK-59 — Deposit notification sound is OFF at the channel level and survives reinstall — ✅ Implemented (needs on-device verify)
+- **Done (2026-07-30):**
+  - **Channel ids moved to a resource** — new `core/src/main/res/values/notification_channels.xml` holds
+    `notification_channel_id_trade`, `notification_channel_id_deposit` (= **`deposit_notifications_v2`**),
+    and a `legacy_deposit_channel_ids` array. Both consumers now read the resource, so the Kotlin side and
+    the manifest can no longer drift — which is exactly how the second defect below arose.
+  - **Channel id bumped + old one deleted** — `NotificationService.createNotificationChannels()` deletes
+    every id in `legacy_deposit_channel_ids` (currently `deposit_notifications`) before creating the v2
+    channel, so the system builds it fresh **with** the custom sound and the dead silent entry disappears
+    from the user's notification settings. `enableVibration(true)` added; importance stays `HIGH`.
+  - **Manifest defect fixed** — `default_notification_channel_id` pointed at **`trade_notifications`**
+    (default sound), so any Firebase-rendered `notification`-payload push could never play the deposit
+    sound. Now `@string/notification_channel_id_deposit`.
+  - **Repair path exposed** — `isDepositChannelSilenced()` (channel blocked or `sound == null`) and
+    `depositChannelSettingsIntent()` (deep link to the system channel screen) added to `NotificationService`.
+    An app cannot re-sound an existing channel programmatically, so this is the only remedy; **the Settings
+    warning row that consumes them is still to be built with TASK S** (§2.2-E).
+  - The `private companion object` with the two hardcoded id constants was removed.
+  - **Resource shrinking checked:** `:app` release has `isShrinkResources = true`, but
+    `res/raw/deposit_alert.mp3` is referenced through a static `R.raw.deposit_alert` in
+    `NotificationService` and `TransactionSoundPlayer`, so the shrinker keeps it. No keep rule needed —
+    but re-verify if either reference ever becomes a name lookup.
+- **Not built here** (Gradle unavailable) — inspection-verified.
+- **Verify on-device:** (1) on the phone that currently shows the deposit channel as silent, install this
+  build → settings show a **new** "واریز و تراکنش جدید" channel with sound on and no stale duplicate;
+  (2) deposit with the app **closed** → custom sound plays; (3) foreground → plays exactly once (no
+  doubling with `TransactionSoundPlayer`); (4) a **release** build still plays it (resource shrinking).
+- **Original spec below.**
+
+- **Problem (user, 2026-07-30):** the transaction/deposit notification arrives **without sound**. The user
+  checked the system notification settings and found the sound **disabled**, and — the key symptom —
+  **uninstalling and reinstalling the app does not fix it**. So this is not a per-notification bug; the
+  channel itself is in a bad state and the fix must be infrastructural.
+- **Root cause (Android notification-channel semantics):**
+  1. **A channel's sound and importance are immutable after creation.** `NotificationService.createNotificationChannels()`
+     (`core/notification/NotificationService.kt:29-59`) builds `deposit_notifications` with the custom
+     `res/raw/deposit_alert` + `USAGE_NOTIFICATION` attributes, but `createNotificationChannel` on an
+     **already-existing** channel id only updates the name/description — the sound and importance are
+     ignored by the OS. Whatever state that channel was first created in (or was later changed to) wins
+     forever.
+  2. **Reinstall does not clear it.** Channel settings are backed up/restored by the system, so a
+     delete-and-reinstall restores the same (soundless) channel — exactly the behaviour observed. Clearing
+     app data is not a shippable instruction for users.
+  3. The remedy is **already documented in the code but never executed**: the comment at
+     `NotificationService.kt:38-40` says "If the sound file ever changes, bump `CHANNEL_ID_DEPOSIT`
+     (e.g. `_v2`) so the system recreates the channel with the new sound." The id has never been bumped.
+- **Second, independent defect (same symptom, different path):** `AndroidManifest.xml:52-55` sets
+  `com.google.firebase.messaging.default_notification_channel_id` = **`trade_notifications`** — the
+  *default-sound* channel. Any FCM message carrying a `notification` payload (i.e. rendered by the Firebase
+  SDK, not by our `PushMessageHandler`) therefore lands on the wrong channel and can never play the deposit
+  sound. Our own data-only path is correct (`PushMessageHandler.kt:114` → deposit channel, `silent = false`),
+  and the **foreground** path is unaffected because `TransactionSoundPlayer` plays the sound explicitly
+  (`NotificationSocketManager.kt:365,385`, `silent = true`) — consistent with "the sound is missing when the
+  app is closed."
+- **Do:**
+  1. **Version the channel id** — `deposit_notifications_v2`, and `deleteNotificationChannel("deposit_notifications")`
+     on the old id so it disappears from system settings instead of lingering as a dead soundless entry.
+     Keep the version bump as the standing migration mechanism (document it next to the constant).
+  2. Recheck the channel spec on creation: `IMPORTANCE_HIGH`, custom sound + `AudioAttributes`
+     (`CONTENT_TYPE_SONIFICATION` / `USAGE_NOTIFICATION` — already correct), `enableVibration(true)`,
+     and `setShowBadge` as desired.
+  3. Point the manifest `default_notification_channel_id` at the new deposit channel (or confirm the server
+     never sends `notification`-payload pushes — the realtime contract says thin **data-only** signals, in
+     which case document that and leave it on a deliberate default).
+  4. **Add a diagnostic + repair path in Settings** (TASK S §2.2-E): read the live channel state via
+     `NotificationManager.getNotificationChannel(id)` and, when `importance == IMPORTANCE_NONE` or
+     `sound == null`, show a warning row that deep-links to the system channel screen
+     (`Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS` with `EXTRA_CHANNEL_ID`). **The app cannot re-enable
+     a user-disabled channel programmatically** — the deep link is the only correct remedy, and without it
+     an affected user has no way back.
+  5. Verify `res/raw/deposit_alert` is not stripped by R8/resource shrinking in release
+     (`app/proguard-rules.pro` / `shrinkResources`) — a missing raw resource degrades to silent.
+- **Files:** `core/notification/NotificationService.kt`, `app/src/main/AndroidManifest.xml`,
+  `data/socket/PushMessageHandler.kt` (verify), `core/notification/TransactionSoundPlayer.kt` (verify),
+  Settings screen (TASK S). **Modules:** core, app, data. **Deps:** TASK-43 (custom sound both paths),
+  TASK-34 (FCM wiring), TASK S (Settings home for the repair row).
+- **Difficulty:** Low · **Est:** 0.5 (+0.25 for the Settings diagnostic row) · **Risk:** Low — but note the
+  channel bump is a **one-way migration**: users who deliberately silenced the old channel will get a fresh
+  channel at `IMPORTANCE_HIGH`. That is the intended repair here; don't bump the id casually in future.
+  · **Priority:** **P1** — ship the id bump with the next release; existing installs cannot self-heal
+  without it.
+- **Acceptance:** on a device that currently shows the deposit channel as soundless, installing the new
+  build produces a **new** channel with the custom sound enabled and the old entry gone; an incoming
+  deposit with the app **closed** plays `deposit_alert`; foreground still plays exactly once (no doubling);
+  a user who manually disables the channel sees the Settings warning row and can deep-link to fix it.
+- **Rollback:** revert to the old channel id (restores today's behaviour — the old channel state is still
+  in the system). **Regression:** all notification delivery, foreground/background sound doubling, badge.
+- **Testing:** on-device matrix — app closed / background / foreground × deposit, on a device with the
+  broken channel and on a clean install; verify `getNotificationChannel(...)` reports a non-null `sound`
+  and `IMPORTANCE_HIGH`; verify the raw resource survives a **release** build.
+
+**Suggested order for this batch:** TASK-58 (P0, data loss) → **TASK-59** (P1, needs to ride the next
+release to self-heal) → TASK-51 + TASK-52 (cheap, user-visible) →
+TASK-57 (unblocks clean errors everywhere) → TASK-54 (price truth) → TASK-53 (config wiring, high risk) →
+TASK-56 (needs TASK S pref + TASK-54) → TASK-55 (needs server contract) → TASK-50 (needs Swap/TASK-2).
 
 ---
 
