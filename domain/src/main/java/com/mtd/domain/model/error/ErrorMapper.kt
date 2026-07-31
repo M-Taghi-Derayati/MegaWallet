@@ -53,6 +53,20 @@ object ErrorMapper {
     fun getUserMessage(throwable: Throwable): String = getUserMessage(map(throwable))
 
     /**
+     * The one rule for turning a failure into display copy: prefer what the taxonomy knows, and
+     * only fall back to the call site's own Persian description of the action when it doesn't.
+     * Use this anywhere a message is written into UI state instead of the snackbar pipeline.
+     */
+    fun userMessage(throwable: Throwable, fallbackMessage: String? = null): String {
+        val mapped = getUserMessage(map(throwable))
+        return if (mapped == GENERIC_MESSAGE && !fallbackMessage.isNullOrBlank()) {
+            fallbackMessage
+        } else {
+            mapped
+        }
+    }
+
+    /**
      * Technical text for the "جزئیات" dialog and the log. Carries the machine code / exception type
      * so a support conversation is possible, with every address, key, hash and payload redacted.
      */
@@ -93,20 +107,12 @@ object ErrorMapper {
         surface: ErrorSurface = ErrorSurface.SNACKBAR,
         title: String = DEFAULT_TITLE,
         fallbackMessage: String? = null
-    ): ErrorPresentation {
-        val mapped = getUserMessage(map(throwable))
-        val short = if (mapped == GENERIC_MESSAGE && !fallbackMessage.isNullOrBlank()) {
-            fallbackMessage
-        } else {
-            mapped
-        }
-        return ErrorPresentation(
-            title = title,
-            shortMessage = short,
-            technicalDetail = getTechnicalDetail(throwable),
-            surface = surface
-        )
-    }
+    ): ErrorPresentation = ErrorPresentation(
+        title = title,
+        shortMessage = userMessage(throwable, fallbackMessage),
+        technicalDetail = getTechnicalDetail(throwable),
+        surface = surface
+    )
 
     /** Digs the original failure out of the [AppError] wrappers so the detail stays informative. */
     private fun unwrap(throwable: Throwable): Throwable = when (throwable) {

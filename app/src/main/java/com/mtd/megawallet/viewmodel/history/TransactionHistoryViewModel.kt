@@ -2,6 +2,7 @@ package com.mtd.megawallet.viewmodel.history
 
 import androidx.lifecycle.viewModelScope
 import com.mtd.core.manager.ErrorManager
+import com.mtd.core.manager.ErrorSeverity
 import com.mtd.data.formatter.TransactionDisplayFormatter
 import com.mtd.data.formatter.WalletAddressReference
 import com.mtd.domain.interfaceRepository.IAppCacheStore
@@ -24,6 +25,7 @@ import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.WalletKey
 import com.mtd.domain.model.error.ApiError
 import com.mtd.domain.model.error.ApiException
+import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.domain.usecase.history.BuildHistoryNetworkOptionsUseCase
 import com.mtd.domain.usecase.history.BuildPendingHistoryTransactionUseCase
 import com.mtd.domain.usecase.history.GetTransactionFeeDetailsUseCase
@@ -274,10 +276,19 @@ class TransactionHistoryViewModel @Inject constructor(
                         if (apiError == ApiError.UnsupportedOperation) {
                             loadLegacy(isAll, normalizedNetwork, normalizedAddress, cacheKey, refreshingIds)
                         } else {
+                            // The empty-state text on the list is the surface here; a snackbar on
+                            // top of a full-screen error message would just be noise.
                             _transactions.value = emptyList()
-                            _errorMessage.value = (unified.exception as? ApiException)?.reasonFa
-                                ?: unified.exception.message
-                                ?: "Failed to load transaction history"
+                            _errorMessage.value = userMessageFor(
+                                unified.exception,
+                                "دریافت تاریخچه تراکنش‌ها ناموفق بود"
+                            )
+                            reportError(
+                                throwable = unified.exception,
+                                userAction = "loadUnifiedHistory",
+                                surface = ErrorSurface.SILENT,
+                                severity = ErrorSeverity.MEDIUM
+                            )
                         }
                     }
 
@@ -308,8 +319,15 @@ class TransactionHistoryViewModel @Inject constructor(
                     is ResultResponse.Success -> applyUnifiedPage(result.data, currentUserAddress, append = true)
                     is ResultResponse.Error -> {
                         // Stop paginating; keep what we have and hint that the list may be incomplete.
+                        // The stale banner is the user-visible signal (ErrorSurface.SILENT).
                         _hasMore.value = false
                         _showStaleWarning.value = true
+                        reportError(
+                            throwable = result.exception,
+                            userAction = "loadMoreHistory",
+                            surface = ErrorSurface.SILENT,
+                            severity = ErrorSeverity.LOW
+                        )
                     }
                 }
             } finally {
@@ -408,7 +426,16 @@ class TransactionHistoryViewModel @Inject constructor(
 
                 is ResultResponse.Error -> {
                     _transactions.value = emptyList()
-                    _errorMessage.value = result.exception.message ?: "Failed to load transaction history"
+                    _errorMessage.value = userMessageFor(
+                        result.exception,
+                        "دریافت تاریخچه تراکنش‌ها ناموفق بود"
+                    )
+                    reportError(
+                        throwable = result.exception,
+                        userAction = "loadLegacyHistory",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.MEDIUM
+                    )
                 }
             }
         }
@@ -699,12 +726,30 @@ class TransactionHistoryViewModel @Inject constructor(
     }
 
     private suspend fun fetchHistoryForWalletKey(key: WalletKey): List<TransactionRecord> {
+        // Per-address fan-out: one chain failing must not blank the whole merged list, and the
+        // stale-warning banner already tells the user the view may be incomplete.
         return try {
             when (val result = getTransactionHistoryUseCase(key.networkName, key.address)) {
                 is ResultResponse.Success -> normalizeTransactionHistoryUseCase(result.data, key.address)
-                is ResultResponse.Error -> emptyList()
+                is ResultResponse.Error -> {
+                    reportError(
+                        throwable = result.exception,
+                        userAction = "fetchHistoryFor(${key.networkName})",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.LOW
+                    )
+                    emptyList()
+                }
             }
-        } catch (_: Exception) {
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            reportError(
+                throwable = e,
+                userAction = "fetchHistoryFor(${key.networkName})",
+                surface = ErrorSurface.SILENT,
+                severity = ErrorSeverity.LOW
+            )
             emptyList()
         }
     }
@@ -742,7 +787,16 @@ class TransactionHistoryViewModel @Inject constructor(
                     }
             }
 
-            is ResultResponse.Error -> walletAddressBook
+            // Cosmetic lookup — rows fall back to the raw counterparty label.
+            is ResultResponse.Error -> {
+                reportError(
+                    throwable = result.exception,
+                    userAction = "loadWalletAddressBook",
+                    surface = ErrorSurface.SILENT,
+                    severity = ErrorSeverity.LOW
+                )
+                walletAddressBook
+            }
         }
     }
 
@@ -770,7 +824,13 @@ class TransactionHistoryViewModel @Inject constructor(
                         applyTransactionFeeDetails(key, result.data)
                     }
 
-                    is ResultResponse.Error -> Unit
+                    // Optional enrichment of an already-rendered row (ErrorSurface.SILENT).
+                    is ResultResponse.Error -> reportError(
+                        throwable = result.exception,
+                        userAction = "loadTransactionFeeDetails",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.LOW
+                    )
                 }
             } finally {
                 _transactionFeeDetailsLoading.update { it - key }

@@ -2,6 +2,7 @@ package com.mtd.megawallet.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.mtd.core.manager.ErrorManager
+import com.mtd.core.manager.ErrorSeverity
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IFeatureAvailabilityResolver
@@ -22,6 +23,11 @@ import com.mtd.domain.model.UnifiedGaslessSession
 import com.mtd.domain.model.UnifiedTransferRequest
 import com.mtd.domain.model.capability.FeatureAvailabilityContext
 import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.error.ApiError
+import com.mtd.domain.model.error.ApiException
+import com.mtd.domain.model.error.AppError
+import com.mtd.domain.model.error.ErrorMapper
+import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.domain.model.FeeState
 import com.mtd.domain.model.FeeTrend
 import com.mtd.domain.model.GaslessAvailability
@@ -249,8 +255,15 @@ class SendViewModel @Inject constructor(
                 }
 
                 is ResultResponse.Error -> {
+                    // Shown inline on the fee tab; gasless simply stays disabled, so log only.
                     _gaslessAvailability.value = GaslessAvailability.Unavailable(
-                        result.exception.message ?: "امکان بررسی وضعیت گس لس وجود ندارد"
+                        userMessageFor(result.exception, "امکان بررسی وضعیت گس لس وجود ندارد")
+                    )
+                    reportError(
+                        throwable = result.exception,
+                        userAction = "checkGaslessAvailability",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.LOW
                     )
                 }
             }
@@ -263,7 +276,13 @@ class SendViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = refreshSelectedAssetBalanceUseCase(wallet, asset, currentIrrRate)) {
                 is ResultResponse.Success -> result.data?.let { _selectedAsset.value = it }
-                is ResultResponse.Error -> Unit
+                // Background balance top-up; the cached figure stays on screen (ErrorSurface.SILENT).
+                is ResultResponse.Error -> reportError(
+                    throwable = result.exception,
+                    userAction = "updateBalanceForAsset",
+                    surface = ErrorSurface.SILENT,
+                    severity = ErrorSeverity.LOW
+                )
             }
         }
     }
@@ -391,20 +410,20 @@ class SendViewModel @Inject constructor(
                 }
 
                 if (effectiveCrypto <= BigDecimal.ZERO) {
-                    throw IllegalStateException("مقدار ارسال معتبر نیست")
+                    sendFailure("مقدار ارسال معتبر نیست")
                 }
 
                 val amountSmallest = toSmallestUnit(effectiveCrypto, asset.decimals)
                 if (amountSmallest <= BigInteger.ZERO) {
-                    throw IllegalStateException("مقدار ارسال خیلی کوچک است")
+                    sendFailure("مقدار ارسال خیلی کوچک است")
                 }
 
                 if (useGasless) {
                     if (!isGaslessEnabled()) {
-                        throw IllegalStateException("ارسال گس لس برای این دارایی فعال نیست")
+                        sendFailure("ارسال گس لس برای این دارایی فعال نیست")
                     }
                     if (!validateAddressForNetworkUseCase(recipient, asset.networkId)) {
-                        throw IllegalStateException("آدرس مقصد برای این شبکه معتبر نیست")
+                        sendFailure("آدرس مقصد برای این شبکه معتبر نیست")
                     }
 
                     val txHash = submitGaslessTransfer(
@@ -426,9 +445,9 @@ class SendViewModel @Inject constructor(
                 val request = when (network.networkType) {
                     NetworkType.EVM -> {
                         val gasPrice = selectedFee?.gasPrice
-                            ?: throw IllegalStateException("گس پرایس دریافت نشد")
+                            ?: sendFailure("گس پرایس دریافت نشد")
                         val gasLimit = selectedFee.gasLimit
-                            ?: throw IllegalStateException("گس لیمیت دریافت نشد")
+                            ?: sendFailure("گس لیمیت دریافت نشد")
 
                         UnifiedTransferRequest(
                             networkId = asset.networkId,
@@ -470,7 +489,7 @@ class SendViewModel @Inject constructor(
                         )
                     }
 
-                    else -> throw IllegalStateException("ارسال برای این شبکه پشتیبانی نشده است")
+                    else -> sendFailure("ارسال برای این شبکه پشتیبانی نشده است")
                 }
 
                 when (val result = unifiedTransferCoordinator.sendNormal(request)) {
@@ -488,8 +507,23 @@ class SendViewModel @Inject constructor(
                         throw result.exception
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _submitState.value = SubmitState.Error(e.message ?: "ارسال تراکنش ناموفق بود")
+                // TASK-57 — a failed send is the one case that must always block: the user is left
+                // not knowing whether their funds moved. The inline slider state carries the same
+                // curated message; the technical detail lives in the dialog.
+                _submitState.value = SubmitState.Error(
+                    userMessageFor(e, "ارسال تراکنش ناموفق بود")
+                )
+                reportError(
+                    throwable = e,
+                    userAction = "submitTransfer",
+                    surface = ErrorSurface.BLOCKING,
+                    severity = ErrorSeverity.HIGH,
+                    title = "ارسال ناموفق",
+                    fallbackMessage = "ارسال تراکنش ناموفق بود"
+                )
             }
         }
     }
@@ -553,8 +587,16 @@ class SendViewModel @Inject constructor(
                 amountSmallest = amountSmallest
             )
         }.getOrElse { error ->
+            // Preview only — the user can still send with a normal fee, so the message lives
+            // inline on the fee tab and the failure is logged rather than surfaced.
             _gaslessPreviewState.value = GaslessPreviewState.Error(
-                error.message ?: "امکان محاسبه هزینه گس لس وجود ندارد"
+                userMessageFor(error, "امکان محاسبه هزینه گس لس وجود ندارد")
+            )
+            reportErrorAsync(
+                throwable = error,
+                userAction = "buildGaslessRequest",
+                surface = ErrorSurface.SILENT,
+                severity = ErrorSeverity.LOW
             )
             return
         }
@@ -581,7 +623,13 @@ class SendViewModel @Inject constructor(
 
                 is ResultResponse.Error -> {
                     _gaslessPreviewState.value = GaslessPreviewState.Error(
-                        eligibility.exception.message ?: "بررسی مجوز گس‌لس ناموفق بود"
+                        userMessageFor(eligibility.exception, "بررسی مجوز گس‌لس ناموفق بود")
+                    )
+                    reportError(
+                        throwable = eligibility.exception,
+                        userAction = "checkGaslessEligibility",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.LOW
                     )
                     return@launch
                 }
@@ -610,7 +658,13 @@ class SendViewModel @Inject constructor(
 
                 is ResultResponse.Error -> {
                     _gaslessPreviewState.value = GaslessPreviewState.Error(
-                        preview.exception.message ?: "امکان دریافت هزینه گس‌لس وجود ندارد"
+                        userMessageFor(preview.exception, "امکان دریافت هزینه گس‌لس وجود ندارد")
+                    )
+                    reportError(
+                        throwable = preview.exception,
+                        userAction = "previewGaslessDisplayPolicy",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.LOW
                     )
                 }
             }
@@ -623,9 +677,9 @@ class SendViewModel @Inject constructor(
         amountSmallest: BigInteger
     ): UnifiedTransferRequest {
         val network = networkCatalog.getNetworkInfoById(asset.networkId)
-            ?: throw IllegalStateException("شبکه ${asset.networkId} یافت نشد")
+            ?: sendFailure("شبکه ${asset.networkId} یافت نشد")
         val tokenAddress = asset.contractAddress
-            ?: throw IllegalStateException("برای گس‌لس، آدرس قرارداد توکن الزامی است")
+            ?: sendFailure("برای گس‌لس، آدرس قرارداد توکن الزامی است")
 
         val deadline = (System.currentTimeMillis() / 1000L) + DEFAULT_GASLESS_DEADLINE_SECONDS
 
@@ -651,7 +705,7 @@ class SendViewModel @Inject constructor(
                 deadlineEpochSeconds = deadline
             )
 
-            else -> throw IllegalStateException("گس‌لس برای این شبکه پشتیبانی نشده است")
+            else -> sendFailure("گس‌لس برای این شبکه پشتیبانی نشده است")
         }
     }
 
@@ -670,7 +724,13 @@ class SendViewModel @Inject constructor(
                     is ResultResponse.Success -> {
                         updateSponsorPreviewPolicy(result.data.sponsorDisplayPolicy)
                     }
-                    is ResultResponse.Error -> Unit
+                    // Optional preview enrichment — the send still works without it.
+                    is ResultResponse.Error -> reportError(
+                        throwable = result.exception,
+                        userAction = "requestSponsorForApprove",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.LOW
+                    )
                 }
             }
 
@@ -684,7 +744,13 @@ class SendViewModel @Inject constructor(
                     is ResultResponse.Success -> {
                         updateSponsorPreviewPolicy(result.data.sponsorDisplayPolicy)
                     }
-                    is ResultResponse.Error -> Unit
+                    // Optional preview enrichment — the send still works without it.
+                    is ResultResponse.Error -> reportError(
+                        throwable = result.exception,
+                        userAction = "requestSponsorForApprove",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.LOW
+                    )
                 }
             }
         }
@@ -698,7 +764,7 @@ class SendViewModel @Inject constructor(
 
     private suspend fun ensureGaslessEligible(asset: AssetItem) {
         val tokenAddress = asset.contractAddress
-            ?: throw IllegalStateException("آدرس قرارداد توکن برای گس‌لس موجود نیست")
+            ?: sendFailure("آدرس قرارداد توکن برای گس‌لس موجود نیست")
 
         val eligibility = unifiedTransferCoordinator.checkGaslessEligibility(
             networkId = asset.networkId,
@@ -707,8 +773,8 @@ class SendViewModel @Inject constructor(
         ).requireSuccess("بررسی مجوز گس‌لس ناموفق بود")
 
         if (!eligibility.allowed) {
-            throw IllegalStateException(
-                eligibility.bestReasonFa
+            sendFailure(
+                eligibility.bestReasonFa?.takeIf { it.isNotBlank() }
                     ?: "این تراکنش فعلاً برای سرویس گس‌لس مجاز نیست"
             )
         }
@@ -728,7 +794,17 @@ class SendViewModel @Inject constructor(
             )
         ) {
             is ResultResponse.Success -> result.data.allowed
-            is ResultResponse.Error -> false
+            // "Can't confirm sponsorship" is treated as "not sponsored" — the user simply pays the
+            // approve fee themselves, so this logs and never interrupts (ErrorSurface.SILENT).
+            is ResultResponse.Error -> {
+                reportError(
+                    throwable = result.exception,
+                    userAction = "checkSponsorEligibility",
+                    surface = ErrorSurface.SILENT,
+                    severity = ErrorSeverity.LOW
+                )
+                false
+            }
         }
     }
 
@@ -745,13 +821,13 @@ class SendViewModel @Inject constructor(
                 }
 
                 val approveFee = resolveApproveFeeOption(selectedFee)
-                    ?: throw IllegalStateException("کارمزد approve برای شبکه EVM در دسترس نیست")
+                    ?: sendFailure("کارمزد approve برای شبکه EVM در دسترس نیست")
                 val gasPrice = approveQuote.approveTxTemplate?.gasPriceWei
                     ?: approveQuote.approveTxTemplate?.maxFeePerGasWei
                     ?: approveQuote.gasPriceWei
                     ?: approveQuote.maxFeePerGasWei
                     ?: approveFee.gasPrice
-                    ?: throw IllegalStateException("گس پرایس approve دریافت نشد")
+                    ?: sendFailure("گس پرایس approve دریافت نشد")
                 val gasLimit = (approveQuote.approveTxTemplate?.gasLimit
                     ?: approveQuote.estimatedApproveGasLimit
                     ?: approveFee.gasLimit
@@ -761,7 +837,7 @@ class SendViewModel @Inject constructor(
                 val approvalAmount = approveQuote.approveTxTemplate?.approvalAmount
                     ?: approveQuote.approvalAmount
                     ?: approveQuote.requiredAllowance
-                    ?: throw IllegalStateException("EVM approve amount was not returned by server")
+                    ?: sendFailure("مقدار approve از سرور دریافت نشد")
 
                 unifiedTransferCoordinator.buildApproveTransaction(
                     session = session,
@@ -781,7 +857,7 @@ class SendViewModel @Inject constructor(
                 val approvalAmount = approveQuote.approveTxTemplate?.approvalAmount
                     ?: approveQuote.approvalAmount
                     ?: approveQuote.requiredAllowance
-                    ?: throw IllegalStateException("مقدار approve از سرور دریافت نشد")
+                    ?: sendFailure("مقدار approve از سرور دریافت نشد")
 
                 val feeLimit = resolveTronApproveFeeLimit(selectedFee, approveQuote)
                 unifiedTransferCoordinator.buildApproveTransaction(
@@ -817,8 +893,10 @@ class SendViewModel @Inject constructor(
             delay(GASLESS_APPROVE_POLL_INTERVAL_MS)
         }
 
-        throw IllegalStateException(
-            lastFailure?.message ?: "تأیید approve در شبکه بیش از حد طول کشید"
+        val timeoutMessage = "تأیید approve در شبکه بیش از حد طول کشید"
+        sendFailure(
+            lastFailure?.let { ErrorMapper.userMessage(it, timeoutMessage) } ?: timeoutMessage,
+            lastFailure
         )
     }
 
@@ -834,12 +912,12 @@ class SendViewModel @Inject constructor(
                     .requireSuccess("ثبت درخواست گس لس ناموفق بود")
                 return queued.queueId
             } catch (e: Exception) {
-                if (attempt == 0 && shouldRetryGasless(e.message)) {
+                if (attempt == 0 && shouldRetryGasless(e)) {
                     currentSession = unifiedTransferCoordinator.prepareGasless(request)
                         .requireSuccess("تازه سازی نشست گس لس ناموفق بود")
 
                     if (currentSession.needsApprove()) {
-                        throw IllegalStateException("پس از تازه سازی نشست، approve توکن هنوز کافی نیست")
+                        sendFailure("پس از تازه سازی نشست، approve توکن هنوز کافی نیست")
                     }
                 } else {
                     throw e
@@ -847,7 +925,7 @@ class SendViewModel @Inject constructor(
             }
         }
 
-        throw IllegalStateException("مسیر گس لس با وجود تلاش مجدد کامل نشد")
+        sendFailure("مسیر گس لس با وجود تلاش مجدد کامل نشد")
     }
 
     private suspend fun notifyTransferRegistered(
@@ -928,8 +1006,23 @@ class SendViewModel @Inject constructor(
         }
     }
 
-    private fun shouldRetryGasless(message: String?): Boolean {
-        val normalized = message?.lowercase(Locale.US).orEmpty()
+    /**
+     * TASK-57 — decide on the **typed** error, not the human message (API invariant #3). The
+     * previous version matched English substrings in `e.message`, which broke the moment the
+     * message became curated Persian; the typed code was always available underneath.
+     * The substring pass survives only as a fallback for transports that have no typed code yet.
+     */
+    private fun shouldRetryGasless(error: Throwable?): Boolean {
+        val apiError = (error as? ApiException)?.apiError
+            ?: (error?.cause as? ApiException)?.apiError
+
+        if (apiError != null) {
+            return apiError == ApiError.RequoteRequired ||
+                apiError == ApiError.RaceConditionLock ||
+                apiError == ApiError.IdempotencyKeyConflict
+        }
+
+        val normalized = (error?.message ?: error?.cause?.message)?.lowercase(Locale.US).orEmpty()
         if (normalized.isBlank()) return false
 
         return "expired" in normalized ||
@@ -956,11 +1049,26 @@ class SendViewModel @Inject constructor(
         is UnifiedGaslessSession.Tron -> value.needsApprove
     }
 
+    /**
+     * TASK-57 — fails with copy that is **already** user-facing Persian.
+     *
+     * Wrapping it in [AppError.Business.General] makes `ErrorMapper` pass the text through
+     * verbatim instead of flattening it to the generic message, while the original failure is kept
+     * as the cause so the "جزئیات" dialog (and `shouldRetryGasless`) still see the typed error.
+     */
+    private fun sendFailure(message: String, cause: Throwable? = null): Nothing {
+        val error = AppError.Business.General(message = message)
+        cause?.let { runCatching { error.initCause(it) } }
+        throw error
+    }
+
     private fun <T> ResultResponse<T>.requireSuccess(errorMessage: String): T {
         return when (this) {
             is ResultResponse.Success -> data
-            is ResultResponse.Error -> throw IllegalStateException(
-                exception.message?.takeIf { it.isNotBlank() } ?: errorMessage,
+            // Curated copy for the typed cases, the call site's Persian description otherwise —
+            // the raw server/exception string is never what the user reads.
+            is ResultResponse.Error -> sendFailure(
+                ErrorMapper.userMessage(exception, errorMessage),
                 exception
             )
         }
@@ -1048,11 +1156,33 @@ class SendViewModel @Inject constructor(
                         _feeState.value = FeeState.Success(options)
                     }
                     is ResultResponse.Error -> {
-                        if (!silent) _feeState.value = FeeState.Error(result.exception.message ?: "Fee estimation failed")
+                        // Rendered inline on the fee card (and suppressed entirely on a silent
+                        // background poll), so it logs rather than raising a snackbar per tick.
+                        if (!silent) {
+                            _feeState.value = FeeState.Error(
+                                userMessageFor(result.exception, "محاسبه کارمزد ناموفق بود")
+                            )
+                        }
+                        reportError(
+                            throwable = result.exception,
+                            userAction = "estimateSendFees",
+                            surface = ErrorSurface.SILENT,
+                            severity = ErrorSeverity.LOW
+                        )
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                if (!silent) _feeState.value = FeeState.Error(e.message ?: "Unknown error")
+                if (!silent) {
+                    _feeState.value = FeeState.Error(userMessageFor(e, "محاسبه کارمزد ناموفق بود"))
+                }
+                reportError(
+                    throwable = e,
+                    userAction = "estimateSendFees",
+                    surface = ErrorSurface.SILENT,
+                    severity = ErrorSeverity.LOW
+                )
             }
         }
     }

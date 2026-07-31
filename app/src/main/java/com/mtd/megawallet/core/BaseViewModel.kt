@@ -68,6 +68,14 @@ abstract class BaseViewModel(
         fallbackMessage = fallbackMessage
     )
 
+    /**
+     * Curated Persian copy for a failure that is written into **UI state** (an error field on a
+     * state object) rather than pushed through the snackbar pipeline. Never returns raw exception
+     * text. Usually paired with a [reportError] call so the failure is also logged/surfaced.
+     */
+    protected fun userMessageFor(throwable: Throwable, fallbackMessage: String? = null): String =
+        ErrorMapper.userMessage(throwable, fallbackMessage)
+
     /** Fire-and-forget variant of [reportError] for non-suspending call sites. */
     protected fun reportErrorAsync(
         throwable: Throwable,
