@@ -11,7 +11,7 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.util.DebugLogger
 import com.google.firebase.crashlytics.FirebaseCrashlytics
-import com.mtd.data.config.ConfigManager
+import com.mtd.data.config.ConfigCatalogBootstrapper
 import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
 import com.mtd.data.datasource.DefaultTestnetVisibilityProvider
 import dagger.hilt.android.HiltAndroidApp
@@ -26,7 +26,9 @@ import javax.inject.Inject
 @HiltAndroidApp
 class MegaWalletApplication: Application() , ImageLoaderFactory{
 
-    @Inject lateinit var configManager: ConfigManager
+    // TASK-53 — ConfigManager دیگر مستقیم مصرف نمی‌شود؛ bootstrapper آن را صدا می‌زند و
+    // نتیجه را روی رجیستری‌ها می‌نشاند.
+    @Inject lateinit var configCatalogBootstrapper: ConfigCatalogBootstrapper
 
 
     @Inject lateinit var connectionModeProvider: DefaultBlockchainConnectionModeProvider
@@ -77,9 +79,12 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
                 .onFailure { Timber.w(it, "Connection-mode prime failed; defaulting to DIRECT") }
             runCatching { testnetVisibilityProvider.prime() }
                 .onFailure { Timber.w(it, "Testnet-visibility prime failed; using the build default") }
-            runCatching { configManager.getValidatedConfig() }
-                .onSuccess { Timber.i("Dynamic config ready (version=${it.version})") }
-                .onFailure { Timber.w(it, "Dynamic config warm-up failed; using local fallback") }
+            // TASK-53 — این دیگر یک warm-up بی‌نتیجه نیست: باندلِ تأییدشده روی رجیستری‌ها
+            // نشانده می‌شود. رجیستری‌ها از قبل با seed محلی پر شده‌اند، پس شکست این مرحله
+            // یعنی «کاتالوگِ محلی سرِ جایش می‌ماند»، نه کاتالوگِ خالی.
+            runCatching { configCatalogBootstrapper.bootstrap() }
+                .onSuccess { Timber.i("Catalog bootstrap finished (appliedFromBundle=$it)") }
+                .onFailure { Timber.w(it, "Catalog bootstrap failed; using the local seed catalog") }
         }
     }
 

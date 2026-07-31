@@ -24,6 +24,13 @@ android {
         buildConfigField("String", "RELAYER_HOST", "\"wallet.intexchange.ir\"")
         buildConfigField("String", "RELAYER_WS_URL", "\"wss://wallet.intexchange.ir/ws\"")
 
+        // TASK-53 — kill switch for applying the signed config bundle to the network/asset
+        // registries. Flip to false to fall back to today's behaviour: the registries are seeded
+        // from the APK-bundled networks.json/assets.json and the server bundle is ignored.
+        // The registries feed key derivation and address validation, so this stays flippable
+        // without a code change to the wiring itself.
+        buildConfigField("boolean", "CONFIG_BUNDLE_APPLY_ENABLED", "true")
+
     }
 
     buildFeatures {

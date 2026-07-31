@@ -711,7 +711,16 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
   processed LIVE (item-4 intent still met via its StateFlow on entry). **History keeps the gating** (it writes
   no shared cache), so item 4 stands where it's correct. **Files:** `HomeViewModel.kt`, `MainScreen.kt`.
 
-### TASK-38 — Signed config bundle bootstrap (network/asset catalog from server) — 🟡 Components exist but are NOT wired (corrected 2026-07-30)
+### TASK-38 — Signed config bundle bootstrap (network/asset catalog from server) — ✅ Wired (2026-08-01, via TASK-53 batch 5)
+- **Status (2026-08-01):** the gap recorded below is **closed**. `ConfigCatalogBootstrapper`
+  (`data/config/`) is now the single consumer of `ConfigManager.getValidatedConfig()` and applies the
+  result to `BlockchainRegistry.applyConfig` / `AssetRegistry.applyConfig`. `MegaWalletApplication`
+  calls the bootstrapper instead of the old fire-and-forget warm-up. The local `networks.json` /
+  `assets.json` are now the **seed**: they populate the registries at DI time so identity lookups never
+  wait on the network, and the verified bundle replaces the catalog atomically when it arrives.
+  Kill switch: `BuildConfig.CONFIG_BUNDLE_APPLY_ENABLED` (`:data`) → local-seed-only behaviour.
+  See TASK-53 for the full record. **Still needs an on-device run** (first launch, tampered signature,
+  version bump).
 - **Server doc §3:** drive the network/asset catalog + `networkId`s from a **signed** server bundle instead
   of hardcoding: `GET /config/public-key` (pin), `GET /config/bundle` (`{version,networks,assets,signature}`,
   secp256k1-verify before trusting), `GET /config/version` (cheap re-fetch poll), `GET /capabilities`
@@ -996,7 +1005,43 @@ the investigation already produced an answer (TASK-53) it is recorded here rathe
 - **Acceptance:** long-press/tap copies the full (un-truncated) address; snackbar confirms.
   **Rollback:** revert. **Regression:** sheet layout/scroll. **Testing:** on-device paste-check per row.
 
-### TASK-53 — Server-bundle networks are NOT displayed (investigation answered: **no**)
+### TASK-53 — Data-driven networks: a bundle-added EVM chain works with no app update — ✅ Implemented (2026-08-01, needs build + on-device verify)
+
+**Delivered in five batches. Nothing below was compiled or run in the authoring environment —
+every item is "verified by inspection" unless marked otherwise.**
+
+| Batch | Commit | What |
+|---|---|---|
+| 1 | `a73cd56` | Family checks key on `NetworkType`, not `NetworkName` lists |
+| 2a | `1526bd7` | `explorerApi` + `hasL1DataFee` become `NetworkConfig` data |
+| 3 | `eb54ded` | `networkId` is the identity; `NetworkName` a nullable alias |
+| 4 | `22648cf` | Register every chain; testnets gated on a user toggle |
+| 2b | `77a1ca0` | Network icons from config, not a drawable map |
+| — | `8d3766d` | `doge_testnet` chainId collision fix |
+| 5 | (this) | The verified bundle is applied to the registries |
+
+- **Verified by inspection:** the five `NetworkName.valueOf` throw-sites are gone; the only remaining
+  name-keyed code is genuine per-chain UTXO behaviour (`UtxoNetworkParametersResolver`,
+  `BitcoinDataSource`, `BitcoinjUtxoTxBuilder`, `ProxyChainDataSource:177`); `getAllNetworks()`
+  (identity/derivation) is never filtered while `getAllNetworkInfos()` (UI listing) is; registry
+  writes are atomic snapshot swaps.
+- **Covered by JVM tests:** unknown-name config registers instead of throwing, address derivation is
+  byte-identical to a known chain, listing tracks the toggle without re-registering, chainId
+  collisions keep the first entry, `applyConfig` replaces rather than merges, identity overrides
+  (chainId / derivationPath / addressRegex / asset contractAddress) are rejected, a tampered
+  signature applies nothing, an empty or offline bundle keeps the seed.
+- **Still needs an on-device run:** first launch fetch + verify + apply; a `config/version` bump
+  re-fetch; a genuinely bundle-only chain deriving an address, reading balances, showing history and
+  **sending**; DIRECT vs PROXY equivalence; and the testnet toggle in a release build.
+- **Known limitation (by design):** only **EVM** is fully data-driven. A new UTXO chain still needs
+  code, because bitcoinj `NetworkParameters` are per-chain; `BitcoinNetworkFactory`/`UtxoNetworkFactory`
+  throw a descriptive error for an aliasless UTXO chain and `registerFromConfig` skips it.
+- **Known data issue:** `xrp_mainnet` collides with `bitcoin_mainnet` on chainId 0 and `xrp_testnet`
+  with `ethereum_mainnet` on 1. Harmless today (XRP has no factory, so neither registers) but must be
+  fixed before an XRP family is added. The `registerNetwork` guard will log it loudly.
+
+#### Original investigation (2026-07-30) — kept for the record
+
 - **Question (user, item 4):** if a network exists in the server config bundle but not in the device's
   local file, does the app show it?
 - **Answer: no — and there are three independent blockers.** Verified 2026-07-30:

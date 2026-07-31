@@ -24,13 +24,29 @@ class LocalConfigAssetProvider @Inject constructor(
 ) {
 
     fun load(): ConfigBundleDto {
+        // TASK-53 — هر فیلدی که برای ساختِ یک شبکهٔ قابل‌استفاده لازم است منتقل می‌شود، وگرنه
+        // seed محلی پس از رفت‌وبرگشت از این DTO ناقص می‌شد و مسیرِ fallback شبکه‌های شکسته می‌ساخت.
         val networks = loadNetworkConfigs(context).map { cfg ->
             ConfigNetworkDto(
                 networkId = cfg.id,
                 name = cfg.name,
                 type = cfg.networkType,
                 chainId = cfg.chainId,
-                isTestnet = cfg.isTestnet
+                isTestnet = cfg.isTestnet,
+                derivationPath = cfg.derivationPath,
+                rpcUrls = cfg.rpcUrls,
+                rpcUrlsEvm = cfg.rpcUrlsEvm,
+                webSocketUrl = cfg.webSocketUrl,
+                currencySymbol = cfg.currencySymbol,
+                decimals = cfg.decimals,
+                explorers = cfg.explorers,
+                explorerTxUrl = cfg.explorerTxUrl,
+                iconUrl = cfg.iconUrl,
+                regex = cfg.regex,
+                color = cfg.color,
+                faName = cfg.faName,
+                explorerApi = cfg.explorerApi,
+                hasL1DataFee = cfg.hasL1DataFee
             )
         }
         val assets = loadAssets(context).map { asset ->
@@ -40,7 +56,9 @@ class LocalConfigAssetProvider @Inject constructor(
                 symbol = asset.symbol,
                 name = asset.name,
                 decimals = asset.decimals,
-                contractAddress = asset.contractAddress
+                contractAddress = asset.contractAddress,
+                iconUrl = asset.iconUrl,
+                faName = asset.faName
             )
         }
         return ConfigBundleDto(

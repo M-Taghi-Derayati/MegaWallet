@@ -95,13 +95,27 @@ class BlockchainRegistry @Inject constructor(
 ) : INetworkCatalog {
 
 
-    private val networks = mutableMapOf<NetworkType, MutableMap<Long, BlockchainNetwork>>()
+    /**
+     * TASK-53 — همهٔ ایندکس‌ها در یک snapshotِ **تغییرناپذیر** نگهداری می‌شوند و یکجا جابه‌جا
+     * می‌شوند.
+     *
+     * دلیل: با [applyConfig] کاتالوگ در زمان اجرا (روی ترد IO، هنگام رسیدنِ باندلِ امضاشده)
+     * بازسازی می‌شود، در حالی که ViewModelها هم‌زمان از آن می‌خوانند. با mapهای تغییرپذیر این
+     * یعنی `ConcurrentModificationException` یا بدتر، خواندنِ نیمه‌کاره در میانهٔ پاک‌سازی —
+     * جایی که خروجی به کلیدسازی و اعتبارسنجی آدرس می‌رود. خواننده‌ها بدون قفل یک snapshot
+     * سازگار می‌بینند؛ فقط نویسنده‌ها [writeLock] می‌گیرند.
+     */
+    private class Catalog(
+        val byId: Map<String, BlockchainNetwork> = emptyMap(),
+        val byChainId: Map<Long, BlockchainNetwork> = emptyMap(),
+        val defaultByType: Map<NetworkType, BlockchainNetwork> = emptyMap(),
+        val regexById: Map<String, Regex> = emptyMap(),
+        val regexByType: Map<NetworkType, List<Regex>> = emptyMap()
+    )
 
-    private val networksById = mutableMapOf<String, BlockchainNetwork>()
-    private val networksByType = mutableMapOf<NetworkType, BlockchainNetwork>()
-    private val networksByChainId = mutableMapOf<Long, BlockchainNetwork>()
-    private val addressRegexByNetworkId = mutableMapOf<String, Regex>()
-    private val addressRegexByNetworkType = mutableMapOf<NetworkType, MutableList<Regex>>()
+    @Volatile
+    private var catalog = Catalog()
+    private val writeLock = Any()
 
     /**
      * مجموعهٔ factoryهای موجود برای ساخت شبکه‌ها.
@@ -116,9 +130,18 @@ class BlockchainRegistry @Inject constructor(
 
 
     fun registerNetwork(network: BlockchainNetwork) {
-        // Register by ID (universal)
-        networksById[network.id] = network
+        synchronized(writeLock) {
+            catalog = catalog.withNetwork(network)
+        }
+    }
 
+    /**
+     * یک شبکه را روی snapshot می‌نشاند و snapshotِ تازه را برمی‌گرداند (بدونِ تغییرِ قبلی).
+     */
+    private fun Catalog.withNetwork(network: BlockchainNetwork): Catalog {
+        val newById = byId + (network.id to network)
+
+        var newByChainId = byChainId
         val chainId = network.chainId
         if (chainId != null) {
             // TASK-53 — تصادفِ chainId را بی‌صدا بازنویسی نکن.
@@ -127,7 +150,7 @@ class BlockchainRegistry @Inject constructor(
             // پس بازنویسیِ خاموش یعنی امضای تراکنش با پارامترهای زنجیرهٔ اشتباه. تا وقتی فیلترِ
             // «فقط تست‌نت» فعال بود این تصادف پنهان می‌ماند؛ حالا که همهٔ شبکه‌ها ثبت می‌شوند
             // باید صریح باشد. اولین ثبت برنده است تا نتیجه قطعی و مستقل از ترتیبِ اجرا بماند.
-            val existing = networksByChainId[chainId]
+            val existing = byChainId[chainId]
             if (existing != null && existing.id != network.id) {
                 Timber.e(
                     "chainId collision: '%s' and '%s' both declare chainId=%d. Keeping '%s' for " +
@@ -136,29 +159,33 @@ class BlockchainRegistry @Inject constructor(
                     existing.id, network.id, chainId, existing.id
                 )
             } else {
-                networks.getOrPut(network.networkType) { mutableMapOf() }[chainId] = network
-                networksByChainId[chainId] = network
+                newByChainId = byChainId + (chainId to network)
             }
         }
 
         // Register as default for type
-        if (!networksByType.containsKey(network.networkType) || !network.isTestnet) {
-            networksByType[network.networkType] = network
-        }
+        val newDefaultByType =
+            if (!defaultByType.containsKey(network.networkType) || !network.isTestnet) {
+                defaultByType + (network.networkType to network)
+            } else {
+                defaultByType
+            }
+
+        return Catalog(newById, newByChainId, newDefaultByType, regexById, regexByType)
     }
 
 
     fun getNetworkByName(name: NetworkName): BlockchainNetwork? {
-        return networksById.values.find { it.name == name }
+        return catalog.byId.values.find { it.name == name }
     }
 
     fun getNetworkById(id: String): BlockchainNetwork? {
-        return networksById[id]
+        return catalog.byId[id]
     }
 
 
     fun getNetworkByChainId(chainId: Long): BlockchainNetwork? {
-        return networksByChainId[chainId]
+        return catalog.byChainId[chainId]
     }
 
 
@@ -173,7 +200,7 @@ class BlockchainRegistry @Inject constructor(
      * برای فهرست‌های UI از [getAllNetworkInfos] استفاده کنید.
      */
     fun getAllNetworks(): List<BlockchainNetwork> {
-        return networksById.values.toList()
+        return catalog.byId.values.toList()
     }
 
     /**
@@ -200,7 +227,7 @@ class BlockchainRegistry @Inject constructor(
     }
 
     fun getNetworkByType(type: NetworkType): BlockchainNetwork? {
-        return networksByType[type]
+        return catalog.defaultByType[type]
     }
 
     fun getDefaultNetworkByType(type: NetworkType): BlockchainNetwork? {
@@ -209,12 +236,63 @@ class BlockchainRegistry @Inject constructor(
 
 
     private fun clearAll() {
-        networks.clear()
-        networksById.clear()
-        networksByType.clear()
-        networksByChainId.clear()
-        addressRegexByNetworkId.clear()
-        addressRegexByNetworkType.clear()
+        synchronized(writeLock) { catalog = Catalog() }
+    }
+
+    /**
+     * TASK-53 — کاتالوگ را از یک باندلِ **تأییدشده** بازمی‌سازد.
+     *
+     * فراخوان (ConfigCatalogBootstrapper) موظف است فقط باندلی را به این‌جا بدهد که یا امضای
+     * secp256k1 آن تأیید شده، یا از کشِ رمزنگاری‌شدهٔ آخرین-وضعیتِ-خوب آمده، یا همان seed محلیِ
+     * داخل APK است. این متد **خودش امضا را بررسی نمی‌کند** و نباید با ورودیِ شبکه‌ایِ خام صدا زده شود.
+     *
+     * محافظِ هویت: برای شبکه‌ای که در seed محلی وجود دارد، تغییرِ `chainId`، `derivationPath` یا
+     * `regex` از سمت سرور **رد** می‌شود و نسخهٔ محلی نگه داشته می‌شود. این سه فیلد تعیین می‌کنند
+     * کلید روی کدام زنجیره ساخته و آدرس چطور اعتبارسنجی می‌شود؛ عوض‌شدنشان یعنی امضا برای زنجیرهٔ
+     * اشتباه یا پذیرفتنِ آدرسی که کاربر کنترلش را ندارد. شبکه‌های تازه آزادانه پذیرفته می‌شوند —
+     * که دقیقاً همان قابلیتی است که این تسک می‌خواهد.
+     *
+     * جایگزینی اتمی است: snapshotِ کامل ساخته و یکجا نشانده می‌شود، پس خواننده‌های هم‌زمان هرگز
+     * کاتالوگِ نیمه‌ساخته نمی‌بینند.
+     *
+     * @param configs شبکه‌های باندل.
+     * @param trustedBaseline شبکه‌های seed محلی که هویتشان مرجع است.
+     * @return تعداد شبکه‌های ثبت‌شده.
+     */
+    fun applyConfig(
+        configs: List<NetworkConfig>,
+        trustedBaseline: List<NetworkConfig> = emptyList()
+    ): Int {
+        val baselineById = trustedBaseline.associateBy { it.id.trim().lowercase() }
+
+        val accepted = configs.mapNotNull { config ->
+            val baseline = baselineById[config.id.trim().lowercase()]
+                ?: return@mapNotNull config // شبکهٔ تازه — همین است که می‌خواهیم
+
+            val violations = buildList {
+                if (baseline.chainId != config.chainId) add("chainId ${baseline.chainId}->${config.chainId}")
+                if (baseline.derivationPath != config.derivationPath) add("derivationPath")
+                if (baseline.regex != config.regex) add("addressRegex")
+            }
+            if (violations.isEmpty()) {
+                config
+            } else {
+                Timber.e(
+                    "Rejected bundle override of security-critical fields for '%s' (%s); " +
+                        "keeping the locally shipped definition.",
+                    config.id, violations.joinToString()
+                )
+                baseline
+            }
+        }
+
+        synchronized(writeLock) {
+            clearAll()
+            indexAddressRegex(accepted)
+            accepted.forEach { registerFromConfig(it) }
+        }
+        Timber.i("Catalog applied: %d/%d networks registered", catalog.byId.size, configs.size)
+        return catalog.byId.size
     }
 
 
@@ -223,8 +301,9 @@ class BlockchainRegistry @Inject constructor(
             val normalized = address.trim()
             if (normalized.isBlank()) return null
 
+            val snapshot = catalog
             NetworkType.values().forEach { type ->
-                val match = addressRegexByNetworkType[type]?.any { regex ->
+                val match = snapshot.regexByType[type]?.any { regex ->
                     regex.matches(normalized)
                 } == true
                 if (match) return type
@@ -289,7 +368,7 @@ class BlockchainRegistry @Inject constructor(
         val normalizedNetworkId = networkId.trim().lowercase()
         if (normalizedAddress.isBlank() || normalizedNetworkId.isBlank()) return false
 
-        addressRegexByNetworkId[normalizedNetworkId]?.let { regex ->
+        catalog.regexById[normalizedNetworkId]?.let { regex ->
             return regex.matches(normalizedAddress)
         }
 
@@ -335,14 +414,13 @@ class BlockchainRegistry @Inject constructor(
         fileName: String = "networks.json",
     ) {
 
-        clearAll()
-        val configs = loadNetworkConfigs(context, fileName)
-        indexAddressRegex(configs)
-
         // TASK-53 — هیچ فیلتری در زمانِ ثبت. قبلاً این‌جا `filter { it.isTestnet == true }` بود،
         // یعنی هر شبکهٔ mainnet حتی از فایل محلی هم حذف می‌شد. جست‌وجوی هویتی باید همیشه جواب
         // بدهد؛ انتخابِ «نمایش تست‌نت» فقط در [getAllNetworkInfos] اعمال می‌شود.
-        configs.forEach { config -> registerFromConfig(config) }
+        //
+        // همان مسیرِ [applyConfig] استفاده می‌شود تا seed محلی و باندلِ سرور دقیقاً یک منطقِ
+        // ساخت داشته باشند (بدون baseline، چون خودِ این فایل مرجع است).
+        applyConfig(loadNetworkConfigs(context, fileName))
     }
 
     /**
@@ -365,6 +443,9 @@ class BlockchainRegistry @Inject constructor(
     }
 
     private fun indexAddressRegex(configs: List<NetworkConfig>) {
+        val byId = mutableMapOf<String, Regex>()
+        val byType = mutableMapOf<NetworkType, MutableList<Regex>>()
+
         configs.forEach { config ->
             val normalizedId = config.id.trim().lowercase()
             if (normalizedId.isBlank()) return@forEach
@@ -376,8 +457,19 @@ class BlockchainRegistry @Inject constructor(
             val compiledRegex =
                 AddressRegexUtils.compileAddressRegex(config.regex) ?: return@forEach
 
-            addressRegexByNetworkId[normalizedId] = compiledRegex
-            addressRegexByNetworkType.getOrPut(networkType) { mutableListOf() }.add(compiledRegex)
+            byId[normalizedId] = compiledRegex
+            byType.getOrPut(networkType) { mutableListOf() }.add(compiledRegex)
+        }
+
+        synchronized(writeLock) {
+            val current = catalog
+            catalog = Catalog(
+                byId = current.byId,
+                byChainId = current.byChainId,
+                defaultByType = current.defaultByType,
+                regexById = byId.toMap(),
+                regexByType = byType.mapValues { (_, v) -> v.toList() }
+            )
         }
     }
 
