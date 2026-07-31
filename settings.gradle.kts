@@ -27,6 +27,7 @@ dependencyResolutionManagement {
             isAllowInsecureProtocol=true}
 
     }
+
 }
 
 rootProject.name = "MegaWallet"
@@ -35,3 +36,4 @@ include(":common_ui")
 include(":data")
 include(":domain")
 include(":core")
+include(":baselineprofile") // PERF-10

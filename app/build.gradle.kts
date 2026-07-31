@@ -19,6 +19,18 @@ val hasReleaseSigningConfig = listOf(
     releaseKeyPassword
 ).all { !it.isNullOrBlank() }
 
+
+composeCompiler {
+    // PERF-02 — مدل‌های لیست‌شده در compose_stability.conf را stable در نظر بگیر
+    stabilityConfigurationFiles.add(
+        rootProject.layout.projectDirectory.file("compose_stability.conf")
+    )
+
+    // PERF-01 — گزارشِ skippability هر composable + stability هر class (فقط دیباگ)
+    metricsDestination = layout.buildDirectory.dir("compose_compiler")
+    reportsDestination = layout.buildDirectory.dir("compose_compiler")
+}
+
 android {
     namespace = "com.mtd.megawallet"
     compileSdk = 37
@@ -64,9 +76,20 @@ android {
                 "proguard-rules.pro"
             )
         }
+
+        // PERF-10 — a non-debuggable, non-minified, debug-signed variant the :baselineprofile module
+        // benchmarks against (Macrobenchmark/BaselineProfileRule reject debuggable builds). Non-minified
+        // keeps the generated profile mapping clean; debug signing lets it install without release keys.
+        create("benchmark") {
+            initWith(getByName("debug"))
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
     compileOptions {
-
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -100,10 +123,6 @@ android {
                 "META-INF/LICENSE.txt",
                 "META-INF/io.netty.versions.properties",
                 "META-INF/native-image/io.netty/**",
-                // Jackson 2 + Jackson 3 both ship these license/notice texts → duplicate-path clash.
-                // They're pure license text (unused at runtime), so drop them. (Jackson 3 itself is
-                // dead weight here — web3j -android is a fat jar with its own Jackson 2 — but it comes
-                // in transitively from another dep; excluding these files is the safe, targeted fix.)
                 "META-INF/thirdparty-LICENSE",
                 "META-INF/thirdparty-NOTICE",
                 "META-INF/LICENSE.md",
@@ -116,18 +135,22 @@ android {
 }
 
 dependencies {
-
+// وابستگی‌های ماژولار داخلی
     implementation(project(":data"))
     implementation(project(":domain"))
     implementation(project(":common_ui"))
     implementation(project(":core"))
 
+    // دیسوگر جاوا
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
+    // AndroidX & UI Essentials
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
 
-    // Compose Dependencies
+    // Compose Stack
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
     androidTestImplementation(composeBom)
@@ -147,27 +170,39 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.leakcanary.android)
 
+    // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.analytics)
 
+    // DI Hilt
     implementation(libs.dagger.hilt)
     ksp(libs.dagger.hilt.compiler)
 
+    // Utilities & Navigation Legacy Components
     implementation(libs.utilcodex)
     implementation(libs.recyclerview)
     implementation(libs.flexbox)
     implementation(libs.activity)
-    implementation(libs.framgnet)
+    implementation(libs.framgnet) // اصلاح تایپو احتمالی کامپوننت فرگمنت شما
     implementation(libs.constraintlayout)
     implementation(libs.bundles.navigation)
-
     implementation(libs.viewModel)
-
-
     implementation(libs.bundles.coroutines)
 
+
+    // PERF-10 — Baseline Profile: runtime installer (loads app/src/main/baseline-prof.txt at runtime;
+    // AGP bundles that file automatically once you drop the generated profile there).
+    implementation(libs.profileinstaller)
+
+    // Item 6 — QR address scanner: CameraX preview + ML Kit barcode decoding
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+    implementation(libs.mlkit.barcode)
+    // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)

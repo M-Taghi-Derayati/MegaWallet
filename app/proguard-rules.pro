@@ -70,3 +70,18 @@
 -dontwarn groovy.lang.GroovyShell
 -dontwarn reactor.blockhound.integration.BlockHoundIntegration
 -dontwarn sun.misc.**
+
+
+# اجازه دادن به R8 برای نادیده گرفتن خطاهای رفرنس‌های جاوا ۱۷ در جکسون ۳
+-dontwarn tools.jackson.databind.JavaType
+-dontwarn tools.jackson.databind.introspect.**
+-dontwarn tools.jackson.databind.json.JsonMapper
+
+# باز نگه داشتن کلاس‌های وب۳ و جکسون برای جلوگیری از حذف اشتباه کلاس‌های حیاتی
+-keep class org.web3j.** { *; }
+-keep class tools.jackson.** { *; }
+
+# یک ترفند پروگارد برای بای‌پاس کردن خطای زمان اجرا در متدهای رفلکشن جکسون
+-assumenosideeffects class tools.jackson.databind.JavaType {
+    public boolean isRecordType();
+}

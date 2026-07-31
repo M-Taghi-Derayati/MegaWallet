@@ -13,3 +13,13 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Generated knowledge graph (rebuilt by `graphify update .`) — ~66 MB, never source.
+/graphify-out
+
+# Local agent config and worktrees.
+/.claude
+
+# Ad-hoc debug captures.
+/megawallet-logcat*.txt
+/tron_crash.txt

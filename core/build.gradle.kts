@@ -24,8 +24,13 @@ android {
                 "proguard-rules.pro"
             )*/
         }
+        create("benchmark") {
+            initWith(getByName("debug"))
+            isMinifyEnabled = false
+        }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
 
@@ -41,31 +46,27 @@ android {
 
 dependencies {
     implementation(project(":domain"))
-
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
-
     implementation(platform(libs.okhttp.bom))
     implementation(libs.bundles.okhttp)
-
     api(libs.timber)
 
-
-
-    implementation(libs.bundles.web3)
-    implementation(libs.bitcoinj)
-    implementation(libs.bitcoin.kmp)
-    implementation(libs.bitcoin.jni)
-
+    // تعریف به صورت api جهت بهینه‌سازی پردازش موازی گریدل و دسترسی سریع دیتا
+    api(libs.bundles.web3)
+    api(libs.bitcoinj)
+    api(libs.bitcoin.kmp)
+    api(libs.bitcoin.jni)
 
     implementation(libs.security.crypto)
-    api(libs.socket)
-    {
+    api(libs.socket) {
         exclude(group = "org.json", module = "json")
     }
     implementation(libs.gson)
     implementation(libs.material)
+
     implementation(libs.dagger.hilt)
     ksp(libs.dagger.hilt.compiler)
 

@@ -22,8 +22,13 @@ android {
                 "proguard-rules.pro"
             )*/
         }
+        create("benchmark") {
+            initWith(getByName("debug"))
+            isMinifyEnabled = false
+        }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -35,26 +40,26 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
 
+    // کامپوننت‌های گرافیکی نیتیو
     api(libs.bundles.coil)
     api(libs.qrgen)
     api(libs.slidetoact)
     api(libs.splash)
-    // این خطوط را به dependencies ماژول common_ui اضافه کن:
+
+    // پلتفرم اشتراکی کامپوز برای حداکثر پرفورمنس رندرینگ گرافیکی UI
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
-
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
-
     implementation(libs.compose.foundation)
 
-// ابزار پیش‌نمایش در حالت دیباگ برای این ماژول هم لازم است
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

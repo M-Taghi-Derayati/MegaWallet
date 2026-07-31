@@ -24,6 +24,10 @@ android {
                 "proguard-rules.pro"
             )*/
         }
+        create("benchmark") {
+            initWith(getByName("debug"))
+            isMinifyEnabled = false
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -6,16 +6,19 @@ coreKtx = "1.19.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
+# PERF-10 Baseline Profile / Macrobenchmark. If a version is incompatible with AGP 9.2.1, bump these.
+benchmark = "1.4.1"
+baselineprofile = "1.4.1"
+profileinstaller = "1.4.1"
+uiautomator = "2.4.0"
 appcompat = "1.7.1"
 material = "1.14.0"
 firebase_plugin="4.5.0"
 firebase-bom="34.16.0"
 crashlytics-plugin="3.0.7"
-# web3j 5.x/6.x are Java-21-only (Jackson 3 → Class.isRecord(), absent < API 33) and have NO -android
-# artifact, so they crash on Android (NoSuchMethodError isRecord/toUnmodifiableMap). `4.12.3-android`
-# is web3j's latest official Android build (LFDT-web3j `android` branch, Jackson 2). Do NOT bump. TASK-40.
-webCore="4.12.3-android"
-webCoreUtils="4.12.3-android"
+
+webCore="5.0.1"
+webCoreUtils="5.0.1"
 security-crypto="1.1.0"
 bitcoinj-core="0.17.1"
 recyclerview="1.4.0"
@@ -53,6 +56,9 @@ google-api-service = "v3-rev20220815-2.0.0"
 google-coroutines="1.11.0"
 biometric = "1.1.0"
 splash="1.2.0"
+# Item 6 — QR address scanner (CameraX preview + ML Kit barcode decoding)
+camerax = "1.4.1"
+mlkit-barcode = "17.3.0"
 
 # Compose Versions
 compose-bom = "2026.06.01"
@@ -63,7 +69,7 @@ lifecycle-runtime-compose = "2.11.0"
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
-desugar_jdk_libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar_jdk_libs" }
+desugar_jdk_libs = { module = "com.android.tools:desugar_jdk_libs_nio", version.ref = "desugar_jdk_libs" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 splash={module="androidx.core:core-splashscreen",version.ref="splash"}
 #///////////////// Compose ////////////////////////#
@@ -119,6 +125,12 @@ framgnet  ={module="androidx.fragment:fragment-ktx",version.ref="fragment"}
 viewModel  ={module="androidx.lifecycle:lifecycle-viewmodel-ktx",version.ref="viewmodel"}
 recyclerview  ={module="androidx.recyclerview:recyclerview",version.ref="recyclerview"}
 qrgen  ={module="com.github.kenglxn.qrgen:android",version.ref="qrgen"}
+# Item 6 — QR address scanner
+camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+mlkit-barcode = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkit-barcode" }
 flexbox = { module = "com.google.android.flexbox:flexbox", version.ref = "flexbox" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
@@ -153,6 +165,10 @@ google-api-services-drive = { module = "com.google.apis:google-api-services-driv
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+# PERF-10 Baseline Profile / Macrobenchmark
+benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
+profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
+uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 coroutines-test={ group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines-test" }
 mockk={ group = "io.mockk", name = "mockk", version.ref = "mockk" }
 hilt-test={ group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt-testing" }
@@ -171,6 +187,9 @@ navigation=["navFragment","navUi","navUi-hitl"]
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+# PERF-10 Baseline Profile / Macrobenchmark
+android-test = { id = "com.android.test", version.ref = "agp" }
+androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
 android-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 android-ksp = { id = "com.google.devtools.ksp", version.ref = "android-ksp" }
 android-hilt = { id = "com.google.dagger.hilt.android", version.ref = "dagger-hilt" }
