@@ -22,6 +22,7 @@ import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.WalletStorageMetadata
 import com.mtd.domain.model.core.NetworkName
+import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.error.ApiError
 import com.mtd.domain.model.error.ApiException
@@ -605,7 +606,7 @@ class WalletRepositoryImpl @Inject constructor(
                         // نقشه معکوس: آدرس -> لیست کیف پول‌ها
                         val addressToWalletIds = mutableMapOf<String, MutableList<String>>()
                         walletAddresses.forEach { (walletId, address) ->
-                            val normalizedAddress = normalizeAddress(address, networkName)
+                            val normalizedAddress = normalizeAddress(address, chainConfig.networkType)
                             addressToWalletIds.getOrPut(normalizedAddress) { mutableListOf() }
                                 .add(walletId)
                         }
@@ -613,7 +614,7 @@ class WalletRepositoryImpl @Inject constructor(
                         val finalMap = mutableMapOf<String, List<Asset>>()
 
                         result.data.forEach { (address, assets) ->
-                            val normalizedAddress = normalizeAddress(address, networkName)
+                            val normalizedAddress = normalizeAddress(address, chainConfig.networkType)
                             addressToWalletIds[normalizedAddress]?.forEach { walletId ->
                                 finalMap[walletId] = assets
                             }
@@ -661,10 +662,15 @@ class WalletRepositoryImpl @Inject constructor(
             }
         }
 
-        fun normalizeAddress(address: String, networkName: NetworkName): String {
-            return when {
-                networkName.isEvm() -> address.lowercase()
-                networkName.isTron() -> {
+        /**
+         * TASK-53 — روی خانوادهٔ شبکه ([NetworkType]) کلید می‌خورد، نه روی نام تک‌تک شبکه‌ها.
+         * لیستِ قبلیِ EVM فقط {BSC, ETHEREUM, SEPOLIA, BSCTESTNET} بود، یعنی آدرس‌های
+         * Base/Arbitrum اصلاً lowercase نمی‌شدند و در تطبیق آدرس→کیف‌پول از قلم می‌افتادند.
+         */
+        fun normalizeAddress(address: String, networkType: NetworkType): String {
+            return when (networkType) {
+                NetworkType.EVM -> address.lowercase()
+                NetworkType.TVM -> {
                     if (address.startsWith("0x") || address.startsWith("41")) {
                         hexToBase58(address)
                     } else {
@@ -674,15 +680,6 @@ class WalletRepositoryImpl @Inject constructor(
 
                 else -> address
             }
-        }
-
-        // Extension function helper
-        private fun NetworkName.isEvm(): Boolean {
-            return this == NetworkName.BSC || this == NetworkName.ETHEREUM || this == NetworkName.SEPOLIA || this == NetworkName.BSCTESTNET
-        }
-
-        private fun NetworkName.isTron(): Boolean {
-            return this == NetworkName.TRON || this == NetworkName.SHASTA
         }
     }
 

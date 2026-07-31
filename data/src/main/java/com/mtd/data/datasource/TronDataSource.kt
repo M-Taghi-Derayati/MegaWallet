@@ -153,7 +153,7 @@ class TronDataSource(
                                 ).sendAsync().await()
                                response.result.toString()
                             }
-                            Asset(assetConfig.name, assetConfig.symbol, assetConfig.decimals, assetConfig.contractAddress,  normalize (balance,assetConfig.decimals,network.name))
+                            Asset(assetConfig.name, assetConfig.symbol, assetConfig.decimals, assetConfig.contractAddress,  normalize (balance,assetConfig.decimals,network.networkType))
                         }
                     }
                 }
@@ -447,7 +447,7 @@ class TronDataSource(
                     totalFeeInSun = (energyToBurn * energyFeeSun) + (bandwidthToBurn * bandwidthFeeSun)
                 }
 
-                val feeInTrx = normalize(totalFeeInSun, 6, network.name)
+                val feeInTrx = normalize(totalFeeInSun, 6, network.networkType)
                 ResultResponse.Success(
                     listOf(
                         FeeData(
@@ -530,7 +530,7 @@ class TronDataSource(
                                 responses.forEachIndexed { index, response ->
                                     if (index < chunk.size) {
                                         val (address, assetConfig, _) = chunk[index]
-                                        val balance =  normalize (response.result.toString(),assetConfig.decimals,network.name)
+                                        val balance =  normalize (response.result.toString(),assetConfig.decimals,network.networkType)
                                         val asset = Asset(
                                             assetConfig.name,
                                             assetConfig.symbol,

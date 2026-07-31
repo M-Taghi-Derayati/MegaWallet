@@ -207,7 +207,7 @@ class BitcoinDataSource(
 
                     UtxoBackend.BLOCKCYPHER -> getBalanceFromBlockCypher(address)
                 }
-                normalize(rawBalance, network.decimals, network.name)
+                normalize(rawBalance, network.decimals, network.networkType)
             }.fold(
                 onSuccess = { ResultResponse.Success(it) },
                 onFailure = { ResultResponse.Error(it) }
@@ -924,7 +924,7 @@ class BitcoinDataSource(
                 feeInCoin = normalize(
                     feeFor(slowRate).toBigInteger(),
                     network.decimals,
-                    network.name
+                    network.networkType
                 ),
                 estimatedTime = "~ 30 دقیقه",
                 feeRateInSatsPerByte = slowRate
@@ -935,7 +935,7 @@ class BitcoinDataSource(
                 feeInCoin = normalize(
                     feeFor(normalRate).toBigInteger(),
                     network.decimals,
-                    network.name
+                    network.networkType
                 ),
                 estimatedTime = "~ 10 دقیقه",
                 feeRateInSatsPerByte = normalRate
@@ -946,7 +946,7 @@ class BitcoinDataSource(
                 feeInCoin = normalize(
                     feeFor(fastRate).toBigInteger(),
                     network.decimals,
-                    network.name
+                    network.networkType
                 ),
                 estimatedTime = "~ 2 دقیقه",
                 feeRateInSatsPerByte = fastRate

@@ -272,7 +272,7 @@ class EvmDataSource(
                                  response.result.toString()
 
                             }
-                            Asset(assetConfig.name, assetConfig.symbol, assetConfig.decimals, assetConfig.contractAddress, normalize(balance,assetConfig.decimals,network.name))
+                            Asset(assetConfig.name, assetConfig.symbol, assetConfig.decimals, assetConfig.contractAddress, normalize(balance,assetConfig.decimals,network.networkType))
                         }
                     }
                 }
@@ -354,7 +354,7 @@ class EvmDataSource(
                                 responses.forEachIndexed { index, response ->
                                     if (index < chunk.size) {
                                         val (address, assetConfig, _) = chunk[index]
-                                        val balance = normalize(response.result.toString(),assetConfig.decimals,network.name)
+                                        val balance = normalize(response.result.toString(),assetConfig.decimals,network.networkType)
                                         val asset = Asset(
                                             assetConfig.name,
                                             assetConfig.symbol,
@@ -497,7 +497,7 @@ class EvmDataSource(
                     gasLimit = gasLimit,
                     // هزینه کل = (L2 Gas * Limit) + L1 Data Fee
                     feeInSmallestUnit = (normalMaxFee * gasLimit + l1DataFeeWithBuffer).toBigDecimal(),
-                    feeInCoin = normalize((normalMaxFee * gasLimit + l1DataFeeWithBuffer), network.decimals, network.name),
+                    feeInCoin = normalize((normalMaxFee * gasLimit + l1DataFeeWithBuffer), network.decimals, network.networkType),
                     feeInUsd = null,
                     estimatedTime = "~ 30 ثانیه"
                 ),
@@ -506,7 +506,7 @@ class EvmDataSource(
                     gasPrice = fast,
                     gasLimit = gasLimit,
                     feeInSmallestUnit = (fast * gasLimit + l1DataFeeWithBuffer).toBigDecimal(),
-                    feeInCoin = normalize((fast * gasLimit + l1DataFeeWithBuffer), network.decimals, network.name),
+                    feeInCoin = normalize((fast * gasLimit + l1DataFeeWithBuffer), network.decimals, network.networkType),
                     feeInUsd = null,
                     estimatedTime = "~ 15 ثانیه"
                 ),
@@ -515,7 +515,7 @@ class EvmDataSource(
                     gasPrice = urgent,
                     gasLimit = gasLimit,
                     feeInSmallestUnit = (urgent * gasLimit + l1DataFeeWithBuffer).toBigDecimal(),
-                    feeInCoin = normalize((urgent * gasLimit + l1DataFeeWithBuffer), network.decimals, network.name),
+                    feeInCoin = normalize((urgent * gasLimit + l1DataFeeWithBuffer), network.decimals, network.networkType),
                     feeInUsd = null,
                     estimatedTime = "< 10 ثانیه"
                 ),

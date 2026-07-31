@@ -154,7 +154,7 @@ class ProxyChainDataSource(
                         estimatedTime = tier.estimatedSeconds?.let { "~ ${it}s" }.orEmpty(),
                         gasPrice = tier.gasPrice,
                         gasLimit = evmGasLimit,
-                        feeInCoin = normalize(feeRaw, network.decimals, network.name),
+                        feeInCoin = normalize(feeRaw, network.decimals, network.networkType),
                         feeInUsd = null,
                         // The build uses an integer sat/vByte; round a fractional rate UP and keep a
                         // relayable floor of 1. Display uses `feeRaw` above, so accuracy is unaffected.
@@ -537,7 +537,7 @@ class ProxyChainDataSource(
             symbol = symbol.orEmpty(),
             decimals = decimals,
             contractAddress = if (isNative) null else contractAddress,
-            balance = normalize(raw, decimals, network.name)
+            balance = normalize(raw, decimals, network.networkType)
         )
     }
 
@@ -599,9 +599,9 @@ class ProxyChainDataSource(
     private fun ProxyBalanceDto.toBatchAsset(): Asset {
         val d = decimals ?: 0
         val raw = balanceRaw ?: BigInteger.ZERO
-        // networkName is irrelevant for a base-10 BigInteger input; reusing normalize() keeps the
+        // networkType is irrelevant for a base-10 BigInteger input; reusing normalize() keeps the
         // formatting (strip-trailing-zeros, fixed scale) consistent with the single-network toAsset().
-        return Asset(name ?: symbol.orEmpty(), symbol.orEmpty(), d, contractAddress, normalize(raw, d, network.name))
+        return Asset(name ?: symbol.orEmpty(), symbol.orEmpty(), d, contractAddress, normalize(raw, d, network.networkType))
     }
 
     private companion object {
