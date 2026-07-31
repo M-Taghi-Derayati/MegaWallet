@@ -3,11 +3,13 @@ package com.mtd.data.socket
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import com.mtd.core.notification.EventDeduplicationCache
 import com.mtd.core.notification.NotificationService
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.INetworkCatalog
+import com.mtd.domain.model.TxDescriptor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,12 +65,17 @@ class PushMessageHandler @Inject constructor(
         // notification block, then a data-payload title/body, and finally an event-type fallback so a
         // pure data-only signal (no title/body) still surfaces — matching the WS foreground behavior.
         val fallback = event?.let(::fallbackNotificationFor)
-        val title = notificationTitle ?: data["title"] ?: fallback?.first
-        val body = notificationBody ?: data["body"] ?: fallback?.second
+        val title = notificationTitle ?: data["title"] ?: fallback?.title
+        val body = notificationBody ?: data["body"] ?: fallback?.body
         if (!title.isNullOrBlank() || !body.isNullOrBlank()) {
             // A new-tx signal routes to the deposit channel (custom sound); everything else uses the
             // default trade channel — mirrors [NotificationSocketManager]'s channel choice.
-            showNotification(title.orEmpty(), body.orEmpty(), isDeposit = event is SocketEvent.TxNew)
+            showNotification(
+                title.orEmpty(),
+                body.orEmpty(),
+                isDeposit = event is SocketEvent.TxNew,
+                subText = fallback?.subText
+            )
         }
     }
 
@@ -77,28 +84,36 @@ class PushMessageHandler @Inject constructor(
      * [NotificationSocketManager.handleNotification] so background (FCM) and foreground (WS) stay
      * consistent. Returns null for signals that are refresh-only (no user-facing alert).
      */
-    private fun fallbackNotificationFor(event: SocketEvent): Pair<String, String>? = when (event) {
-        is SocketEvent.TxNew ->
+    private fun fallbackNotificationFor(event: SocketEvent): TransactionNotificationText.Content? = when (event) {
+        is SocketEvent.TxNew -> {
             // Prefer the real amount/direction from the thin-signal hint (FCM is now DATA-ONLY — the server
             // sends no title/body), falling back to a generic alert when the hint is absent.
-            TransactionNotificationText.forTx(event.descriptor)
-                ?: ("تراکنش جدید" to "یک تراکنش جدید روی آدرس شما ثبت شد.")
-        is SocketEvent.TxStatusUpdated -> when (event.status?.uppercase()) {
-            "SUCCESS" -> "تراکنش موفق" to "تراکنش شما با موفقیت ثبت شد."
-            "FAILED", "TIMEOUT" -> "تراکنش ناموفق" to "تراکنش شما تکمیل نشد."
-            else -> null
+            val network = event.networkId?.takeIf { it.isNotBlank() }
+                ?.let { networkCatalog.getNetworkInfoById(it) }
+            TransactionNotificationText.forTx(event.descriptor, network)
+                ?: TransactionNotificationText.Content(
+                    title = "تراکنش جدید",
+                    body = "یک تراکنش جدید روی آدرس شما ثبت شد."
+                )
         }
-        is SocketEvent.TxStatusChanged -> when (event.status?.uppercase()) {
-            "SUCCESS" -> "تراکنش موفق" to "تراکنش شما با موفقیت ثبت شد."
-            "FAILED", "TIMEOUT" -> "تراکنش ناموفق" to "تراکنش شما تکمیل نشد."
-            else -> null
-        }
-        is SocketEvent.GrowthFeeShareAccrued ->
-            "پاداش جدید" to "سهم کارمزد دعوت به حساب شما اضافه شد."
+        is SocketEvent.TxStatusUpdated -> statusContent(event.status)
+        is SocketEvent.TxStatusChanged -> statusContent(event.status)
+        is SocketEvent.GrowthFeeShareAccrued -> TransactionNotificationText.Content(
+            title = "پاداش جدید",
+            body = "سهم کارمزد دعوت به حساب شما اضافه شد."
+        )
         else -> null
     }
 
-    private fun showNotification(title: String, body: String, isDeposit: Boolean) {
+    private fun statusContent(status: String?): TransactionNotificationText.Content? =
+        when (status?.uppercase()) {
+            "SUCCESS" -> TransactionNotificationText.Content("تراکنش موفق", "تراکنش شما با موفقیت ثبت شد.")
+            "FAILED", "TIMEOUT" -> TransactionNotificationText.Content("تراکنش ناموفق", "تراکنش شما تکمیل نشد.")
+            else -> null
+        }
+
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
+    private fun showNotification(title: String, body: String, isDeposit: Boolean, subText: String?) {
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
@@ -108,27 +123,18 @@ class PushMessageHandler @Inject constructor(
         }
         if (isDeposit) {
             // Background/closed: let the deposit channel play the custom sound (silent = false).
-            notificationService.showTransactionNotification(title, body, silent = false)
+            notificationService.showTransactionNotification(title, body, silent = false, subText = subText)
         } else {
             notificationService.showTradeNotification(title, body)
         }
     }
 
-    /** The optional tx.new display hint from the flat FCM map (every value arrives stringified). */
-    private fun parseTxDescriptor(data: Map<String, String>): TxDescriptor? {
-        val direction = data["direction"]?.takeIf { it.isNotBlank() }
-        val amountRaw = data["amountRaw"]?.takeIf { it.isNotBlank() }
-        val tokenSymbol = data["tokenSymbol"]?.takeIf { it.isNotBlank() }
-        if (direction == null && amountRaw == null && tokenSymbol == null) return null
-        return TxDescriptor(
-            direction = direction,
-            assetKind = data["assetKind"]?.takeIf { it.isNotBlank() },
-            asset = data["asset"]?.takeIf { it.isNotBlank() },
-            amountRaw = amountRaw,
-            tokenSymbol = tokenSymbol,
-            tokenDecimal = data["tokenDecimal"]?.toIntOrNull()
-        )
-    }
+    /**
+     * The optional tx.new display hint from the flat FCM map (every value arrives stringified).
+     * Shares [TxDescriptorParser] with the WS path so the two transports can't drift apart.
+     */
+    private fun parseTxDescriptor(data: Map<String, String>): TxDescriptor? =
+        TxDescriptorParser.fromMap(data)
 
     /** Builds a [SocketEvent] from the flat FCM data map (mirrors [NotificationSocketManager]'s parser). */
     private fun parseFcmData(data: Map<String, String>): SocketEvent? {

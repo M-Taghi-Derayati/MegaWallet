@@ -11,11 +11,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Item 3 — plays the bundled transaction sound (`res/raw/deposit_alert`) IN-APP. Used on the foreground
- * realtime (WS) path so the alert is audible even on OEMs that suppress a notification channel's sound
- * while the app is in the foreground. The background/closed case stays on the notification channel's own
- * sound (see [NotificationService.showTransactionNotification] with `silent = false`), so the two never
- * double up.
+ * Item 3 — plays the bundled transaction sound (`res/raw/deposit_alert`) IN-APP.
+ *
+ * TASK-59a — this is now a **fallback only**, used when the user has denied POST_NOTIFICATIONS (playing
+ * a sound needs no permission, so a deposit is still audible). When notifications are allowed, both the
+ * foreground (WS) and background (FCM) paths post a non-silent notification and let the deposit channel
+ * alert with its custom sound *and vibration*. Previously the foreground path posted `silent = true` and
+ * relied on this player alone — which meant no vibration ever, and total silence whenever the MediaPlayer
+ * failed. Do not call this alongside a non-silent notification, or the alert doubles.
  *
  * Each play spins up a short-lived [MediaPlayer] that releases itself on completion/error — no shared
  * state, safe to call from any thread. Uses the NOTIFICATION stream so it honors the user's ringer.

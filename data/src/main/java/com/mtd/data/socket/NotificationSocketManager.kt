@@ -8,7 +8,6 @@ import androidx.core.app.ActivityCompat
 import com.mtd.core.notification.EventDeduplicationCache
 import com.mtd.core.notification.NotificationService
 import com.mtd.core.notification.TransactionSoundPlayer
-import com.mtd.core.utils.BalanceFormatter
 import com.mtd.data.BuildConfig
 import com.mtd.data.di.ForWebSocket
 import com.mtd.data.utils.ExponentialBackoff
@@ -16,6 +15,7 @@ import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.ITokenStore
 import com.mtd.domain.model.AppEvent
+import com.mtd.domain.model.TxDescriptor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -277,12 +277,14 @@ class NotificationSocketManager @Inject constructor(
         scope.launch { refreshEvents.forEach { appEventBus.postEvent(it) } }
     }
 
-    private data class ParsedFrame(val event: SocketEvent, val isHeartbeat: Boolean)
+
 
     /**
      * Parses the contract WS envelope `{ id, name, ts, payload }`. Returns `null` only when the frame
      * is unparseable JSON.
      */
+    private data class ParsedFrame(val event: SocketEvent, val isHeartbeat: Boolean)
+
     private fun parseEnvelope(text: String): ParsedFrame? {
         return try {
             val root = JSONObject(text)
@@ -359,29 +361,47 @@ class NotificationSocketManager @Inject constructor(
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     private fun handleNotification(event: SocketEvent) {
-        // The in-app sound needs no POST_NOTIFICATIONS. Play it (this path is foreground-only — the
-        // socket is disconnected in the background) BEFORE the permission gate, so a deposit is audible
-        // in-app even if the user declined notifications; the notification below stays silent. Item 3.
-        if (event is SocketEvent.TxNew) transactionSoundPlayer.play()
+        val notificationsAllowed = ActivityCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
 
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
+        // TASK-59a — when notifications are DENIED we can still make a deposit audible in-app, since
+        // playing a sound needs no permission. When they're allowed we deliberately do NOT play here:
+        // the notification below is posted non-silently and the deposit channel plays the same sound
+        // (plus vibration), so doing both would double the alert.
+        if (event is SocketEvent.TxNew && !notificationsAllowed) {
+            transactionSoundPlayer.play()
         }
+
+        if (!notificationsAllowed) return
 
         when (event) {
             // A monitored address is involved in a new tx. When the thin signal carries a display hint we
             // show the real amount/direction ("مبلغ ۱.۵ USDT دریافت شد."); otherwise a generic alert. The
-            // paired dispatchRefreshFor() already refreshes history+balance behind the alert. Foreground
-            // (WS): the sound was already played above, so post a SILENT notification to avoid doubling the
-            // alert sound. Item 3.
+            // paired dispatchRefreshFor() already refreshes history+balance behind the alert.
+            //
+            // TASK-59a — this used to post with `silent = true` on the theory that TransactionSoundPlayer
+            // covered the foreground alert. `setSilent(true)` also kills VIBRATION and heads-up, so an
+            // in-app deposit could never buzz, and when the MediaPlayer failed there was no alert at all —
+            // just a mute status-bar entry. Foreground now alerts through the channel exactly like the
+            // background/FCM path.
             is SocketEvent.TxNew -> {
-                val (title, body) = TransactionNotificationText.forTx(event.descriptor)
-                    ?: ("تراکنش جدید" to "یک تراکنش جدید روی آدرس شما ثبت شد.")
-                notificationService.showTransactionNotification(title, body, silent = true)
+                val network = event.networkId?.takeIf { it.isNotBlank() }
+                    ?.let { networkCatalog.getNetworkInfoById(it) }
+                val content = TransactionNotificationText.forTx(event.descriptor, network)
+                if (content == null) {
+                    Timber.w(
+                        "[NotificationSocket] tx.new carried no usable display hint " +
+                            "(descriptor=${event.descriptor}) — showing the generic alert."
+                    )
+                }
+                notificationService.showTransactionNotification(
+                    title = content?.title ?: "تراکنش جدید",
+                    message = content?.body ?: "یک تراکنش جدید روی آدرس شما ثبت شد.",
+                    silent = false,
+                    subText = content?.subText
+                )
             }
             is SocketEvent.TxStatusChanged -> notifyForTxStatus(event.status)
             is SocketEvent.TxStatusUpdated -> notifyForTxStatus(event.status)
@@ -395,6 +415,7 @@ class NotificationSocketManager @Inject constructor(
         }
     }
 
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     private fun notifyForTxStatus(status: String?) {
         when (status?.uppercase()) {
             "SUCCESS" -> notificationService.showTradeNotification(
@@ -415,24 +436,15 @@ class NotificationSocketManager @Inject constructor(
     private fun JSONObject.optLongOrNull(key: String): Long? =
         if (has(key) && !isNull(key)) optLong(key).takeIf { it > 0 } else null
 
-    private fun JSONObject.optIntOrNull(key: String): Int? =
-        if (has(key) && !isNull(key)) optInt(key, Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE } else null
-
-    /** The optional tx.new display hint; null when the server sent none of the hint fields. */
-    private fun JSONObject.parseTxDescriptor(): TxDescriptor? {
-        val direction = optStringOrNull("direction")
-        val amountRaw = optStringOrNull("amountRaw")
-        val tokenSymbol = optStringOrNull("tokenSymbol")
-        if (direction == null && amountRaw == null && tokenSymbol == null) return null
-        return TxDescriptor(
-            direction = direction,
-            assetKind = optStringOrNull("assetKind"),
-            asset = optStringOrNull("asset"),
-            amountRaw = amountRaw,
-            tokenSymbol = tokenSymbol,
-            tokenDecimal = optIntOrNull("tokenDecimal")
-        )
-    }
+    /**
+     * TASK-59a — the display hint used to be read from the payload root under exactly one spelling
+     * each, so if the server nested it (`display`/`descriptor`/`tx`/`meta`) or used a synonym, every
+     * field came back null and the notification silently degraded to the generic text. Now the root
+     * and the known nested containers are searched, with the documented key first and common aliases
+     * after it.
+     */
+    private fun JSONObject.parseTxDescriptor(): TxDescriptor? =
+        TxDescriptorParser.fromJson(this)
 
     private companion object {
         const val NORMAL_CLOSURE = 1000
@@ -444,6 +456,7 @@ class NotificationSocketManager @Inject constructor(
         const val RECONNECT_BASE_MS = 2_000.0
         const val RECONNECT_MAX_MS = 60_000L
     }
+
 }
 
 /**
@@ -504,38 +517,6 @@ internal object SocketRefreshMapper {
 }
 
 /**
- * Pure builder for the user-facing tx notification text from a [TxDescriptor]. Shared by the foreground
- * (WS, [NotificationSocketManager]) and background (FCM data-only, [PushMessageHandler]) paths so both show
- * identical wording. Returns null when the descriptor is absent/insufficient, so callers can fall back to a
- * generic alert. Amount formatting reuses [BalanceFormatter] for consistency with the rest of the app.
- */
-internal object TransactionNotificationText {
-
-    fun forTx(descriptor: TxDescriptor?): Pair<String, String>? {
-        val d = descriptor ?: return null
-        val symbol = d.tokenSymbol?.takeIf { it.isNotBlank() } ?: "دارایی"
-        val amount = formatAmount(d.amountRaw, d.tokenDecimal)
-        val amountAndSymbol = if (amount != null) "$amount $symbol" else symbol
-        return when (d.direction?.lowercase()) {
-            "in" -> "دریافت وجه" to "مبلغ $amountAndSymbol دریافت شد."
-            "out" -> "ارسال وجه" to "مبلغ $amountAndSymbol ارسال شد."
-            "self" -> "انتقال داخلی" to "یک انتقال بین حساب‌های شما ثبت شد."
-            else -> null
-        }
-    }
-
-    private fun formatAmount(amountRaw: String?, decimals: Int?): String? {
-        val raw = amountRaw?.takeIf { it.isNotBlank() } ?: return null
-        val dec = decimals ?: return null
-        return try {
-            BalanceFormatter.formatBalance(java.math.BigDecimal(java.math.BigInteger(raw), dec), dec)
-        } catch (e: Exception) {
-            null
-        }
-    }
-}
-
-/**
  * Realtime frames the client surfaces, aligned to the relayer's WS contract (§8 of
  * `ANDROID_SERVER_INTEGRATION.md`). Two generations coexist:
  *
@@ -548,20 +529,7 @@ internal object TransactionNotificationText {
  *
  * All money fields stay raw `String` (BigInt-as-String invariant) — never parsed to Long/Double here.
  */
-/**
- * Best-effort display hint carried on `tx.new` (realtime-event-contract.md §2). Lets the client show an
- * immediate "received 1.5 USDT" preview / notification without waiting for the re-fetch. NOT the source of
- * truth — the cursor-driven refresh is; every field may be absent on older/native-only rows. `amountRaw` is
- * RAW base units (never a float); format with `tokenDecimal`. Over FCM every value arrives stringified.
- */
-data class TxDescriptor(
-    val direction: String? = null,   // "in" (deposit) | "out" (withdraw) | "self"
-    val assetKind: String? = null,   // "token" | "native"
-    val asset: String? = null,       // token contract; "" for native
-    val amountRaw: String? = null,   // RAW base units
-    val tokenSymbol: String? = null,
-    val tokenDecimal: Int? = null
-)
+
 
 sealed interface SocketEvent {
     /** Envelope frame id (`{ id, name, ts, payload }`). Welcome frame = `"welcome"`. */

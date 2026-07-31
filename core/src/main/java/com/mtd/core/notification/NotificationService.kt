@@ -3,6 +3,7 @@ package com.mtd.core.notification
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -98,17 +99,34 @@ class NotificationService @Inject constructor(
         show(channelIdTrade, title, message)
 
     /**
-     * New-transaction/deposit alerts on the deposit channel. `silent = false` lets the channel play the
-     * custom bundled sound (background/closed via FCM). `silent = true` suppresses THIS notification's
-     * sound — used on the foreground WS path, where [TransactionSoundPlayer] plays the sound explicitly
-     * so it is audible in-app without doubling up. Item 3.
+     * New-transaction/deposit alerts on the deposit channel.
+     *
+     * TASK-59a — `silent` used to be `true` on the foreground WS path, on the theory that
+     * [TransactionSoundPlayer] would cover the in-app alert. That was wrong twice over:
+     * `setSilent(true)` suppresses **vibration and heads-up as well as sound**, so an in-app deposit
+     * could never buzz; and it made the hand-rolled MediaPlayer the *only* alert, so when it failed
+     * the user got a completely silent status-bar entry. Both paths now let the CHANNEL alert
+     * (custom sound + vibration), which is what the channel was configured for in the first place.
+     * `silent` remains only for callers that genuinely want a quiet post.
+     *
+     * @param subText short context line (the network) shown in the notification header.
      */
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
-    fun showTransactionNotification(title: String, message: String, silent: Boolean = false) =
-        show(channelIdDeposit, title, message, silent)
+    fun showTransactionNotification(
+        title: String,
+        message: String,
+        silent: Boolean = false,
+        subText: String? = null
+    ) = show(channelIdDeposit, title, message, silent, subText)
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
-    private fun show(channelId: String, title: String, message: String, silent: Boolean = false) {
+    private fun show(
+        channelId: String,
+        title: String,
+        message: String,
+        silent: Boolean = false,
+        subText: String? = null
+    ) {
         // برای اندروید ۱۳ به بالا، به اجازه نوتیفیکیشن نیاز داریم
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             // در یک اپ واقعی، باید کاربر را برای دادن اجازه هدایت کنیم
@@ -119,11 +137,50 @@ class NotificationService @Inject constructor(
             .setSmallIcon(R.drawable.ic_logo)
             .setContentTitle(title)
             .setContentText(message)
+            // Expandable, so a long body (amount + network + counterparty) isn't truncated.
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setAutoCancel(true)
             .setSilent(silent)
+            // Tapping did nothing before — there was no content intent at all.
+            .setContentIntent(launchAppIntent())
+            // A balance change is sensitive: keep amounts off the lock screen and show a neutral
+            // line there instead. The full text is visible once the device is unlocked.
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, channelId)
+                    .setSmallIcon(R.drawable.ic_logo)
+                    .setContentTitle(title)
+                    .setContentText(REDACTED_LOCKSCREEN_TEXT)
+                    .setAutoCancel(true)
+                    .build()
+            )
+
+        subText?.takeIf { it.isNotBlank() }?.let(builder::setSubText)
 
         // یک ID منحصر به فرد برای هر نوتیفیکیشن
         notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+    }
+
+    /**
+     * Opens the app when the notification is tapped. Resolved through the package manager rather than
+     * referencing the launcher Activity directly — `:core` must not depend on `:app`.
+     */
+    private fun launchAppIntent(): PendingIntent? {
+        val intent = context.packageManager
+            .getLaunchIntentForPackage(context.packageName)
+            ?.apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP }
+            ?: return null
+        return PendingIntent.getActivity(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private companion object {
+        const val REDACTED_LOCKSCREEN_TEXT = "برای مشاهده جزئیات، قفل را باز کنید"
     }
 }
