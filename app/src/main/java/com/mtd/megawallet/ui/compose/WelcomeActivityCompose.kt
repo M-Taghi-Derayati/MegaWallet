@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -25,18 +26,21 @@ import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.mtd.common_ui.theme.MegaWalletTheme
+import com.mtd.core.manager.ErrorManager
 import com.mtd.domain.model.CreateWalletStep
 import com.mtd.domain.model.ImportScreenState
-import com.mtd.megawallet.ui.compose.screens.OnboardingScreen
-import com.mtd.megawallet.ui.compose.screens.SplashScreen
+import com.mtd.megawallet.ui.compose.components.AppMessageHost
+import com.mtd.megawallet.ui.compose.screens.splash.SplashScreen
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWalletScreen
 import com.mtd.megawallet.ui.compose.screens.createwallet.CreateWalletScreen
-import com.mtd.common_ui.theme.MegaWalletTheme
-import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
-import com.mtd.megawallet.viewmodel.news.WalletImportViewModel
-import com.mtd.megawallet.viewmodel.news.WelcomeViewModel
+import com.mtd.megawallet.ui.compose.screens.welcome.WelcomeIntroScreen
+import com.mtd.megawallet.viewmodel.CreateWalletViewModel
+import com.mtd.megawallet.viewmodel.WalletImportViewModel
+import com.mtd.megawallet.viewmodel.WelcomeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * اکتیویتی اصلی برای بخش Welcome/Onboarding اپلیکیشن.
@@ -48,6 +52,9 @@ class WelcomeActivityCompose : ComponentActivity() {
     private val viewModelWelcome: WelcomeViewModel by viewModels()
     private val viewModelWalletImport: WalletImportViewModel by viewModels()
     private val viewModelCreateWallet: CreateWalletViewModel by viewModels()
+
+    // TASK-57 — the app-wide message bus; one AppMessageHost per Activity renders it.
+    @Inject lateinit var errorManager: ErrorManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -63,7 +70,7 @@ class WelcomeActivityCompose : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-
+                    Box(modifier = Modifier.fillMaxSize()) {
                         WelcomeNavGraph(
                             viewModelWelcome = viewModelWelcome,
                             viewModelWalletImport = viewModelWalletImport,
@@ -74,9 +81,14 @@ class WelcomeActivityCompose : ComponentActivity() {
                             }
                         )
 
+                        // TASK-57 — single message host for the whole onboarding flow.
+                        AppMessageHost(uiMessages = errorManager.uiMessages)
+                    }
                 }
             }
         }
+
+
     }
 
 
@@ -149,7 +161,11 @@ class WelcomeActivityCompose : ComponentActivity() {
                     fadeIn(animationSpec = tween(0))
                 }
             ) {
-                OnboardingScreen(
+               /* OnboardingScreen(
+                    onConnectWallet = { navController.navigate("add_existing_wallet") },
+                    onCreateWallet = { navController.navigate("create_wallet") }
+                )*/
+                WelcomeIntroScreen(
                     onConnectWallet = { navController.navigate("add_existing_wallet") },
                     onCreateWallet = { navController.navigate("create_wallet") }
                 )

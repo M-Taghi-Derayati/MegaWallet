@@ -1,4 +1,4 @@
-package com.mtd.megawallet.viewmodel.news
+package com.mtd.megawallet.viewmodel
 
 import com.mtd.core.manager.ErrorManager
 import com.mtd.megawallet.core.BaseViewModel

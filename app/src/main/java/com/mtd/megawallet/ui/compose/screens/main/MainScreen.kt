@@ -1,10 +1,6 @@
 package com.mtd.megawallet.ui.compose.screens.main
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.testTagsAsResourceId
-import androidx.compose.ui.semantics.semantics
-import com.mtd.megawallet.ui.compose.TestTags
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector4D
@@ -49,6 +45,9 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -57,6 +56,7 @@ import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.CloudWalletItem
 import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.ImportData
+import com.mtd.megawallet.ui.compose.TestTags
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWalletScreen
 import com.mtd.megawallet.ui.compose.screens.createwallet.CreateWalletScreen
@@ -69,11 +69,12 @@ import com.mtd.megawallet.ui.compose.screens.wallet.MultiWalletScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.ReceiveScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.WalletScreens
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
-import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
-import com.mtd.megawallet.viewmodel.news.HomeViewModel
-import com.mtd.megawallet.viewmodel.news.MainScreenViewModel
+import com.mtd.megawallet.viewmodel.CreateWalletViewModel
+import com.mtd.megawallet.viewmodel.HomeViewModel
+import com.mtd.megawallet.viewmodel.MainScreenViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 
 /**
@@ -89,7 +90,6 @@ fun MainScreen(
     mainViewModel: MainScreenViewModel = hiltViewModel(),
     homeViewModel: HomeViewModel = hiltViewModel(),
     onNavigateToWalletManagement: () -> Unit = {},
-    onScanClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onMoreOptionsClick: () -> Unit = {},
     onFabClick: () -> Unit = {},
@@ -113,8 +113,6 @@ fun MainScreen(
         walletColor = activeWallet?.color?.let { Color(it) }
             ?: MaterialTheme.colorScheme.primary,
         onNavigateToWalletManagement = onNavigateToWalletManagement,
-        onScanClick = onScanClick,
-        // Tapping the magnifier flips the blockchain connection mode (PROXY ⇄ DIRECT).
         onSearchClick = { mainViewModel.toggleConnectionMode() },
         onMoreOptionsClick = onMoreOptionsClick,
         onHistoryClick = onHistoryClick,
@@ -138,7 +136,6 @@ private fun MainDashboardContent(
     walletName: String,
     walletColor: Color,
     onNavigateToWalletManagement: () -> Unit,
-    onScanClick: () -> Unit,
     onSearchClick: () -> Unit,
     onMoreOptionsClick: () -> Unit,
     onHistoryClick: () -> Unit,
@@ -157,6 +154,10 @@ private fun MainDashboardContent(
     // sheet lived inside the Scaffold content, where innerPadding clipped it above the bottom bar.
     val historyViewModel: TransactionHistoryViewModel = hiltViewModel()
     val selectedHistoryTransaction by historyViewModel.selectedTransaction.collectAsStateWithLifecycle()
+
+    // Item 6 — همان instanceِ SendViewModel که SendScreen استفاده می‌کند (Activity-scoped)، تا اسکنِ QR
+    // بتواند آدرسِ خوانده‌شده را مستقیم روی آن بنشاند و بعد صفحهٔ Send باز شود.
+    val sendViewModel: com.mtd.megawallet.viewmodel.SendViewModel = hiltViewModel()
 
     // ✅✅✅ Rect.VectorConverter برای انیمیشن هماهنگ Rect ✅✅✅
     val rectConverter = remember {
@@ -198,6 +199,9 @@ private fun MainDashboardContent(
     var sendInitialAssetId by rememberSaveable { mutableStateOf<String?>(null) }
     var showReceiveScreen by rememberSaveable { mutableStateOf(false) }
     var showMultiWalletScreen by rememberSaveable { mutableStateOf(false) }
+
+    // Item 6 — اورلیِ اسکنرِ QR (transient، پس remember ساده کافی است).
+    var showScanner by remember { mutableStateOf(false) }
 
     // حالات مدیریت ساخت و وارد کردن کیف پول
     var showCreateWalletScreen by rememberSaveable { mutableStateOf(false) }
@@ -263,7 +267,7 @@ private fun MainDashboardContent(
                 // هنگام باز شدن: ابتدا کوچک باشد، سپس با کمی تاخیر بزرگ شود تا انیمیشن دیده شود
                 isHeaderExpanded = false
                 launch {
-                    delay(50)
+                    delay(60.milliseconds)
                     isHeaderExpanded = true
                 }
             } else {
@@ -364,7 +368,7 @@ private fun MainDashboardContent(
                         walletName = walletName,
                         walletColor = walletColor,
                         onWalletClick = { showMultiWalletScreen = true },
-                        onScanClick = onScanClick,
+                        onScanClick = { showScanner = true },
                         onSearchClick = onSearchClick,
                         onMoreOptionsClick = onMoreOptionsClick,
                         onCurrencyToggle = onCurrencyToggle,
@@ -529,7 +533,26 @@ private fun MainDashboardContent(
                     showSendScreen = false
                     sendInitialAssetId = null
                 },
-                onScanClick = onScanClick
+                onScanClick = { showScanner = true },
+                sendViewModel = sendViewModel
+            )
+        }
+
+        // --- لایه ۶: QR Scanner Overlay (بالاترین لایه) — آدرس را می‌خواند و Send را با همان آدرس باز می‌کند ---
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showScanner,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.zIndex(6000f)
+        ) {
+            com.mtd.megawallet.ui.compose.screens.scanner.QrScannerScreen(
+                onClose = { showScanner = false },
+                onAddressScanned = { address ->
+                    sendViewModel.setRecipient(address)
+                    sendInitialAssetId = null
+                    showSendScreen = true
+                    showScanner = false
+                }
             )
         }
 
@@ -625,10 +648,21 @@ private fun MainDashboardContent(
         ) {
             val createWalletViewModel: CreateWalletViewModel = hiltViewModel()
 
-            LaunchedEffect(pendingCloudRestore) {
-                pendingCloudRestore?.let { walletItem ->
-                    createWalletViewModel.startRestoreFromCloud(walletItem)
-                    pendingCloudRestore = null
+            // این بلوک هر بار که overlay باز می‌شود یک‌بار اجرا می‌شود (محتوای AnimatedVisibility با هر باز
+            // شدن دوباره compose می‌شود). استیتِ باقی‌مانده از دفعهٔ قبل را قطعی مقداردهی می‌کند تا فلوِ
+            // ساخت/بازیابی همیشه از ابتدا باز شود و «از جای قبلی» باز نشود.
+            LaunchedEffect(Unit) {
+                val restore = pendingCloudRestore
+                when {
+                    restore != null -> {
+                        createWalletViewModel.startRestoreFromCloud(restore)
+                        pendingCloudRestore = null
+                    }
+                    pendingImportData != null -> {
+                        createWalletViewModel.resetToInitialState()
+                        createWalletViewModel.setPendingImportData(pendingImportData)
+                    }
+                    else -> createWalletViewModel.resetToInitialState()
                 }
             }
 

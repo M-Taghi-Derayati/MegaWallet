@@ -1,8 +1,7 @@
 package com.mtd.megawallet.ui.compose.components
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -12,30 +11,44 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.LayoutDirection
-import java.lang.Integer.max
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
 
+/**
+ * شمارندهٔ عددیِ متحرک — سبکِ «اودومتر» رقم‌به‌رقم (شبیهِ شمارندهٔ Family).
+ *
+ * هر رقم به‌صورتِ مستقل می‌غلتد (slide عمودی + بلورِ حرکتیِ سبک) و **خواندنِ انیمیشن در فازِ draw**
+ * انجام می‌شود (`Animatable` داخلِ `graphicsLayer`)، پس با هر تغییرِ مقدار **recomposition per-frame
+ * رخ نمی‌دهد** — برخلافِ نسخهٔ قبلی که کلِ رشته را با `AnimatedContent` سوییچ می‌کرد و لگ می‌داد.
+ *
+ * API دست‌نخورده مانده تا همهٔ استفاده‌کننده‌ها (موجودیِ کل، جزئیاتِ دارایی، لیستِ ارسال) خودکار بهبود یابند.
+ */
 @Composable
 fun AnimatedCounter(
     text: String,
@@ -73,10 +86,10 @@ fun AnimatedCounter(
     val styleChanged = styleVariantKey != previousStyleVariant
 
     val direction = when {
-        styleChanged       -> RollDirection.None  // currency swap — uses its own animation
-        parts.number < previousNumber -> RollDirection.Up
-        parts.number > previousNumber -> RollDirection.Down
-        else               -> RollDirection.None
+        styleChanged                  -> RollDirection.None // currency swap — own animation
+        parts.number < previousNumber -> RollDirection.Down // value decreased → roll down
+        parts.number > previousNumber -> RollDirection.Up   // value increased → roll up
+        else                          -> RollDirection.None
     }
 
     LaunchedEffect(parts.number) { previousNumber = parts.number }
@@ -95,8 +108,6 @@ fun AnimatedCounter(
             direction = direction,
             style = style,
             durationMs = animationDuration,
-            // Force lightweight when style swaps (currency toggle) OR many chars changed
-            forceLightweightTransition = styleChanged,
             isCurrencySwap = styleChanged
         )
 
@@ -114,173 +125,164 @@ private fun RollingDigitsText(
     direction: RollDirection,
     style: TextStyle,
     durationMs: Int,
-    forceLightweightTransition: Boolean,
     isCurrencySwap: Boolean = false
 ) {
-    var previousText by remember { mutableStateOf(text) }
-
-    val maxLen = max(previousText.length, text.length)
-    val newPadded = text.padStart(maxLen, ' ')
-    val oldPadded = previousText.padStart(maxLen, ' ')
-    val changedChars = remember(oldPadded, newPadded) {
-        oldPadded.indices.count { oldPadded[it] != newPadded[it] }
-    }
-
-    // Lightweight path: whole-text transition
-    // Used when: currency toggles, many chars changed, or force-flagged
-    val useLightweightTransition = forceLightweightTransition || maxLen > 6 || changedChars > 2
-
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        if (useLightweightTransition) {
+        if (isCurrencySwap) {
+            // تعویضِ ارز (تومان ↔ دلار): کلِ مقدار به‌سبکِ iOS از کنار وارد/خارج می‌شود.
             AnimatedContent(
                 targetState = text,
                 transitionSpec = {
-                    if (initialState == targetState || direction == RollDirection.None && !isCurrencySwap) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else if (isCurrencySwap) {
-                        // ─── Currency Toggle (e.g. Toman ↔ Dollar) ───
-                        // iOS Wallet-style: new value scales+slides in from trailing side,
-                        // old value scales out toward leading side.
-                        (
-                            slideInHorizontally(
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                ),
-                                initialOffsetX = { it / 3 }
-                            ) + scaleIn(
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                ),
-                                initialScale = 0.82f
-                            ) + fadeIn(tween((durationMs * 0.7f).toInt()))
-                        ).togetherWith(
-                            slideOutHorizontally(
-                                animationSpec = tween(
-                                    (durationMs * 0.6f).toInt(),
-                                    easing = FastOutSlowInEasing
-                                ),
-                                targetOffsetX = { -(it / 4) }
-                            ) + scaleOut(
-                                animationSpec = tween((durationMs * 0.6f).toInt()),
-                                targetScale = 0.88f
-                            ) + fadeOut(tween((durationMs * 0.5f).toInt()))
-                        )
-                    } else if (direction == RollDirection.Up) {
-                        // Value increased → roll UP (new comes from below)
-                        (
-                            slideInVertically(
-                                animationSpec = spring(
-                                    dampingRatio = 0.68f,
-                                    stiffness = 700f
-                                ),
-                                initialOffsetY = { it / 2 }
-                            ) + fadeIn(tween((durationMs * 0.6f).toInt()))
-                        ).togetherWith(
-                            slideOutVertically(
-                                animationSpec = tween(
-                                    (durationMs * 0.55f).toInt(),
-                                    easing = FastOutSlowInEasing
-                                ),
-                                targetOffsetY = { -(it / 2) }
-                            ) + fadeOut(tween((durationMs * 0.5f).toInt()))
-                        )
-                    } else {
-                        // Value decreased → roll DOWN (new comes from above)
-                        (
-                            slideInVertically(
-                                animationSpec = spring(
-                                    dampingRatio = 0.68f,
-                                    stiffness = 700f
-                                ),
-                                initialOffsetY = { -(it / 2) }
-                            ) + fadeIn(tween((durationMs * 0.6f).toInt()))
-                        ).togetherWith(
-                            slideOutVertically(
-                                animationSpec = tween(
-                                    (durationMs * 0.55f).toInt(),
-                                    easing = FastOutSlowInEasing
-                                ),
-                                targetOffsetY = { it / 2 }
-                            ) + fadeOut(tween((durationMs * 0.5f).toInt()))
-                        )
-                    }
+                    (
+                        slideInHorizontally(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            initialOffsetX = { it / 3 }
+                        ) + scaleIn(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            initialScale = 0.82f
+                        ) + fadeIn(tween((durationMs * 0.7f).toInt()))
+                    ).togetherWith(
+                        slideOutHorizontally(
+                            animationSpec = tween(
+                                (durationMs * 0.6f).toInt(),
+                                easing = FastOutSlowInEasing
+                            ),
+                            targetOffsetX = { -(it / 4) }
+                        ) + scaleOut(
+                            animationSpec = tween((durationMs * 0.6f).toInt()),
+                            targetScale = 0.88f
+                        ) + fadeOut(tween((durationMs * 0.5f).toInt()))
+                    )
                 },
-                label = "RollingNumberText"
+                label = "CurrencySwap"
             ) { value ->
                 Text(text = value, style = style)
             }
         } else {
-            // ─── Per-digit path (fewer changed chars → more precise roll) ───
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                repeat(maxLen) { index ->
-                    val targetChar = newPadded[index]
+            RollingCounter(
+                text = text,
+                rollUp = direction != RollDirection.Down, // increase/none → roll up
+                style = style,
+                durationMs = durationMs
+            )
+        }
+    }
+}
 
-                    if (oldPadded[index] == targetChar || direction == RollDirection.None) {
-                        Text(
-                            text = if (targetChar == ' ') "\u00A0" else targetChar.toString(),
-                            style = style
-                        )
+/**
+ * شمارندهٔ اودومترِ عمومی؛ رشتهٔ خام (مثلِ «12,542,636» یا مبلغِ تایپ‌شدهٔ «0.25») را **عیناً** نشان می‌دهد
+ * (بدونِ reformat) و فقط ارقامِ تغییرکرده را می‌غلتاند — انیمیشن در فازِ draw، بدونِ recomposition per-frame.
+ * برای فیلدهایی مثلِ مبلغِ Send که نباید عددشان دوباره‌فرمت شود مناسب است.
+ *
+ * @param rollUp جهتِ غلتش؛ اگر null باشد از روی افزایش/کاهشِ مقدار خودکار تشخیص داده می‌شود.
+ */
+@Composable
+fun RollingCounter(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: TextStyle = TextStyle(),
+    durationMs: Int = 240,
+    rollUp: Boolean? = null
+) {
+    var prevText by remember { mutableStateOf(text) }
+    val autoUp = remember(text) {
+        val cur = text.filter { it.isDigit() || it == '.' }.toFloatOrNull()
+        val old = prevText.filter { it.isDigit() || it == '.' }.toFloatOrNull()
+        if (cur != null && old != null) cur >= old else true
+    }
+    LaunchedEffect(text) { prevText = text }
+    val up = rollUp ?: autoUp
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+            val n = text.length
+            text.forEachIndexed { i, c ->
+                // کلید بر اساس فاصله از راست تا هویتِ رقمِ یکان/دهگان… هنگام تغییرِ طولِ عدد پایدار بماند.
+                key(n - 1 - i) {
+                    if (c.isDigit()) {
+                        DigitSlot(target = c, rollUp = up, style = style, durationMs = durationMs)
                     } else {
-                        AnimatedContent(
-                            targetState = targetChar,
-                            transitionSpec = {
-                                if (direction == RollDirection.Up) {
-                                    // Roll UP with spring bounce
-                                    (
-                                        slideInVertically(
-                                            animationSpec = spring(
-                                                dampingRatio = 0.58f,
-                                                stiffness = 900f
-                                            ),
-                                            initialOffsetY = { it }
-                                        ) + fadeIn(tween((durationMs * 0.5f).toInt()))
-                                    ).togetherWith(
-                                        slideOutVertically(
-                                            animationSpec = tween(
-                                                (durationMs * 0.45f).toInt(),
-                                                easing = FastOutSlowInEasing
-                                            ),
-                                            targetOffsetY = { -it }
-                                        ) + fadeOut(tween((durationMs * 0.4f).toInt()))
-                                    )
-                                } else {
-                                    // Roll DOWN with spring bounce
-                                    (
-                                        slideInVertically(
-                                            animationSpec = spring(
-                                                dampingRatio = 0.58f,
-                                                stiffness = 900f
-                                            ),
-                                            initialOffsetY = { -it }
-                                        ) + fadeIn(tween((durationMs * 0.5f).toInt()))
-                                    ).togetherWith(
-                                        slideOutVertically(
-                                            animationSpec = tween(
-                                                (durationMs * 0.45f).toInt(),
-                                                easing = FastOutSlowInEasing
-                                            ),
-                                            targetOffsetY = { it }
-                                        ) + fadeOut(tween((durationMs * 0.4f).toInt()))
-                                    )
-                                }
-                            },
-                            label = "RollingDigit_$index"
-                        ) { char ->
-                            Text(
-                                text = if (char == ' ') "\u00A0" else char.toString(),
-                                style = style
-                            )
-                        }
+                        Text(text = glyphStr(c), style = style)
                     }
                 }
             }
         }
     }
-
-    LaunchedEffect(text) { previousText = text }
 }
+
+/**
+ * یک رقمِ منفرد که هنگام تغییر، به‌صورتِ عمودی می‌غلتد. مقدارِ انیمیشن فقط داخلِ `graphicsLayer`
+ * خوانده می‌شود (فازِ draw) تا هیچ recomposition‌ای per-frame نداشته باشیم.
+ */
+@Composable
+private fun DigitSlot(
+    target: Char,
+    rollUp: Boolean,
+    style: TextStyle,
+    durationMs: Int
+) {
+    val density = LocalDensity.current
+    val rollPx = remember(style.fontSize, density) {
+        with(density) {
+            if (style.fontSize != TextUnit.Unspecified) style.fontSize.toPx() else 48f
+        }
+    }
+    var shown by remember { mutableStateOf(target) }
+    var prev by remember { mutableStateOf(target) }
+    var animating by remember { mutableStateOf(false) }
+    val progress = remember { Animatable(1f) }
+
+    LaunchedEffect(target) {
+        if (target != shown) {
+            prev = shown
+            shown = target
+            animating = true
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(durationMs, easing = FastOutSlowInEasing))
+            animating = false
+        }
+    }
+
+    val sign = if (rollUp) 1f else -1f
+    val blurRadius = if (animating) 1.5.dp else 0.dp
+
+    Box {
+        // رقمِ جدید: از سمتِ ورود به مرکز می‌آید
+        Text(
+            text = shown.toString(),
+            style = style,
+            modifier = Modifier
+                .blur(blurRadius, BlurredEdgeTreatment.Unbounded)
+                .graphicsLayer {
+                    val p = progress.value
+                    translationY = (1f - p) * rollPx * sign
+                    alpha = p
+                }
+        )
+        // رقمِ قبلی: فقط حین انیمیشن، از مرکز خارج می‌شود
+        if (animating) {
+            Text(
+                text = prev.toString(),
+                style = style,
+                modifier = Modifier
+                    .blur(blurRadius, BlurredEdgeTreatment.Unbounded)
+                    .graphicsLayer {
+                        val p = progress.value
+                        translationY = -p * rollPx * sign
+                        alpha = 1f - p
+                    }
+            )
+        }
+    }
+}
+
+private fun glyphStr(c: Char): String = if (c == ' ') " " else c.toString()
 
 private data class ParsedText(
     val number: Float,

@@ -4,7 +4,21 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
+/**
+ * TASK-57 — the single place a `Throwable` becomes something a user may see.
+ *
+ * Contract: [getUserMessage] always returns curated Persian copy, never a raw exception or DTO
+ * string. Technical text is produced separately by [getTechnicalDetail], PII-scrubbed by
+ * [ErrorTextSanitizer], and only ever rendered behind the "جزئیات" dialog. [present] bundles both
+ * with an [ErrorSurface] so a call site declares *how loud* the failure is in one place.
+ */
 object ErrorMapper {
+
+    /** Fallback copy for anything we cannot name. Deliberately actionable, never technical. */
+    const val GENERIC_MESSAGE = "خطای ناشناخته رخ داد. لطفاً دوباره تلاش کنید."
+
+    const val DEFAULT_TITLE = "خطا"
+
     fun map(throwable: Throwable): AppError {
         return when (throwable) {
             is AppError -> throwable // اگر خودش از قبل AppError بود
@@ -16,16 +30,88 @@ object ErrorMapper {
             else -> AppError.Unexpected(throwable)
         }
     }
-    
+
     // متدی برای گرفتن پیام کاربرپسند (می‌تواند بعداً به String Resource تبدیل شود)
     fun getUserMessage(error: AppError): String {
         return when (error) {
             is AppError.Network.NoInternet -> "اتصال اینترنت برقرار نیست."
             is AppError.Network.Timeout -> "پاسخی از سرور دریافت نشد. لطفاً دوباره تلاش کنید."
             is AppError.Network.ServerUnavailable -> "سرور موقتاً در دسترس نیست."
+            is AppError.Network.Unknown -> "ارتباط با شبکه برقرار نشد. لطفاً دوباره تلاش کنید."
             is AppError.Business.InsufficientFunds -> "موجودی کافی نیست."
             is AppError.Business.InvalidAddress -> "آدرس وارد شده معتبر نیست."
-            else -> "خطای ناشناخته رخ داد."
+            // Curated copy already resolved upstream (see ApiErrorMessageMapper.toAppError) or a
+            // hand-written Persian message from a call site. Sanitized defensively: the Unknown
+            // bucket falls back to the server's own text, which we do not control.
+            is AppError.Business.General ->
+                ErrorTextSanitizer.sanitize(error.message).ifBlank { GENERIC_MESSAGE }
+            is AppError.Unexpected -> GENERIC_MESSAGE
         }
+    }
+
+    /** Convenience overload — maps then resolves in one step. */
+    fun getUserMessage(throwable: Throwable): String = getUserMessage(map(throwable))
+
+    /**
+     * Technical text for the "جزئیات" dialog and the log. Carries the machine code / exception type
+     * so a support conversation is possible, with every address, key, hash and payload redacted.
+     */
+    fun getTechnicalDetail(throwable: Throwable): String {
+        val cause = unwrap(throwable)
+        val parts = mutableListOf<String>()
+
+        if (cause is ApiException) {
+            parts += "کد: ${ApiErrorMessageMapper.technicalCode(cause.apiError)}"
+            cause.httpStatus?.let { parts += "وضعیت: $it" }
+            cause.retryAfterSec?.let { parts += "تلاش مجدد پس از $it ثانیه" }
+            ErrorTextSanitizer.sanitize(cause.reasonFa)
+                .takeIf { it.isNotBlank() }
+                ?.let { parts += it }
+        } else {
+            cause::class.simpleName
+                ?.takeIf { it.isNotBlank() }
+                ?.let { parts += "نوع: $it" }
+            ErrorTextSanitizer.sanitize(cause.message)
+                .takeIf { it.isNotBlank() }
+                ?.let { parts += it }
+        }
+
+        return parts.joinToString("\n")
+    }
+
+    /**
+     * Bundles the curated message, the scrubbed technical detail and the declared [surface].
+     * This is what every error branch should hand to the UI layer.
+     *
+     * @param fallbackMessage optional Persian copy describing *what the user was doing*
+     *   ("خطا در حذف کیف پول"). Used only when the taxonomy has nothing more specific to say, so a
+     *   typed [ApiError] keeps its curated wording and an unrecognized exception still reads as
+     *   something concrete instead of [GENERIC_MESSAGE].
+     */
+    fun present(
+        throwable: Throwable,
+        surface: ErrorSurface = ErrorSurface.SNACKBAR,
+        title: String = DEFAULT_TITLE,
+        fallbackMessage: String? = null
+    ): ErrorPresentation {
+        val mapped = getUserMessage(map(throwable))
+        val short = if (mapped == GENERIC_MESSAGE && !fallbackMessage.isNullOrBlank()) {
+            fallbackMessage
+        } else {
+            mapped
+        }
+        return ErrorPresentation(
+            title = title,
+            shortMessage = short,
+            technicalDetail = getTechnicalDetail(throwable),
+            surface = surface
+        )
+    }
+
+    /** Digs the original failure out of the [AppError] wrappers so the detail stays informative. */
+    private fun unwrap(throwable: Throwable): Throwable = when (throwable) {
+        is AppError.Unexpected -> throwable.originalException
+        is AppError.Network.Unknown -> throwable.originalException
+        else -> throwable
     }
 }

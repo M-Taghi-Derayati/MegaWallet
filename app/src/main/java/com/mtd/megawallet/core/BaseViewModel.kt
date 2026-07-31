@@ -2,12 +2,12 @@ package com.mtd.megawallet.core
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mtd.core.manager.ErrorAction
 import com.mtd.core.manager.ErrorContext
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.manager.ErrorSeverity
 import com.mtd.domain.model.error.AppError
 import com.mtd.domain.model.error.ErrorMapper
+import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.domain.model.ui.UiEvent
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -16,83 +16,70 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
+/**
+ * TASK-57 — error reporting contract for every ViewModel.
+ *
+ * Never build a user-facing string from an exception. Call [reportError] with the [ErrorSurface]
+ * that matches the situation (see the policy table on [ErrorSurface]); it maps the failure to
+ * curated Persian copy, hides the scrubbed technical text behind the "جزئیات" dialog, and logs.
+ * For a message you have already written yourself, use [showErrorSnackbar] / [showSuccess].
+ *
+ * Messages are emitted on the app-wide [ErrorManager.uiMessages] bus, not on a per-ViewModel
+ * channel — a single `AppMessageHost` per Activity renders them.
+ */
 abstract class BaseViewModel(
     protected val errorManager: ErrorManager
 ) : ViewModel() {
 
-    // استفاده از Channel برای one-time events (بهتر از SharedFlow برای UI events)
+    /**
+     * ViewModel-local navigation/loading events. Snackbars and dialogs deliberately do **not**
+     * travel here — see the class doc.
+     */
     private val _uiEvents = Channel<UiEvent>(Channel.UNLIMITED)
     val uiEvents = _uiEvents.receiveAsFlow()
 
-    // CoroutineExceptionHandler برای گرفتن خطاهای handle نشده
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
         handleException(throwable)
     }
 
-    init {
-        // Observe error events from ErrorManager
-        observeErrorEvents()
+    /**
+     * Reports a failure through the shared pipeline.
+     *
+     * @param surface how loudly to surface it. SILENT still logs — use it for background work.
+     * @param fallbackMessage Persian copy describing what the user was doing; shown only when the
+     *   error taxonomy has nothing more specific (see [ErrorMapper.present]).
+     */
+    protected suspend fun reportError(
+        throwable: Throwable,
+        userAction: String? = null,
+        surface: ErrorSurface = ErrorSurface.SNACKBAR,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        title: String = ErrorMapper.DEFAULT_TITLE,
+        fallbackMessage: String? = null
+    ): AppError = errorManager.report(
+        throwable = throwable,
+        context = ErrorContext(
+            component = this::class.simpleName ?: "Unknown",
+            userAction = userAction
+        ),
+        surface = surface,
+        severity = severity,
+        title = title,
+        fallbackMessage = fallbackMessage
+    )
+
+    /** Fire-and-forget variant of [reportError] for non-suspending call sites. */
+    protected fun reportErrorAsync(
+        throwable: Throwable,
+        userAction: String? = null,
+        surface: ErrorSurface = ErrorSurface.SNACKBAR,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        title: String = ErrorMapper.DEFAULT_TITLE,
+        fallbackMessage: String? = null
+    ) {
+        launchLocal { reportError(throwable, userAction, surface, severity, title, fallbackMessage) }
     }
 
-    /**
-     * مشاهده error events از ErrorManager
-     */
-    private fun observeErrorEvents() {
-        viewModelScope.launch {
-            errorManager.errorEvents.collect { errorEvent ->
-                handleErrorAction(errorEvent.action, errorEvent.error)
-            }
-        }
-    }
-
-    /**
-     * هندل کردن action های خطا
-     */
-    private suspend fun handleErrorAction(action: ErrorAction, error: AppError) {
-        when (action) {
-            is ErrorAction.ShowSnackbar -> {
-                val message = ErrorMapper.getUserMessage(error)
-                _uiEvents.send(UiEvent.ShowErrorSnackbar(message))
-            }
-            is ErrorAction.ShowRetryDialog -> {
-                val message = ErrorMapper.getUserMessage(error)
-                _uiEvents.send(
-                    UiEvent.ShowDialog(
-                        title = "خطا",
-                        message = "$message\nآیا می‌خواهید دوباره تلاش کنید؟",
-                        positiveButton = "تلاش مجدد",
-                        negativeButton = "لغو",
-                        onPositive = {
-                            // Retry logic should be implemented in child ViewModels
-                        }
-                    )
-                )
-            }
-            is ErrorAction.ForceLogout -> {
-                // Force logout logic - should be handled in MainViewModel or Application
-                _uiEvents.send(UiEvent.ShowErrorSnackbar("خطای بحرانی. لطفاً دوباره وارد شوید."))
-            }
-            is ErrorAction.NavigateTo -> {
-                _uiEvents.send(UiEvent.Navigate(action.destination))
-            }
-            is ErrorAction.ShowDialog -> {
-                _uiEvents.send(
-                    UiEvent.ShowDialog(
-                        title = action.title,
-                        message = action.message,
-                        positiveButton = action.positiveButton,
-                        negativeButton = action.negativeButton
-                    )
-                )
-            }
-        }
-    }
-
-    /**
-     * متد امن برای اجرای کوروتین‌ها
-     * از این به جای viewModelScope.launch استفاده کنید
-     * @param checkNetwork اگر true باشد، قبل از اجرا اتصال به اینترنت چک می‌شود
-     */
     protected fun launchSafe(
         checkNetwork: Boolean = true,
         block: suspend CoroutineScope.() -> Unit
@@ -105,84 +92,55 @@ abstract class BaseViewModel(
         }
     }
 
-    /**
-     * متد برای اجرای کوروتین‌های محلی (بدون نیاز به چک کردن اینترنت)
-     */
     protected fun launchLocal(block: suspend CoroutineScope.() -> Unit): Job {
         return viewModelScope.launch(exceptionHandler) {
             block()
         }
     }
 
-    /**
-     * هندل کردن خطاهای catch نشده
-     */
+    /** Anything that escapes a coroutine is by definition unexpected — always surfaced. */
     private fun handleException(throwable: Throwable) {
         viewModelScope.launch {
-            errorManager.handleError(
+            reportError(
                 throwable = throwable,
-                context = ErrorContext(
-                    component = this@BaseViewModel::class.simpleName ?: "Unknown",
-                    userAction = "Uncaught exception"
-                ),
+                userAction = "Uncaught exception",
+                surface = ErrorSurface.SNACKBAR,
                 severity = ErrorSeverity.HIGH
             )
         }
     }
 
-    /**
-     * هندل کردن خطا به صورت دستی
-     */
-    protected suspend fun handleError(
-        throwable: Throwable,
-        userAction: String? = null,
-        severity: ErrorSeverity = ErrorSeverity.MEDIUM
-    ) {
-        errorManager.handleError(
-            throwable = throwable,
-            context = ErrorContext(
-                component = this::class.simpleName ?: "Unknown",
-                userAction = userAction
-            ),
-            severity = severity
-        )
-    }
-
-    /**
-     * ارسال manual event از ViewModel
-     */
     protected suspend fun sendEvent(event: UiEvent) {
         _uiEvents.send(event)
     }
 
     /**
-     * نمایش Error Snackbar کاستوم با پیام کوتاه و شرح کامل
+     * Shows an error snackbar from copy **you wrote**. [shortMessage] must be user-facing Persian;
+     * put anything technical in [detailedMessage], which is rendered only behind "جزئیات".
      */
     protected suspend fun showErrorSnackbar(
         shortMessage: String,
-        detailedMessage: String="",
-        errorTitle: String = "خطا"
+        detailedMessage: String = "",
+        errorTitle: String = ErrorMapper.DEFAULT_TITLE
     ) {
-        _uiEvents.send(
-            UiEvent.ShowErrorSnackbar(
-                shortMessage = shortMessage,
-                detailedMessage = detailedMessage,
-                errorTitle = errorTitle
-            )
-        )
+        errorManager.showSnackbar(shortMessage, detailedMessage)
     }
 
-    /**
-     * نمایش سریع Snackbar بدون نیاز به بلاک suspend (استفاده از launchLocal)
-     */
     protected fun showSnackbarMessage(message: String) {
         launchLocal { showErrorSnackbar(message) }
     }
 
+    /** TASK-57 — success-styled confirmation snackbar (green, auto-dismissing). */
+    protected suspend fun showSuccess(message: String) {
+        errorManager.showSuccess(message)
+    }
+
+    protected fun showSuccessMessage(message: String) {
+        launchLocal { showSuccess(message) }
+    }
 
     override fun onCleared() {
         super.onCleared()
-        // بستن Channel برای جلوگیری از memory leak
         _uiEvents.close()
     }
 }

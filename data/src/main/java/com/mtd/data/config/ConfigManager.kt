@@ -9,23 +9,7 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Phase 3 — dynamic config authority with a strict **Offline-First + Fallback** strategy.
- *
- * [getValidatedConfig] resolves the network/asset catalog in this exact priority order:
- *
- *  1. **Local cache (fastest)** — if a previously validated bundle is cached AND a cheap
- *     `/config/version` probe confirms it is still the latest (or the probe can't be reached, i.e.
- *     we are offline), return the cache immediately with no full fetch.
- *  2. **Network fetch (freshness)** — otherwise fetch `/config/bundle`, verify its secp256k1
- *     signature against the pinned public key, cache it on success, and return it.
- *  3. **Local asset fallback (resilience)** — if the network fails (timeout / IOException / 5xx) or
- *     the signature can't be trusted, return the last validated cache if present, else the bundled
- *     `networks.json` / `assets.json`. This path NEVER surfaces an error to the caller.
- *
- * The bundled local assets are intentionally retained in `core/src/main/assets/` and are trusted
- * without signature verification.
- */
+
 @Singleton
 class ConfigManager @Inject constructor(
     private val configApiService: ConfigApiService,

@@ -1,4 +1,4 @@
-package com.mtd.megawallet.viewmodel.news
+package com.mtd.megawallet.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

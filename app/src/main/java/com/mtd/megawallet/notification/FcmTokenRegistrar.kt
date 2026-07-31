@@ -4,7 +4,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.mtd.domain.interfaceRepository.INotificationRepository
 import com.mtd.domain.interfaceRepository.ITokenStore
 import com.mtd.domain.model.DeviceRegistration
-import com.mtd.domain.model.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import com.mtd.domain.model.ResultResponse
 import com.mtd.megawallet.BuildConfig
 import kotlinx.coroutines.CoroutineScope

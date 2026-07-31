@@ -20,12 +20,17 @@ import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
+import com.mtd.domain.model.WalletStorageMetadata
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.error.ApiError
 import com.mtd.domain.model.error.ApiException
 import org.web3j.utils.Numeric
 import javax.inject.Inject
+import kotlin.collections.find
+import kotlin.collections.isNotEmpty
+import kotlin.collections.map
+import kotlin.collections.toMutableList
 
 class WalletRepositoryImpl @Inject constructor(
     private val keyManager: KeyManager,
@@ -49,7 +54,7 @@ class WalletRepositoryImpl @Inject constructor(
         private fun getSecretKey(id: String) = "wallet_secret_$id"
     }
 
-    private fun com.mtd.data.datasource.IChainDataSource.TransactionFeeDetails.toDomainModel(): TransactionFeeDetails {
+    private fun TransactionFeeDetails.toDomainModel(): TransactionFeeDetails {
         return TransactionFeeDetails(
             fee = fee,
             energyUsed = energyUsed,
@@ -59,14 +64,7 @@ class WalletRepositoryImpl @Inject constructor(
         )
     }
 
-    private data class WalletStorageMetadata(
-        val id: String,
-        val name: String,
-        val color: Int,
-        val isMnemonic: Boolean,
-        val isManualBackedUp: Boolean = false,
-        val isCloudBackedUp: Boolean = false
-    )
+
 
     private fun getWalletsMetadata(): List<WalletStorageMetadata> {
         val json = secureStorage.getDecrypted(WALLETS_METADATA_KEY)

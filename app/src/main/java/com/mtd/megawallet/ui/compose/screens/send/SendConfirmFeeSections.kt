@@ -55,7 +55,7 @@ import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.common_ui.theme.IranSansRegularMedium
 import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.domain.model.FeeOption
-import com.mtd.domain.model.gassless.GaslessPreviewState
+import com.mtd.domain.model.GaslessPreviewState
 
 data class SmartFeeInfo(
     val amount: String,

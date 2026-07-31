@@ -3,7 +3,7 @@ package com.mtd.data.repository
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.mtd.domain.model.BlockchainConnectionMode
-import com.mtd.domain.model.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 

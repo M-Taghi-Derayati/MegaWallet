@@ -1,4 +1,4 @@
-package com.mtd.megawallet.viewmodel.news
+package com.mtd.megawallet.viewmodel
 
 import android.content.Intent
 import androidx.compose.runtime.getValue
@@ -177,55 +177,48 @@ class CreateWalletViewModel @Inject constructor(
      * @param walletItem اطلاعات کیف پول انتخاب شده از cloud
      */
     fun startRestoreFromCloud(walletItem: CloudWalletItem) {
+        // استیتِ حیاتی را «سنکرون» ست می‌کنیم (نه داخلِ launch) تا:
+        //  ۱) صفحه بلافاصله در مرحلهٔ درست باز شود و یک‌فریم NAME_INPUT فلش نزند،
+        //  ۲) isRestoreMode پیش از اجرای ریستِ محافظت‌شدهٔ CreateWalletScreen true باشد و استیتِ بازیابی پاک نشود.
+        isRestoreMode = true
+        creationSuccess = false
+        isAnimationFinished = false
+        backupAnimationState = BackupAnimationState.IDLE
+        backupMethod = BackupMethodType.NONE
+        currentStep = CreateWalletStep.SEED_PHRASE_GENERATION
+        restoreId = walletItem.id
+        preloadedRestoreBalanceUsdt = walletItem.balanceUsdt
+            .takeIf { it.isNotBlank() && it != "..." }
+        totalBalanceUSDT = preloadedRestoreBalanceUsdt ?: "0.00"
+        walletName = walletItem.name
+        selectedColor = try {
+            Color(walletItem.colorHex.toColorInt())
+        } catch (e: Exception) {
+            Color(0xFF22C55E) // Default green
+        }
+        importData = if (walletItem.isMnemonic) {
+            ImportData.Mnemonic(walletItem.key.split(" "))
+        } else {
+            ImportData.PrivateKey(walletItem.key)
+        }
+        // پاک‌سازی داده‌های احتمالیِ باقی‌مانده از فلوِ قبلی
+        seedWords.clear()
+        walletAddress.clear()
+
+        // شروع فرآیند بازیابی (بدون backup گرفتن)
         viewModelScope.launch {
             try {
-                isRestoreMode = true
-                restoreId = walletItem.id
-                preloadedRestoreBalanceUsdt = walletItem.balanceUsdt
-                    .takeIf { it.isNotBlank() && it != "..." }
-                totalBalanceUSDT = preloadedRestoreBalanceUsdt ?: "0.00"
+                generateWallet()
 
-                // Reset animation state برای نمایش انیمیشن از ابتدا
-                isAnimationFinished = false
-                backupAnimationState = BackupAnimationState.IDLE
-                backupMethod = BackupMethodType.NONE
+                // منتظر می‌مانیم تا انیمیشن اولیه (خطوط و reveal) تمام شود
+                val totalAnimationDuration = AnimationConstants.GENERATING_ANIMATION_DURATION +
+                        AnimationConstants.LINE_DRAW_DELAY +
+                        AnimationConstants.LINE_DRAW_DURATION +
+                        AnimationConstants.REVEAL_ANIMATION_DELAY +
+                        AnimationConstants.REVEAL_ANIMATION_DURATION
+                delay(totalAnimationDuration.toLong())
 
-                // تنظیم اطلاعات کیف پول
-                walletName = walletItem.name
-                selectedColor = try {
-                    Color(walletItem.colorHex.toColorInt())
-                } catch (e: Exception) {
-                    Color(0xFF22C55E) // Default green
-                }
-
-                // تنظیم importData
-                importData = if (walletItem.isMnemonic) {
-                    ImportData.Mnemonic(walletItem.key.split(" "))
-                } else {
-                    ImportData.PrivateKey(walletItem.key)
-                }
-
-                // مستقیماً به مرحله SEED_PHRASE_GENERATION برو
-                currentStep = CreateWalletStep.SEED_PHRASE_GENERATION
-
-                // شروع فرآیند بازیابی (بدون backup گرفتن)
-                // generateWallet یک suspend function است، پس باید منتظر بمانیم
-                // اما چون generateWallet در viewModelScope اجرا می‌شود، باید آن را در یک coroutine جداگانه اجرا کنیم
-                launch {
-                    generateWallet()
-
-                    // منتظر می‌مانیم تا انیمیشن اولیه (خطوط و reveal) تمام شود
-                    // قبل از اینکه backupAnimationState را به PROCESSING ببریم
-                    val totalAnimationDuration = AnimationConstants.GENERATING_ANIMATION_DURATION +
-                            AnimationConstants.LINE_DRAW_DELAY +
-                            AnimationConstants.LINE_DRAW_DURATION +
-                            AnimationConstants.REVEAL_ANIMATION_DELAY +
-                            AnimationConstants.REVEAL_ANIMATION_DURATION
-                    delay(totalAnimationDuration.toLong())
-
-                    backupAnimationState = BackupAnimationState.SUCCESS
-                }
-
+                backupAnimationState = BackupAnimationState.SUCCESS
             } catch (e: Exception) {
                 launchLocal {
                     showErrorSnackbar(

@@ -21,5 +21,7 @@ data class NetworkInfo(
     val faName: String?,
     val decimals: Int = 0,
     val explorers: List<String> = emptyList(),
-    val color: String? = null
+    val color: String? = null,
+    /** TASK-51 — web-explorer transaction page template with a `{hash}` placeholder; see [NetworkConfig]. */
+    val explorerTxUrl: String? = null
 )

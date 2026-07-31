@@ -283,8 +283,6 @@ class NotificationSocketManager @Inject constructor(
      * Parses the contract WS envelope `{ id, name, ts, payload }`. Returns `null` only when the frame
      * is unparseable JSON.
      */
-    private data class ParsedFrame(val event: SocketEvent, val isHeartbeat: Boolean)
-
     private fun parseEnvelope(text: String): ParsedFrame? {
         return try {
             val root = JSONObject(text)
@@ -457,6 +455,7 @@ class NotificationSocketManager @Inject constructor(
         const val RECONNECT_MAX_MS = 60_000L
     }
 
+   private data class ParsedFrame(val event: SocketEvent, val isHeartbeat: Boolean)
 }
 
 /**

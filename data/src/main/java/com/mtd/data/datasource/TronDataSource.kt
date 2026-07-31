@@ -7,7 +7,6 @@ import com.mtd.core.network.tron.TronUtils
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.utils.AddressRegexUtils
 import com.mtd.core.utils.TronAddressConverter
-import com.mtd.data.datasource.IChainDataSource.FeeData
 import com.mtd.data.dto.AccountRequest
 import com.mtd.data.dto.CreateTxRequest
 import com.mtd.data.dto.TriggerConstantRequest
@@ -17,8 +16,10 @@ import com.mtd.data.service.TronExplorerService
 import com.mtd.data.service.TronNativeService
 import com.mtd.data.utils.AssetNormalizer.normalize
 import com.mtd.domain.model.Asset
+import com.mtd.domain.model.FeeData
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TokenTransferDetails
+import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
@@ -248,7 +249,7 @@ class TronDataSource(
         }
     } //TODO اینجا هزینه پرداختی هر تراکنش نیست باید https://apilist.tronscan.org/api/transaction-info?hash={transaction_id} رو استفاده کنیم وقتی جزئیات رو خواست ببینه
 
-    override suspend fun getTransactionFeeDetails(txId: String): ResultResponse<IChainDataSource.TransactionFeeDetails> {
+    override suspend fun getTransactionFeeDetails(txId: String): ResultResponse<TransactionFeeDetails> {
         return try {
             executeNativeApiWithFailover { api ->
                 val requestBody = com.mtd.data.dto.TransactionInfoRequest(value = txId)
@@ -262,7 +263,7 @@ class TronDataSource(
                 val bandwidthUsed = receipt?.netUsage
 
                 ResultResponse.Success(
-                    IChainDataSource.TransactionFeeDetails(
+                    TransactionFeeDetails(
                         fee = fee,
                         energyUsed = energyUsed,
                         bandwidthUsed = bandwidthUsed,

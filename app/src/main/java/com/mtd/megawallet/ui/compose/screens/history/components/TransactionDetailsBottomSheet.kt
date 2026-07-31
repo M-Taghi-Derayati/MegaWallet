@@ -35,7 +35,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,6 +62,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,6 +83,7 @@ import com.mtd.domain.model.TransactionStatus
 import com.mtd.domain.model.TronTransaction
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedBottomSheetCard
+import com.mtd.megawallet.ui.compose.components.rememberClipboardCopier
 import com.mtd.megawallet.ui.compose.screens.wallet.AutoResizeBalanceRows
 import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
 import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
@@ -342,6 +347,11 @@ private fun TransactionHeader(
     networkIconUrl: Int,
     style: TransactionVisualStyle
 ) {
+    val uriHandler = LocalUriHandler.current
+    val copyToClipboard = rememberClipboardCopier()
+    val explorerUrl = remember(transaction.hash) { viewModel.buildExplorerUrl(transaction) }
+    var menuOpen by remember(transaction.hash) { mutableStateOf(false) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -377,12 +387,77 @@ private fun TransactionHeader(
             )
         }
 
-        Icon(
-            imageVector = Icons.Default.MoreHoriz,
-            contentDescription = null,
-            tint = Color(0xFF8F8F96),
-            modifier = Modifier.size(24.dp)
-        )
+        // TASK-51 — this three-dot affordance existed but was a plain, non-interactive Icon. It now
+        // opens the actions menu. `buildExplorerUrl` returns null for a network with no configured
+        // explorer (or an explorer whose URL shape we can't build), in which case the entry is hidden
+        // rather than shown as a dead item.
+        Box {
+            IconButton(
+                onClick = { menuOpen = true },
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreHoriz,
+                    contentDescription = "گزینه‌های بیشتر",
+                    tint = Color(0xFF8F8F96),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false }
+            ) {
+                if (explorerUrl != null) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "مشاهده در اکسپلورر",
+                                fontSize = 14.sp,
+                                fontFamily = IranSansRegularMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_chain),
+                                contentDescription = null,
+                                tint = Color(0xFF8F8F96),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            // No browser / no activity to handle the intent must not crash the sheet.
+                            runCatching { uriHandler.openUri(explorerUrl) }
+                        }
+                    )
+                }
+
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "کپی هش تراکنش",
+                            fontSize = 14.sp,
+                            fontFamily = IranSansRegularMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_copy),
+                            contentDescription = null,
+                            tint = Color(0xFF8F8F96),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        copyToClipboard(transaction.hash)
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -712,7 +787,8 @@ private fun GeneralDetailsCard(
                 label = row.label,
                 value = row.value,
                 accent = row.accent,
-                loading = row.loading
+                loading = row.loading,
+                copyValue = row.copyValue
             )
             if (index != rows.lastIndex) {
                 DividerLine()
@@ -748,6 +824,7 @@ private fun TokenTransfersCard(
             label = "ارسال به",
             value = shortenAddress(toAddress),
             accent = true,
+            copyValue = toAddress,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
         DividerLine(modifier = Modifier.padding(horizontal = 16.dp))
@@ -756,6 +833,7 @@ private fun TokenTransfersCard(
             label = "ارسال از",
             value = shortenAddress(fromAddress),
             accent = true,
+            copyValue = fromAddress,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
         DividerLine(modifier = Modifier.padding(horizontal = 16.dp))
@@ -775,11 +853,21 @@ private fun DetailRow(
     value: String,
     accent: Boolean = false,
     loading: Boolean = false,
+    copyValue: String? = null,
     modifier: Modifier = Modifier
 ) {
+    // TASK-52 — `copyValue` carries the FULL value; `value` is the shortened display form, so copying
+    // the displayed text would hand the user a truncated, useless address.
+    val copyToClipboard = rememberClipboardCopier()
+    val copyable = !loading && !copyValue.isNullOrBlank()
+
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .then(
+                // Clickable before padding, so the padding is part of the touch target.
+                if (copyable) Modifier.clickable { copyToClipboard(copyValue.orEmpty()) } else Modifier
+            )
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -809,16 +897,31 @@ private fun DetailRow(
                 )
             }
         } else {
-            Text(
-                text = value.ifBlank { "-" },
-                fontSize = 14.sp,
-                fontFamily = IranSansBoldBold,
-                color = if (accent) Color(0xFF4AA8FF) else MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.End,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1.2f)
-            )
+            Row(
+                modifier = Modifier.weight(1.2f),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = value.ifBlank { "-" },
+                    fontSize = 14.sp,
+                    fontFamily = IranSansBoldBold,
+                    color = if (accent) Color(0xFF4AA8FF) else MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (copyable) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        painter = painterResource(R.drawable.ic_copy),
+                        contentDescription = "کپی $label",
+                        tint = Color(0xFF8F8F96),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -873,7 +976,9 @@ private data class DetailItem(
     val label: String,
     val value: String,
     val accent: Boolean = false,
-    val loading: Boolean = false
+    val loading: Boolean = false,
+    /** TASK-52 — full, un-truncated text to copy; null means the row isn't copyable. */
+    val copyValue: String? = null
 )
 
 private fun formatNativeValue(
@@ -918,6 +1023,30 @@ private fun buildGeneralRows(
         rows[1] = rows[1].copy(loading = true)
     }
 
+    // TASK-52 — for a NATIVE transfer the counterparties weren't rendered anywhere (TokenTransfersCard
+    // only exists for token transfers), so there was no address to copy at all. Added here and only
+    // here, so token transfers don't end up with the same two rows twice.
+    if (transactionTokenTransfer(transaction) == null) {
+        transaction.fromAddress?.takeIf { it.isNotBlank() }?.let { from ->
+            rows += DetailItem(
+                R.drawable.ic_send,
+                "ارسال از",
+                shortenAddress(from),
+                accent = true,
+                copyValue = from
+            )
+        }
+        transaction.toAddress?.takeIf { it.isNotBlank() }?.let { to ->
+            rows += DetailItem(
+                R.drawable.ic_download,
+                "ارسال به",
+                shortenAddress(to),
+                accent = true,
+                copyValue = to
+            )
+        }
+    }
+
     when (transaction) {
         is EvmTransaction -> {
             transaction.gasPrice?.let {
@@ -945,7 +1074,8 @@ private fun buildGeneralRows(
                     R.drawable.ic_contract,
                     "قرارداد هوشمند",
                     shortenAddress(it),
-                    accent = true
+                    accent = true,
+                    copyValue = it
                 )
             }
         }
@@ -989,7 +1119,8 @@ private fun buildGeneralRows(
                     R.drawable.ic_contract,
                     "قرارداد هوشمند",
                     shortenAddress(it),
-                    accent = true
+                    accent = true,
+                    copyValue = it
                 )
             }
         }
@@ -1004,7 +1135,8 @@ private fun buildGeneralRows(
         R.drawable.ic_hash,
         "هش تراکنش",
         shortenAddress(transaction.hash),
-        accent = true
+        accent = true,
+        copyValue = transaction.hash
     )
     return rows
 }

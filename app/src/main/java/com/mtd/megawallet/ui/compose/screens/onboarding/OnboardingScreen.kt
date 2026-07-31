@@ -1,4 +1,4 @@
-package com.mtd.megawallet.ui.compose.screens
+package com.mtd.megawallet.ui.compose.screens.onboarding
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween

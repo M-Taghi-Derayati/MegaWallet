@@ -1,6 +1,6 @@
 package com.mtd.domain.security
 
-import com.mtd.domain.model.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

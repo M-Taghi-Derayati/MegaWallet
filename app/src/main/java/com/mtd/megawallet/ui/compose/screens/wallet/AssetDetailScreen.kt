@@ -84,8 +84,8 @@ import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.screens.send.ChooseBalanceBottomSheet
-import com.mtd.megawallet.viewmodel.news.AssetDetailViewModel
-import com.mtd.megawallet.viewmodel.news.HomeViewModel
+import com.mtd.megawallet.viewmodel.assetdetail.AssetDetailViewModel
+import com.mtd.megawallet.viewmodel.HomeViewModel
 import kotlinx.coroutines.delay
 import java.math.BigDecimal
 import java.math.RoundingMode

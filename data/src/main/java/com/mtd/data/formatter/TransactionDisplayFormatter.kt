@@ -1,4 +1,4 @@
-package com.mtd.megawallet.viewmodel.history
+package com.mtd.data.formatter
 
 import com.mtd.core.utils.AddressUtils
 import com.mtd.core.utils.BalanceFormatter
@@ -19,7 +19,7 @@ import java.util.Locale
 import javax.inject.Inject
 
 /** A resolved local wallet address, used to label a transaction's counterparty. */
-internal data class WalletAddressReference(
+data class WalletAddressReference(
     val name: String,
     val color: Int
 )
@@ -262,18 +262,44 @@ class TransactionDisplayFormatter @Inject constructor(
         return resolveAssetConfig(networkId, contractAddr, symbol)?.symbol
     }
 
+    /**
+     * TASK-51 — web-explorer URL for a transaction, or null when the network has no explorer we can
+     * link to (callers must hide the action rather than show a dead link).
+     *
+     * Prefers the network's own `explorerTxUrl` template from `networks.json`. That field exists
+     * because `explorers` holds the explorer **API** base URLs the data sources call, which is not
+     * the page a human opens — the guess-from-API-base path below silently produced *no link at all*
+     * for BSC, TRON and DOGE (their API hosts are nodereal/trongrid/blockcypher, none of which match
+     * a known web-explorer host) and a malformed one for Solana devnet, whose base carries a query
+     * string that a path was then appended to.
+     */
     fun buildExplorerUrl(transaction: TransactionRecord): String? {
         val network = networkCatalog.getNetworkInfoByName(transaction.networkName ?: return null) ?: return null
-        val base = network.explorers.firstOrNull()?.trimEnd('/') ?: return null
+        val hash = transaction.hash.takeIf { it.isNotBlank() } ?: return null
+
+        network.explorerTxUrl?.takeIf { it.isNotBlank() }?.let { template ->
+            return template.replace(HASH_PLACEHOLDER, hash)
+        }
+
+        // Fallback for networks without a template (and for anything arriving from the server config
+        // bundle). Tries every configured explorer in order, not just the first, so one dead entry
+        // doesn't cost the link entirely.
+        return network.explorers.firstNotNullOfOrNull { explorer ->
+            explorerUrlFromApiBase(explorer.trimEnd('/'), hash)
+        }
+    }
+
+    private fun explorerUrlFromApiBase(base: String, hash: String): String? {
+        val host = base.lowercase()
         return when {
-            "blockscout" in base.lowercase() -> "$base/tx/${transaction.hash}"
-            "tronscan" in base.lowercase() -> "$base/#/transaction/${transaction.hash}"
-            "mempool.space" in base.lowercase() -> base.removeSuffix("/api") + "/tx/${transaction.hash}"
-            "blockchair.com" in base.lowercase() -> "$base/transaction/${transaction.hash}"
-            "xrpscan" in base.lowercase() -> "$base/tx/${transaction.hash}"
-            "solscan" in base.lowercase() -> "$base/tx/${transaction.hash}"
-            "tonscan" in base.lowercase() -> "$base/tx/${transaction.hash}"
-            "basescan" in base.lowercase() || "etherscan" in base.lowercase() -> "$base/tx/${transaction.hash}"
+            "blockscout" in host -> "$base/tx/$hash"
+            "tronscan" in host -> "$base/#/transaction/$hash"
+            "mempool.space" in host -> base.removeSuffix("/api") + "/tx/$hash"
+            "blockchair.com" in host -> "$base/transaction/$hash"
+            "xrpscan" in host -> "$base/tx/$hash"
+            "solscan" in host -> "$base/tx/$hash"
+            "tonscan" in host -> "$base/tx/$hash"
+            "basescan" in host || "etherscan" in host -> "$base/tx/$hash"
             else -> null
         }
     }
@@ -371,5 +397,8 @@ class TransactionDisplayFormatter @Inject constructor(
         // Neutral "no data" glyph shown when a transaction's fee is unknown (not yet fetched / not
         // reported), so it can't be mistaken for a genuine zero-fee transaction.
         const val FEE_UNKNOWN_PLACEHOLDER = "—"
+
+        /** Placeholder substituted with the tx hash in a network's `explorerTxUrl` template. */
+        const val HASH_PLACEHOLDER = "{hash}"
     }
 }

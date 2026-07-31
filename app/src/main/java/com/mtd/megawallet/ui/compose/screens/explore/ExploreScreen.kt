@@ -32,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mtd.common_ui.R
 import com.mtd.common_ui.theme.InterBold
 import com.mtd.common_ui.theme.IranSansRegular
 
@@ -49,12 +48,12 @@ fun ExploreScreen() {
         animationSpec = infiniteRepeatable(
             animation = keyframes {
                 this.durationMillis = durationMillis
-                0f at 0 with CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
-                -66f at 1200 with CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
-                -58f at 1520 with CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
-                -62f at 1800 with CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
-                -60f at 2000 with CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
-                0f at 2800 with CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
+                0f at 0 using CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
+                -66f at 1200 using CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
+                -58f at 1520 using CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
+                -62f at 1800 using CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
+                -60f at 2000 using CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
+                0f at 2800 using CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
                 0f at 4000
             }
         ), label = "TranslationX"

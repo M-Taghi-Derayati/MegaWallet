@@ -165,51 +165,55 @@ class BlockchainRegistry @Inject constructor() : INetworkCatalog {
 
 
     override fun getNetworkTypeForAddress(address: String): NetworkType? {
-        val normalized = address.trim()
-        if (normalized.isBlank()) return null
+        try {
+            val normalized = address.trim()
+            if (normalized.isBlank()) return null
 
-        NetworkType.values().forEach { type ->
-            val match = addressRegexByNetworkType[type]?.any { regex ->
-                regex.matches(normalized)
-            } == true
-            if (match) return type
-        }
-
-        if (WalletUtils.isValidAddress(normalized)) {
-            return NetworkType.EVM
-        }
-
-        // TRON addresses are Base58 too, so detect before generic Base58 checks.
-        if (normalized.startsWith("T") && normalized.length == 34) {
-            try {
-                Base58.decode(normalized)
-                return NetworkType.TVM
-            } catch (_: Exception) {
-                // ignore
+            NetworkType.values().forEach { type ->
+                val match = addressRegexByNetworkType[type]?.any { regex ->
+                    regex.matches(normalized)
+                } == true
+                if (match) return type
             }
-        }
 
-        if (normalized.startsWith("bc1", true) || normalized.startsWith("tb1", true)) {
-            return NetworkType.BITCOIN
-        }
-
-        val utxoCandidates = listOf(
-            NetworkName.BITCOIN to NetworkType.BITCOIN,
-            NetworkName.BITCOINTESTNET to NetworkType.BITCOIN,
-            NetworkName.LITECOIN to NetworkType.UTXO,
-            NetworkName.LTCTESTNET to NetworkType.UTXO,
-            NetworkName.DOGE to NetworkType.UTXO,
-            NetworkName.DOGETESTNET to NetworkType.UTXO
-        )
-        utxoCandidates.forEach { (networkName, type) ->
-            runCatching {
-                Address.fromString(UtxoNetworkParametersResolver.resolve(networkName), normalized)
-            }.onSuccess {
-                return type
+            if (WalletUtils.isValidAddress(normalized)) {
+                return NetworkType.EVM
             }
-        }
 
-        return null
+            // TRON addresses are Base58 too, so detect before generic Base58 checks.
+            if (normalized.startsWith("T") && normalized.length == 34) {
+                try {
+                    Base58.decode(normalized)
+                    return NetworkType.TVM
+                } catch (_: Exception) {
+                    // ignore
+                }
+            }
+
+            if (normalized.startsWith("bc1", true) || normalized.startsWith("tb1", true)) {
+                return NetworkType.BITCOIN
+            }
+
+            val utxoCandidates = listOf(
+                NetworkName.BITCOIN to NetworkType.BITCOIN,
+                NetworkName.BITCOINTESTNET to NetworkType.BITCOIN,
+                NetworkName.LITECOIN to NetworkType.UTXO,
+                NetworkName.LTCTESTNET to NetworkType.UTXO,
+                NetworkName.DOGE to NetworkType.UTXO,
+                NetworkName.DOGETESTNET to NetworkType.UTXO
+            )
+            utxoCandidates.forEach { (networkName, type) ->
+                runCatching {
+                    Address.fromString(UtxoNetworkParametersResolver.resolve(networkName), normalized)
+                }.onSuccess {
+                    return type
+                }
+            }
+
+            return null
+        } catch (e: Exception) {
+            return null
+        }
     }
 
     override fun getNetworkTypeForNetworkId(networkId: String): NetworkType? {
@@ -320,6 +324,7 @@ class BlockchainRegistry @Inject constructor() : INetworkCatalog {
             faName = faName,
             decimals = decimals,
             explorers = explorers,
+            explorerTxUrl = explorerTxUrl,
             color = color
         )
     }

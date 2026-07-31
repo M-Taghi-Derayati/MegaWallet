@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -29,18 +28,21 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.theme.MegaWalletTheme
+import com.mtd.core.manager.ErrorManager
 import com.mtd.domain.model.AuthPurpose
 import com.mtd.megawallet.security.BiometricAuthHelper
 import com.mtd.megawallet.session.RealtimeLifecycleCoordinator
 import com.mtd.megawallet.session.WalletLockKeyCoordinator
 import com.mtd.megawallet.session.WalletSessionAuthCoordinator
+import com.mtd.megawallet.ui.compose.components.AppMessageHost
 import com.mtd.megawallet.ui.compose.screens.main.MainScreen
 import com.mtd.megawallet.ui.compose.screens.security.LockedFingerprintOverlay
 import com.mtd.megawallet.ui.compose.screens.security.PasscodeKeypadSheet
 import com.mtd.megawallet.ui.compose.screens.security.PasscodeSetupSheet
 import com.mtd.megawallet.ui.compose.screens.security.SecuritySettingsSheet
-import com.mtd.megawallet.viewmodel.news.AppLockViewModel
+import com.mtd.megawallet.viewmodel.AppLockViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -61,6 +63,9 @@ class MainActivityCompose : FragmentActivity() {
 
     // TASK-22 — disconnects the realtime socket in the background, reconnects it in the foreground.
     @Inject lateinit var realtimeLifecycleCoordinator: RealtimeLifecycleCoordinator
+
+    // TASK-57 — the app-wide message bus; one AppMessageHost per Activity renders it.
+    @Inject lateinit var errorManager: ErrorManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -183,9 +188,6 @@ class MainActivityCompose : FragmentActivity() {
                                 onNavigateToWalletManagement = {
                                     // TODO: Navigate to wallet management screen
                                 },
-                                onScanClick = {
-                                    // TODO: Open QR scanner
-                                },
                                 onSearchClick = {
                                     // TODO: Open search
                                 },
@@ -273,6 +275,10 @@ class MainActivityCompose : FragmentActivity() {
                             cancelLabel = if (lockUiState.authPurpose == AuthPurpose.SENSITIVE_ACTION) "لغو عملیات" else "بازگشت",
                             onExitApp = { finishAffinity() }
                         )
+
+                        // TASK-57 — single message host for the whole main app. Mounted last so the
+                        // snackbar/dialog draws above the sheets and the app-lock overlay.
+                        AppMessageHost(uiMessages = errorManager.uiMessages)
                     }
                 }
             }

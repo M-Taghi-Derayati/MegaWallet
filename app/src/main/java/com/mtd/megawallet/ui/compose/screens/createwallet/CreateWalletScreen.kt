@@ -27,11 +27,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.mtd.domain.model.CreateWalletStep
 import com.mtd.domain.model.GoogleSignInEvent
 import com.mtd.domain.model.ImportData
-import com.mtd.megawallet.ui.compose.components.ErrorSnackbarHandler
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudBackupPasswordScreen
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudPasswordMode
-import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
+import com.mtd.megawallet.viewmodel.CreateWalletViewModel
 
 /**
  * Main screen for creating a new wallet.
@@ -89,13 +88,8 @@ fun CreateWalletScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-        // Error Snackbar Handler (در بالای همه چیز)
-        ErrorSnackbarHandler(
-            uiEvents = viewModel.uiEvents,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .zIndex(100f)
-        )
+        // TASK-57 — snackbars/dialogs are rendered once by the AppMessageHost at the Activity root
+        // (WelcomeActivityCompose); nothing screen-local is needed here.
 
         // Header with back button
         Row(

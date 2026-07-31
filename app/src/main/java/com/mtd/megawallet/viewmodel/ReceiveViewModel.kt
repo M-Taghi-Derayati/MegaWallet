@@ -1,4 +1,4 @@
-package com.mtd.megawallet.viewmodel.news
+package com.mtd.megawallet.viewmodel
 
 import com.mtd.domain.model.ReceiveUiState
 import com.mtd.domain.usecase.receive.BuildReceiveAddressGroupsUseCase

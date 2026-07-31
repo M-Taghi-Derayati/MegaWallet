@@ -26,6 +26,7 @@ class TronNetwork(config: NetworkConfig) : BlockchainNetwork {
     override val currencySymbol: String = config.currencySymbol
     override val regex: String? = config.regex
     override val explorers: List<String> = config.explorers
+    override val explorerTxUrl: String? = config.explorerTxUrl
     override val color: String? = config.color
     override val faName: String? = config.faName
     override val isTestnet: Boolean = config.isTestnet

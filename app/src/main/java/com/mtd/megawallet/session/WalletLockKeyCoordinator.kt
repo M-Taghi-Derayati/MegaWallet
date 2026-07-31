@@ -21,33 +21,7 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * TASK-06 (TD-23) — keeps decrypted private-key material out of the heap whenever the wallet isn't
- * actively usable. Enforces one invariant:
- *
- *   > the [KeyManager] credential cache is populated **iff the app is unlocked AND in the foreground**.
- *
- * On lock or backgrounding it clears the cache; on the return to an unlocked foreground it re-hydrates
- * from Keystore-encrypted storage via [IWalletRepository.loadExistingWallet] (off the main thread, so
- * it never reintroduces the TASK-05 blocking regression).
- *
- * **Scope is deliberately minimal.** It clears only the in-memory keys — it does NOT null the active
- * wallet or drop the JWT session (that heavier teardown is
- * [com.mtd.core.wallet.ActiveWalletManager.lockWallet], which the session layer treats as a full
- * sign-out). Clearing just the credential cache closes the "locked-but-keys-resident" window without
- * bouncing the realtime socket on every soft auto-lock.
- *
- * Only engaged when app-lock is actually configured, so no-passcode users keep their current behavior
- * (no resume-time key re-derivation cost, no session churn). Cryptographic hardening — binding the
- * Keystore master key to user authentication — is the follow-up **TD-35** (TASK-19).
- *
- * Foreground state comes from [ProcessLifecycleOwner] (not a single `Activity.onStop`/`onStart`), so it
- * reflects true app-wide foreground and is debounced across configuration changes — a screen rotation
- * won't needlessly clear-then-re-derive keys. Same signal the realtime socket uses
- * ([RealtimeLifecycleCoordinator]), so "background" means one thing across the app.
- *
- * Started once from [com.mtd.megawallet.ui.compose.MainActivityCompose]; idempotent.
- */
+
 @Singleton
 class WalletLockKeyCoordinator internal constructor(
     private val appLockManager: AppLockManager,

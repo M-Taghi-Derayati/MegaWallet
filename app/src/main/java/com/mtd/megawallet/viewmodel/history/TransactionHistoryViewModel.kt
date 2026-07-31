@@ -1,6 +1,9 @@
 package com.mtd.megawallet.viewmodel.history
 
+import androidx.lifecycle.viewModelScope
 import com.mtd.core.manager.ErrorManager
+import com.mtd.data.formatter.TransactionDisplayFormatter
+import com.mtd.data.formatter.WalletAddressReference
 import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
@@ -35,7 +38,6 @@ import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -814,23 +816,11 @@ class TransactionHistoryViewModel @Inject constructor(
         return _transactionFeeDetailsLoading.value.contains(key)
     }
 
-    fun formatTronEnergyUsed(transaction: TransactionRecord): String? =
-        displayFormatter.tronEnergyUsed(transaction, transactionDetailFor(transaction))
-
-    fun formatTronBandwidthUsed(transaction: TransactionRecord): String? =
-        displayFormatter.tronBandwidthUsed(transaction, transactionDetailFor(transaction))
-
     fun formatTronEnergyFee(transaction: TransactionRecord): String? =
         displayFormatter.tronEnergyFee(transaction, transactionDetailFor(transaction))
 
     fun formatTronNetworkFee(transaction: TransactionRecord): String? =
         displayFormatter.tronNetworkFee(transaction, transactionDetailFor(transaction))
-
-    fun getTransactionTypeLabel(transaction: TransactionRecord): String =
-        displayFormatter.transactionTypeLabel(transaction)
-
-    fun getTransactionStatusLabel(status: TransactionStatus): String =
-        displayFormatter.statusLabel(status)
 
     fun getNetworkDisplayName(transaction: TransactionRecord): String =
         displayFormatter.networkDisplayName(transaction)

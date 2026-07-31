@@ -1,4 +1,6 @@
-package com.mtd.domain.model
+package com.mtd.domain.interfaceRepository
+
+import com.mtd.domain.model.BlockchainConnectionMode
 
 
 interface IUserPreferencesRepository {

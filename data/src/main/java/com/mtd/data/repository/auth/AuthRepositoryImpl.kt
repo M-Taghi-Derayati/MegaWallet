@@ -1,17 +1,18 @@
 package com.mtd.data.repository.auth
 
+import com.mtd.core.crypto.HmacUtils
 import com.mtd.data.BuildConfig
 import com.mtd.data.dto.AuthChallengeRequestDto
 import com.mtd.data.dto.AuthVerifyRequestDto
 import com.mtd.data.dto.DeviceChallengeRequest
 import com.mtd.data.service.AuthApiService
-import com.mtd.core.crypto.HmacUtils
 import com.mtd.data.utils.safeApiCall
 import com.mtd.domain.interfaceRepository.IAuthRepository
 import com.mtd.domain.interfaceRepository.IDeviceIdProvider
 import com.mtd.domain.interfaceRepository.ITokenStore
 import com.mtd.domain.model.AuthChallenge
 import com.mtd.domain.model.AuthSession
+import com.mtd.domain.model.DeviceAttestation
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.error.ApiError
 import com.mtd.domain.model.error.ApiException
@@ -142,7 +143,6 @@ class AuthRepositoryImpl(
         }.getOrNull()
     }
 
-    private data class DeviceAttestation(val nonce: String, val signature: String)
 
     override suspend fun refresh(): ResultResponse<AuthSession> = safeApiCall {
         val response = authApiService.refresh()

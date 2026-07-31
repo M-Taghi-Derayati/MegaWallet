@@ -18,6 +18,9 @@ interface BlockchainNetwork {
     val derivationPath: String
     val currencySymbol: String
     val explorers: List<String>
+    /** TASK-51 — web-explorer tx page template (`{hash}`). Defaults to null so a network that hasn't
+     *  declared one falls back to deriving the URL from [explorers]. */
+    val explorerTxUrl: String? get() = null
     val color: String?
     val regex: String?
     val faName: String?

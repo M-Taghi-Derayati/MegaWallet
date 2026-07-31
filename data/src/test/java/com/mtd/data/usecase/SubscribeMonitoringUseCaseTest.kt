@@ -4,7 +4,7 @@ import com.mtd.domain.interfaceRepository.IActiveWalletProvider
 import com.mtd.domain.interfaceRepository.IMonitoringRepository
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.NetworkInfo
-import com.mtd.domain.model.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import com.mtd.domain.model.MonitoringSubscribeResult
 import com.mtd.domain.model.MonitoringSubscription
 import com.mtd.domain.model.ResultResponse

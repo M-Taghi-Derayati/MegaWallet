@@ -1,5 +1,6 @@
 package com.mtd.megawallet.viewmodel.history
 
+import com.mtd.data.formatter.TransactionDisplayFormatter
 import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.NetworkInfo
@@ -165,6 +166,50 @@ class TransactionDisplayFormatterTest {
     @Test
     fun `explorer url is built for an etherscan-family explorer`() {
         assertEquals("https://sepolia.etherscan.io/tx/0xhash", formatter.buildExplorerUrl(evm()))
+    }
+
+    // TASK-51 — the network's own template wins over guessing from the explorer API base.
+    @Test
+    fun `explorer url prefers the configured template over the api-base guess`() {
+        every { networkCatalog.getNetworkInfoByName(NetworkName.SEPOLIA) } returns
+            sepoliaInfo.copy(explorerTxUrl = "https://custom.example/transaction/{hash}")
+
+        assertEquals("https://custom.example/transaction/0xhash", formatter.buildExplorerUrl(evm()))
+    }
+
+    // The regression this task exists for: TRON's configured explorer is the trongrid API host,
+    // which matches no known web-explorer host, so the guess path returned null and the app could
+    // never link a TRON transaction.
+    @Test
+    fun `tron api-host explorer yields no url without a template, and the real url with one`() {
+        every { networkCatalog.getNetworkInfoByName(NetworkName.TRON) } returns
+            tronInfo.copy(explorers = listOf("https://api.trongrid.io/"))
+        assertNull(formatter.buildExplorerUrl(tron()))
+
+        every { networkCatalog.getNetworkInfoByName(NetworkName.TRON) } returns
+            tronInfo.copy(
+                explorers = listOf("https://api.trongrid.io/"),
+                explorerTxUrl = "https://tronscan.org/#/transaction/{hash}"
+            )
+        assertEquals("https://tronscan.org/#/transaction/0xhash", formatter.buildExplorerUrl(tron()))
+    }
+
+    @Test
+    fun `explorer url falls through to the next explorer when the first is unrecognised`() {
+        every { networkCatalog.getNetworkInfoByName(NetworkName.SEPOLIA) } returns
+            sepoliaInfo.copy(
+                explorers = listOf("https://unknown-host.example", "https://sepolia.etherscan.io")
+            )
+
+        assertEquals("https://sepolia.etherscan.io/tx/0xhash", formatter.buildExplorerUrl(evm()))
+    }
+
+    @Test
+    fun `explorer url is null when the network has no usable explorer`() {
+        every { networkCatalog.getNetworkInfoByName(NetworkName.SEPOLIA) } returns
+            sepoliaInfo.copy(explorers = emptyList())
+
+        assertNull(formatter.buildExplorerUrl(evm()))
     }
 
     @Test

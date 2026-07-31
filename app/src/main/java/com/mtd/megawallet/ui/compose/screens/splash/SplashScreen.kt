@@ -1,4 +1,4 @@
-package com.mtd.megawallet.ui.compose.screens
+package com.mtd.megawallet.ui.compose.screens.splash
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing

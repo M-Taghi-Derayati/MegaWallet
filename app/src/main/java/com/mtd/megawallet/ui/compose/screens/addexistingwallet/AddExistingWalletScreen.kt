@@ -48,14 +48,13 @@ import com.mtd.domain.model.GoogleSignInEvent
 import com.mtd.domain.model.ImportData
 import com.mtd.domain.model.ImportScreenState
 import com.mtd.megawallet.ui.compose.components.AnimatedFlipCard
-import com.mtd.megawallet.ui.compose.components.ErrorSnackbarHandler
 import com.mtd.megawallet.ui.compose.components.FlipCardTargets
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 import com.mtd.megawallet.ui.compose.components.WalletStackCardBackPrivateKey
 import com.mtd.megawallet.ui.compose.components.WalletStackCardBackWordKeys
 import com.mtd.megawallet.ui.compose.components.WalletStackCardFront
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.manualimport.ManualImportWordKeys
-import com.mtd.megawallet.viewmodel.news.WalletImportViewModel
+import com.mtd.megawallet.viewmodel.WalletImportViewModel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -67,7 +66,13 @@ fun AddExistingWalletScreen(
 ) {
     val screenState = viewModel.screenState
     val restoreWalletEvent = viewModel.restoreWalletEvent
-    
+
+    // با هر بار باز شدنِ صفحه، فلوِ ورود/بازیابی از ابتدا (STACKED) شروع شود و دادهٔ واردشدهٔ قبلی
+    // پاک شود؛ چون ViewModel در سطحِ Activity زنده می‌ماند و در غیر این صورت «از جای قبلی» باز می‌شد.
+    LaunchedEffect(Unit) {
+        viewModel.resetToInitialState()
+    }
+
     // Observe restore event - باید key را به restoreWalletEvent تغییر دهیم
     LaunchedEffect(restoreWalletEvent) {
         restoreWalletEvent?.let { walletItem ->
@@ -213,13 +218,8 @@ fun AddExistingWalletScreen(
                 .padding(padding)
 
         ) {
-            // Error Snackbar Handler (در بالای همه چیز)
-            ErrorSnackbarHandler(
-                uiEvents = viewModel.uiEvents,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .zIndex(100f)
-            )
+            // TASK-57 — snackbars/dialogs are rendered once by the AppMessageHost at the Activity
+            // root (WelcomeActivityCompose); nothing screen-local is needed here.
 
             // ۱. هدر یکپارچه
             UnifiedHeader(

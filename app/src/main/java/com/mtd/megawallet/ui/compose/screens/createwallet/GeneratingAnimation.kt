@@ -111,7 +111,7 @@ import com.mtd.megawallet.ui.compose.components.PrivateKeyWallet
 import com.mtd.megawallet.ui.compose.components.SeedPhraseGrid
 import com.mtd.megawallet.ui.compose.components.WalletStackCard
 import com.mtd.megawallet.ui.compose.screens.wallet.ManualBackupVerifier
-import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
+import com.mtd.megawallet.viewmodel.CreateWalletViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.sqrt

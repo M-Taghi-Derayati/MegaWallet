@@ -3,8 +3,10 @@ package com.mtd.data.datasource
 import com.mtd.data.dto.BatchBalanceWalletDto
 import com.mtd.data.dto.HistoryAddressDto
 import com.mtd.domain.model.Asset
+import com.mtd.domain.model.FeeData
 import com.mtd.domain.model.HistoryPage
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.error.ApiError
@@ -50,24 +52,5 @@ interface IChainDataSource {
         )
     }
 
-    // یک data class برای داده‌های خام کارمزد
-    data class FeeData(
-        val level: String, // "Normal", "Fast", "Urgent"
-        val feeInSmallestUnit: BigDecimal,
-        val estimatedTime: String,
-        // فیلدهای مخصوص EVM
-        val gasPrice: BigInteger? = null,
-        val gasLimit: BigInteger? = null,
-        val feeInCoin: BigDecimal?=null,
-        val feeInUsd: BigDecimal?=null,
-        val feeRateInSatsPerByte: Long? = null,
-    )
 
-    data class TransactionFeeDetails(
-        val fee: BigInteger,
-        val energyUsed: Long? = null,
-        val bandwidthUsed: Long? = null,
-        val energyFee: BigInteger? = null,
-        val networkFee: BigInteger? = null // bandwidth fee
-    )
 }

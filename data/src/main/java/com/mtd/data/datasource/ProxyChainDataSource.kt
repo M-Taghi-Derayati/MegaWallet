@@ -3,8 +3,7 @@ package com.mtd.data.datasource
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.mtd.core.network.BlockchainNetwork
-import com.mtd.data.datasource.IChainDataSource.FeeData
-import com.mtd.data.datasource.IChainDataSource.TransactionFeeDetails
+
 import com.mtd.data.dto.BalancesRequestDto
 import com.mtd.data.dto.BatchBalanceRequestDto
 import com.mtd.data.dto.BatchBalanceWalletDto
@@ -21,10 +20,14 @@ import com.mtd.data.network.proxyCall
 import com.mtd.data.service.MobileProxyApiService
 import com.mtd.data.utils.AssetNormalizer.normalize
 import com.mtd.domain.model.Asset
+import com.mtd.domain.model.FeeData
 import com.mtd.domain.model.HistoryPage
+import com.mtd.domain.model.PreparedEvmTx
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
+import com.mtd.domain.model.UtxoInput
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.error.ApiError
@@ -34,6 +37,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import java.math.BigDecimal
 import java.math.BigInteger
+import kotlin.math.ceil
 
 /**
  * PROXY-mode [IChainDataSource] — routes reads + broadcast through the centralized Mobile
@@ -140,7 +144,7 @@ class ProxyChainDataSource(
                     // Reserve the ceiling — mirrors the DIRECT path (EvmDataSource.getFeeOptions) and still
                     // never underestimates the L2 total (ceiling ≥ totalFee), preserving the L2 fix.
                     val evmCeiling = if (isEvm && tier.maxFeePerGas != null && evmGasLimit != null) {
-                        tier.maxFeePerGas!! * evmGasLimit + (tier.l1DataFee ?: BigInteger.ZERO)
+                        tier.maxFeePerGas * evmGasLimit + (tier.l1DataFee ?: BigInteger.ZERO)
                     } else null
                     // Non-EVM (or an older backend without maxFeePerGas) keeps the context-aware total.
                     val feeRaw = evmCeiling ?: tier.totalFee ?: dto.totalFee ?: tier.estimatedCost ?: BigInteger.ZERO
@@ -155,7 +159,7 @@ class ProxyChainDataSource(
                         // The build uses an integer sat/vByte; round a fractional rate UP and keep a
                         // relayable floor of 1. Display uses `feeRaw` above, so accuracy is unaffected.
                         feeRateInSatsPerByte = tier.satPerVByte?.let {
-                            maxOf(1L, kotlin.math.ceil(it).toLong())
+                            maxOf(1L, ceil(it).toLong())
                         }
                     )
                 }

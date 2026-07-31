@@ -27,12 +27,10 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
 
     @Inject lateinit var configManager: ConfigManager
 
-    // TASK-05/TD-19 — warm the transport-mode cache off-main so the data-source factory reads the
-    // persisted DIRECT/PROXY choice without ever blocking the main thread.
+
     @Inject lateinit var connectionModeProvider: DefaultBlockchainConnectionModeProvider
 
-    // TASK-25 — background coroutine failures are logged (and, once Crashlytics is wired, reported)
-    // instead of vanishing. Paired with SupervisorJob so one failure doesn't tear down the scope.
+
     private val crashHandler = CoroutineExceptionHandler { _, throwable ->
         Timber.e(throwable, "Uncaught coroutine exception in applicationScope")
         // Non-fatal (SupervisorJob isolates it, the app keeps running) → record so it isn't silent.
@@ -43,10 +41,11 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
 
     override fun onCreate() {
         super.onCreate()
-        // TASK-26 — surface disk/network-on-main + leaks early in debug (was silent: no StrictMode).
         installStrictModeIfDebug()
-        // TASK-25 — Crashlytics disabled in debug (no dev noise / privacy); enabled in release.
-        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(BuildConfig.BUILD_TYPE != "debug")
+        FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = BuildConfig.BUILD_TYPE != "debug"
+
+
+
         // TASK-25 — process-wide safety net so uncaught exceptions are logged before the crash.
         installGlobalCrashLogger()
         if (BuildConfig.BUILD_TYPE == "debug") {
@@ -78,11 +77,6 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
         }
     }
 
-    /**
-     * TASK-26 / TD-44 — StrictMode tripwire, DEBUG builds only. Uses `penaltyLog()` (not
-     * `penaltyDeath()`) so it surfaces disk/network-on-main and leaked-closable/activity violations in
-     * Logcat without crashing dev builds. Release builds are unaffected.
-     */
     private fun installStrictModeIfDebug() {
         if (BuildConfig.BUILD_TYPE != "debug") return
         StrictMode.setThreadPolicy(
@@ -104,13 +98,7 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
         )
     }
 
-    /**
-     * TASK-25 — install a process-wide uncaught-exception logger that runs before delegating to the
-     * platform/Crashlytics default handler. Crashlytics installs its own handler during its
-     * ContentProvider init (before `Application.onCreate`), so it is `previous` here — delegating to
-     * it records the FATAL. We only add a Timber log; we do NOT `recordException` (that would
-     * double-report the fatal).
-     */
+
     private fun installGlobalCrashLogger() {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->

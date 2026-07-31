@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.TopHeader
-import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
+import com.mtd.megawallet.viewmodel.CreateWalletViewModel
 import com.mtd.common_ui.theme.IranSansLightLight
 import com.mtd.common_ui.theme.IranSansRegular
 

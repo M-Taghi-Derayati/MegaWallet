@@ -1,17 +1,23 @@
 package com.mtd.data.datasource
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.mtd.core.network.BlockchainNetwork
-import com.mtd.data.datasource.IChainDataSource.FeeData
+import com.mtd.core.utils.hexToBytes
+import com.mtd.core.utils.toHexString
 import com.mtd.data.dto.PushTxRequest
 import com.mtd.data.service.BTCApiService
 import com.mtd.data.service.UtxoApiService
 import com.mtd.data.utils.AssetNormalizer.normalize
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.BitcoinTransaction
+import com.mtd.domain.model.BlockCypherRoute
+import com.mtd.domain.model.FeeData
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.SpendableUtxo
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
+import com.mtd.domain.model.UtxoBackend
 import com.mtd.domain.model.core.NetworkName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -42,7 +48,6 @@ import org.web3j.protocol.http.HttpService
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import timber.log.Timber
-import tools.jackson.databind.JsonNode
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
@@ -55,22 +60,6 @@ class BitcoinDataSource(
     private val okHttpClient: OkHttpClient
 ) : IChainDataSource {
 
-    private enum class UtxoBackend {
-        MEMPOOL,
-        BLOCKCYPHER
-    }
-
-    private data class SpendableUtxo(
-        val txid: String,
-        val vout: Int,
-        val value: Long
-    )
-
-    private data class BlockCypherRoute(
-        val coin: String,
-        val chain: String
-    )
-
     private val backend: UtxoBackend by lazy {
         when (network.name) {
             NetworkName.BITCOIN,
@@ -81,7 +70,6 @@ class BitcoinDataSource(
     }
 
     private class BitcoinRpcResponse : Response<JsonNode>()
-
 
     private object BitcoinRpcFactory {
         private val cache = ConcurrentHashMap<String, HttpService>()
@@ -111,7 +99,6 @@ class BitcoinDataSource(
             fallback()
         }
     }
-
 
     private fun canUseRpcFallback(): Boolean {
         return backend == UtxoBackend.MEMPOOL && network.RpcUrlsEvm.isNotEmpty()
@@ -164,7 +151,7 @@ class BitcoinDataSource(
     private fun jsonNodeToValue(node: JsonNode): Any? {
         return when {
             node.isNull -> null
-            node.isObject -> node.properties().associate { (key, value) ->
+            node.isObject -> node.fields().asSequence().associate { (key, value) ->
                 key to jsonNodeToValue(value)
             }
             node.isArray -> node.map { child -> jsonNodeToValue(child) }
@@ -175,7 +162,6 @@ class BitcoinDataSource(
             else -> node.asText()
         }
     }
-
 
     private suspend fun scanTxOutSet(address: String): Map<*, *> {
         repeat(3) { attempt ->
@@ -209,7 +195,6 @@ class BitcoinDataSource(
         }
     }
 
-
     override suspend fun getBalance(address: String): ResultResponse<BigDecimal> {
         return withContext(Dispatchers.IO) {
             runCatching {
@@ -229,7 +214,6 @@ class BitcoinDataSource(
             )
         }
     }
-
 
     override suspend fun getTransactionHistory(address: String): ResultResponse<List<TransactionRecord>> {
         return withContext(Dispatchers.IO) {
@@ -315,7 +299,7 @@ class BitcoinDataSource(
                 )
             }
 
-            val tx = Transaction(networkParameters)
+            val tx = Transaction()
             selectedInputs.forEach { utxo ->
                 tx.addInput(Sha256Hash.wrap(utxo.txid), utxo.vout.toLong(), parse(ByteArray(0)))
             }
@@ -796,7 +780,7 @@ class BitcoinDataSource(
         val signedInputs = mutableListOf<TransactionInput>()
         for (i in inputs.indices) {
             val utxoValue = Coin.valueOf(inputs[i].value)
-            val scriptCode = ScriptBuilder.createP2PKHOutputScript(key).program
+            val scriptCode = ScriptBuilder.createP2PKHOutputScript(key).program()
             val sighash = tx.hashForWitnessSignature(
                 i,
                 scriptCode,
@@ -1060,9 +1044,4 @@ class BitcoinDataSource(
         }
         return if (minRelayFee > 0L && calculatedFee < minRelayFee) minRelayFee else calculatedFee
     }
-
-    private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
-
-    private fun String.hexToBytes(): ByteArray =
-        chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 }

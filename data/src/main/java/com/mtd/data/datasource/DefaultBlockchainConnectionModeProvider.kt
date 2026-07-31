@@ -2,7 +2,7 @@ package com.mtd.data.datasource
 
 import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.model.BlockchainConnectionMode
-import com.mtd.domain.model.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 

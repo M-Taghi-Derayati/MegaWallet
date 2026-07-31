@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 
 private const val BOTTOM_SHEET_CONTENT_TRANSITION_MS = 360
@@ -116,12 +117,8 @@ fun AnimatedBottomSheetCard(
                             text = title,
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = FontFamily(
-                                Font(
-                                    R.font.iransansmobile_fa_regular,
-                                    FontWeight.Medium
-                                )
-                            ),
+                            fontFamily = IranSansRegular
+                            ,
                             modifier = Modifier.weight(1f)
                         )
 

@@ -3,6 +3,7 @@ package com.mtd.data.datasource
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.utils.hexToBytes
 import com.mtd.core.utils.toHexString
+import com.mtd.domain.model.UtxoInput
 import com.mtd.domain.model.core.NetworkName
 import org.bitcoinj.base.Address
 import org.bitcoinj.base.Coin

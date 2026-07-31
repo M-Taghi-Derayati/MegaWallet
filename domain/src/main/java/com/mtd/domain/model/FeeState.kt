@@ -1,8 +1,4 @@
-package com.mtd.domain.model.gassless
-
-import com.mtd.domain.model.FeeOption
-import com.mtd.domain.model.GaslessDisplayPolicy
-import com.mtd.domain.model.GaslessSmartFee
+package com.mtd.domain.model
 
 sealed class FeeState {
         object Idle : FeeState()

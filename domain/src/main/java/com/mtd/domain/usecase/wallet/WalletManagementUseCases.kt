@@ -4,7 +4,7 @@ import com.mtd.domain.interfaceRepository.IBackupRepository
 import com.mtd.domain.interfaceRepository.ICloudWalletBackupCodec
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.model.Asset
-import com.mtd.domain.model.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import com.mtd.domain.model.CloudWalletMetadata
 import com.mtd.domain.model.ImportData
 import com.mtd.domain.model.ResultResponse

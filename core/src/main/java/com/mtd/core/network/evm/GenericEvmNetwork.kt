@@ -21,6 +21,7 @@ class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
     override val RpcUrlsEvm=config.rpcUrlsEvm
     override val currencySymbol= config.currencySymbol
     override val explorers=config.explorers
+    override val explorerTxUrl = config.explorerTxUrl
     override val color = config.color
     override val regex = config.regex
     override val faName = config.faName

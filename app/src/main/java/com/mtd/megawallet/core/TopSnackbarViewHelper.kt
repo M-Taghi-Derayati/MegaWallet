@@ -23,6 +23,10 @@ import com.mtd.domain.model.ui.UiEvent
 /**
  * Helper class for displaying custom top snackbar in View-based UI (Activity/Fragment)
  * Similar to CustomTopSnackbar in Compose
+ *
+ * NOTE (TASK-57): the app is 100% Compose and nothing currently calls this — the live path is
+ * `AppMessageHost` + `CustomTopSnackbar`. It is kept for View-based hosts and mirrors the same
+ * error/success styling policy so the two cannot drift.
  */
 class TopSnackbarViewHelper private constructor() {
 
@@ -42,43 +46,57 @@ class TopSnackbarViewHelper private constructor() {
         }
     }
 
-    /**
-     * Initialize with Activity
-     */
+
     fun init(activity: Activity) {
         this.activity = activity
         this.fragment = null
     }
 
-    /**
-     * Initialize with Fragment
-     */
+
     fun init(fragment: Fragment) {
         this.fragment = fragment
         this.activity = fragment.activity
     }
 
-    /**
-     * Show error snackbar
-     */
+
     fun showErrorSnackbar(event: UiEvent.ShowErrorSnackbar) {
+        show(
+            shortMessage = event.shortMessage,
+            detailedMessage = event.detailedMessage,
+            title = event.errorTitle,
+            style = Style.ERROR
+        )
+    }
+
+    /** TASK-57 — success-styled confirmation; no "جزئیات" affordance, tap to dismiss. */
+    fun showSuccessSnackbar(event: UiEvent.ShowSuccessSnackbar) {
+        show(
+            shortMessage = event.message,
+            detailedMessage = "",
+            title = "",
+            style = Style.SUCCESS
+        )
+    }
+
+    private fun show(
+        shortMessage: String,
+        detailedMessage: String,
+        title: String,
+        style: Style
+    ) {
         val context = activity ?: fragment?.requireContext() ?: return
         val rootView = getRootView() ?: return
 
-        // Save state
         currentState = ErrorSnackbarState(
-            shortMessage = event.shortMessage,
-            detailedMessage = event.detailedMessage,
-            errorTitle = event.errorTitle
+            shortMessage = shortMessage,
+            detailedMessage = detailedMessage,
+            errorTitle = title
         )
 
-        // Remove existing snackbar if any
         dismissCurrentSnackbar()
 
-        // Create snackbar view
-        val snackbarView = createSnackbarView(context, event)
-        
-        // Add to root view
+        val snackbarView = createSnackbarView(context, shortMessage, detailedMessage, title, style)
+
         val layoutParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
@@ -91,13 +109,10 @@ class TopSnackbarViewHelper private constructor() {
         rootView.addView(snackbarView, layoutParams)
         currentSnackbarView = snackbarView
 
-        // Animate in
         animateIn(snackbarView)
     }
 
-    /**
-     * Dismiss current snackbar
-     */
+
     fun dismissCurrentSnackbar() {
         currentSnackbarView?.let { view ->
             animateOut(view) {
@@ -107,30 +122,24 @@ class TopSnackbarViewHelper private constructor() {
         }
     }
 
-    /**
-     * Get root view
-     */
+
     private fun getRootView(): ViewGroup? {
         return activity?.findViewById(android.R.id.content) as? ViewGroup
             ?: fragment?.view?.rootView as? ViewGroup
     }
 
-    /**
-     * Create snackbar view
-     */
-    private fun createSnackbarView(context: android.content.Context, event: UiEvent.ShowErrorSnackbar): View {
+
+    private fun createSnackbarView(
+        context: android.content.Context,
+        shortMessage: String,
+        detailedMessage: String,
+        title: String,
+        style: Style
+    ): View {
         val cardView = MaterialCardView(context).apply {
             radius = 48f
             cardElevation = 8f
-            // استفاده از رنگ error از Material Design
-            val errorColor = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                val typedValue = android.util.TypedValue()
-                context.theme.resolveAttribute(android.R.attr.colorError, typedValue, true)
-                typedValue.data
-            } else {
-                ContextCompat.getColor(context, android.R.color.holo_red_dark)
-            }
-            setCardBackgroundColor(errorColor)
+            setCardBackgroundColor(backgroundColorFor(context, style))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -143,18 +152,22 @@ class TopSnackbarViewHelper private constructor() {
             setPadding(48, 32, 48, 32)
         }
 
-        // Error icon
         val icon = ImageView(context).apply {
-            setImageResource(android.R.drawable.ic_dialog_alert)
+            setImageResource(
+                when (style) {
+                    Style.ERROR -> android.R.drawable.ic_dialog_alert
+                    Style.SUCCESS -> android.R.drawable.checkbox_on_background
+                }
+            )
             setColorFilter(Color.WHITE)
+            contentDescription = if (style == Style.ERROR) "خطا" else "انجام شد"
             layoutParams = LinearLayout.LayoutParams(48, 48).apply {
                 marginEnd = 24
             }
         }
 
-        // Message text
         val messageText = TextView(context).apply {
-            text = event.shortMessage
+            text = shortMessage
             setTextColor(Color.WHITE)
             textSize = 14f
             maxLines = 2
@@ -166,8 +179,7 @@ class TopSnackbarViewHelper private constructor() {
             )
         }
 
-        // Details text (if detailed message exists)
-        if (event.detailedMessage.isNotEmpty()) {
+        if (detailedMessage.isNotEmpty()) {
             val detailsText = TextView(context).apply {
                 text = "جزئیات"
                 setTextColor(Color.WHITE)
@@ -179,15 +191,13 @@ class TopSnackbarViewHelper private constructor() {
             container.addView(messageText)
             container.addView(detailsText)
 
-            // Set click listener to show dialog
             cardView.setOnClickListener {
-                showErrorDialog(context, event)
+                showErrorDialog(context, title, detailedMessage)
             }
         } else {
             container.addView(icon)
             container.addView(messageText)
 
-            // Set click listener to dismiss
             cardView.setOnClickListener {
                 dismissCurrentSnackbar()
             }
@@ -197,15 +207,35 @@ class TopSnackbarViewHelper private constructor() {
         return cardView
     }
 
-    /**
-     * Show error dialog
-     */
-    private fun showErrorDialog(context: android.content.Context, event: UiEvent.ShowErrorSnackbar) {
-        if (event.detailedMessage.isEmpty()) return
+
+    /** Background colour per style — red for errors, brand green for confirmations. */
+    private fun backgroundColorFor(context: android.content.Context, style: Style): Int {
+        val attr = when (style) {
+            Style.ERROR -> android.R.attr.colorError
+            Style.SUCCESS -> android.R.attr.colorPrimary
+        }
+        val typedValue = android.util.TypedValue()
+        return if (context.theme.resolveAttribute(attr, typedValue, true)) {
+            typedValue.data
+        } else {
+            val fallback = when (style) {
+                Style.ERROR -> android.R.color.holo_red_dark
+                Style.SUCCESS -> android.R.color.holo_green_dark
+            }
+            ContextCompat.getColor(context, fallback)
+        }
+    }
+
+    private fun showErrorDialog(
+        context: android.content.Context,
+        title: String,
+        detailedMessage: String
+    ) {
+        if (detailedMessage.isEmpty()) return
 
         androidx.appcompat.app.AlertDialog.Builder(context)
-            .setTitle(event.errorTitle)
-            .setMessage(event.detailedMessage)
+            .setTitle(title.ifBlank { "خطا" })
+            .setMessage(detailedMessage)
             .setPositiveButton("بستن") { dialog, _ ->
                 dialog.dismiss()
                 dismissCurrentSnackbar()
@@ -216,9 +246,6 @@ class TopSnackbarViewHelper private constructor() {
             .show()
     }
 
-    /**
-     * Animate in
-     */
     private fun animateIn(view: View) {
         view.translationY = -view.height.toFloat()
         view.alpha = 0f
@@ -235,9 +262,8 @@ class TopSnackbarViewHelper private constructor() {
         animator.start()
     }
 
-    /**
-     * Animate out
-     */
+
+
     private fun animateOut(view: View, onComplete: () -> Unit) {
         val animator = ValueAnimator.ofFloat(0f, -view.height.toFloat()).apply {
             duration = 250
@@ -256,9 +282,7 @@ class TopSnackbarViewHelper private constructor() {
         animator.start()
     }
 
-    /**
-     * Get status bar height
-     */
+
     private fun getStatusBarHeight(rootView: View): Int {
         val insets = ViewCompat.getRootWindowInsets(rootView)
             ?: return 0
@@ -266,9 +290,6 @@ class TopSnackbarViewHelper private constructor() {
         return systemWindowInsets.top
     }
 
-    /**
-     * Clear references
-     */
     fun clear() {
         dismissCurrentSnackbar()
         currentState = null
@@ -276,13 +297,14 @@ class TopSnackbarViewHelper private constructor() {
         fragment = null
     }
 
-    /**
-     * State for error snackbar
-     */
+
     private data class ErrorSnackbarState(
         val shortMessage: String,
         val detailedMessage: String,
         val errorTitle: String
     )
+
+    /** Mirrors `TopSnackbarStyle` on the Compose side. */
+    private enum class Style { ERROR, SUCCESS }
 }
 

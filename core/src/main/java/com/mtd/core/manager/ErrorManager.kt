@@ -2,6 +2,9 @@ package com.mtd.core.manager
 
 import com.mtd.domain.model.error.AppError
 import com.mtd.domain.model.error.ErrorMapper
+import com.mtd.domain.model.error.ErrorPresentation
+import com.mtd.domain.model.error.ErrorSurface
+import com.mtd.domain.model.ui.UiEvent
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import timber.log.Timber
@@ -11,14 +14,27 @@ import javax.inject.Singleton
 /**
  * مدیریت متمرکز خطاها در کل اپلیکیشن
  * همه خطاها باید از طریق این Manager handle شوند
+ *
+ * TASK-57 — this is also the single **app-wide UI message bus**. ViewModels never render; they
+ * report here, and exactly one host per Activity (`AppMessageHost`) collects [uiMessages] and draws
+ * the top snackbar / detail dialog / blocking dialog. That is why the flow lives on a `@Singleton`
+ * rather than per-ViewModel: previously every `BaseViewModel` mirrored the stream into its own
+ * channel, and only two onboarding screens ever collected one — so every error raised anywhere in
+ * the main app was silently dropped.
+ *
+ * Severity policy lives in [ErrorSurface]; each call site declares its own.
  */
 @Singleton
 class ErrorManager @Inject constructor(
     private val errorMapper: ErrorMapper,
     private val networkManager: NetworkManager
 ) {
-    private val _errorEvents = MutableSharedFlow<ErrorEvent>(replay = 0)
-    val errorEvents = _errorEvents.asSharedFlow()
+    // extraBufferCapacity so non-suspending emitters (tryEmit) never drop a message while the
+    // host is recomposing; replay = 0 so a message is not re-shown on Activity recreation.
+    private val _uiMessages = MutableSharedFlow<UiEvent>(replay = 0, extraBufferCapacity = 16)
+
+    /** Everything the user should see. Collected by `AppMessageHost` at the Activity root. */
+    val uiMessages = _uiMessages.asSharedFlow()
 
     /**
      * بررسی وضعیت آنلاین بودن
@@ -29,15 +45,13 @@ class ErrorManager @Inject constructor(
      * بررسی اتصال به اینترنت و نمایش Snackbar در صورت قطع بودن
      * @return true اگر وصل باشد، false اگر قطع باشد (و اسنک‌بار نمایش داده شود)
      */
-    suspend fun ensureOnline(): Boolean {
+    suspend fun ensureOnline(surface: ErrorSurface = ErrorSurface.SNACKBAR): Boolean {
         if (!isOnline()) {
-            _errorEvents.emit(
-                ErrorEvent(
-                    error = AppError.Network.NoInternet,
-                    action = ErrorAction.ShowSnackbar,
-                    context = ErrorContext(component = "ErrorManager", userAction = "Connectivity Check"),
-                    severity = ErrorSeverity.LOW
-                )
+            report(
+                throwable = AppError.Network.NoInternet,
+                context = ErrorContext(component = "ErrorManager", userAction = "Connectivity Check"),
+                surface = surface,
+                severity = ErrorSeverity.LOW
             )
             return false
         }
@@ -46,127 +60,127 @@ class ErrorManager @Inject constructor(
 
     /**
      * هندل کردن خطا و تصمیم‌گیری در مورد action مناسب
+     *
+     * Maps [throwable] to curated Persian copy, logs the original at [severity], and surfaces it
+     * according to [surface]. Returns the mapped [AppError] so a caller can branch on the taxonomy
+     * (never on the message text).
      */
+    suspend fun report(
+        throwable: Throwable,
+        context: ErrorContext,
+        surface: ErrorSurface = ErrorSurface.SNACKBAR,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        title: String = ErrorMapper.DEFAULT_TITLE,
+        fallbackMessage: String? = null
+    ): AppError {
+        val presentation = errorMapper.present(throwable, surface, title, fallbackMessage)
+        logError(presentation, context, severity, throwable)
+        emit(presentation)
+        return errorMapper.map(throwable)
+    }
+
+    /** Legacy entry point kept for existing call sites; snackbar unless the failure is critical. */
     suspend fun handleError(
         throwable: Throwable,
         context: ErrorContext,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM
-    ): ErrorHandlingResult {
-        // 1. Map error
-        val appError = errorMapper.map(throwable)
+    ): AppError = report(
+        throwable = throwable,
+        context = context,
+        surface = if (severity == ErrorSeverity.CRITICAL) ErrorSurface.BLOCKING else ErrorSurface.SNACKBAR,
+        severity = severity
+    )
 
-        // 2. Log error based on severity
-        logError(appError, context, severity, throwable)
+    /**
+     * نمایش snackbar ساده
+     *
+     * [message] must already be user-facing Persian copy — never an exception or DTO string.
+     */
+    suspend fun showSnackbar(message: String, detail: String = "") {
+        _uiMessages.emit(
+            UiEvent.ShowErrorSnackbar(
+                shortMessage = message,
+                detailedMessage = detail
+            )
+        )
+    }
 
-        // 3. Decide action
-        val action = decideAction(appError, context, severity)
+    /** TASK-57 — success-styled confirmation. Auto-dismisses; carries no technical detail. */
+    suspend fun showSuccess(message: String) {
+        _uiMessages.emit(UiEvent.ShowSuccessSnackbar(message))
+    }
 
-        // 4. Emit event
-        _errorEvents.emit(ErrorEvent(appError, action, context, severity))
+    /** Non-suspending variant for callbacks that cannot suspend (e.g. clipboard taps). */
+    fun showSuccessNow(message: String) {
+        _uiMessages.tryEmit(UiEvent.ShowSuccessSnackbar(message))
+    }
 
-        return ErrorHandlingResult(appError, action)
+    /** Blocking modal the user must acknowledge. */
+    suspend fun showBlockingDialog(
+        title: String,
+        message: String,
+        positiveButton: String = "تایید",
+        negativeButton: String? = null
+    ) {
+        _uiMessages.emit(
+            UiEvent.ShowDialog(
+                title = title,
+                message = message,
+                positiveButton = positiveButton,
+                negativeButton = negativeButton
+            )
+        )
+    }
+
+    private suspend fun emit(presentation: ErrorPresentation) {
+        when (presentation.surface) {
+            // Logged above and nothing else — a failed background refresh must not nag the user.
+            ErrorSurface.SILENT -> Unit
+
+            ErrorSurface.SNACKBAR -> _uiMessages.emit(
+                UiEvent.ShowErrorSnackbar(
+                    shortMessage = presentation.shortMessage,
+                    detailedMessage = presentation.technicalDetail,
+                    errorTitle = presentation.title
+                )
+            )
+
+            ErrorSurface.BLOCKING -> _uiMessages.emit(
+                UiEvent.ShowDialog(
+                    title = presentation.title,
+                    message = if (presentation.technicalDetail.isBlank()) {
+                        presentation.shortMessage
+                    } else {
+                        "${presentation.shortMessage}\n\n${presentation.technicalDetail}"
+                    }
+                )
+            )
+        }
     }
 
     /**
      * Log کردن خطا بر اساس severity
+     *
+     * The original throwable goes to Timber (stack traces stay in logcat); the message we print is
+     * the already-scrubbed technical detail so nothing sensitive lands in a persisted log sink.
      */
     private fun logError(
-        error: AppError,
+        presentation: ErrorPresentation,
         context: ErrorContext,
         severity: ErrorSeverity,
         originalThrowable: Throwable
     ) {
+        val line = "${context.component}: ${context.userAction} — ${presentation.technicalDetail}"
         when (severity) {
             ErrorSeverity.CRITICAL -> {
-                Timber.e(originalThrowable, "CRITICAL Error in ${context.component}: ${context.userAction}")
+                Timber.e(originalThrowable, "CRITICAL Error in $line")
                 // در آینده می‌توان crash reporter اضافه کرد
             }
-            ErrorSeverity.HIGH -> {
-                Timber.e(originalThrowable, "HIGH Error in ${context.component}: ${context.userAction}")
-            }
-            ErrorSeverity.MEDIUM -> {
-                Timber.w(originalThrowable, "MEDIUM Error in ${context.component}: ${context.userAction}")
-            }
-            ErrorSeverity.LOW -> {
-                Timber.d(originalThrowable, "LOW Error in ${context.component}: ${context.userAction}")
-            }
+            ErrorSeverity.HIGH -> Timber.e(originalThrowable, "HIGH Error in $line")
+            ErrorSeverity.MEDIUM -> Timber.w(originalThrowable, "MEDIUM Error in $line")
+            ErrorSeverity.LOW -> Timber.d(originalThrowable, "LOW Error in $line")
         }
     }
-
-    /**
-     * تصمیم‌گیری در مورد action مناسب بر اساس نوع خطا
-     */
-    private fun decideAction(
-        error: AppError,
-        context: ErrorContext,
-        severity: ErrorSeverity
-    ): ErrorAction {
-        return when {
-            // خطاهای بحرانی - نیاز به action فوری
-            severity == ErrorSeverity.CRITICAL -> ErrorAction.ForceLogout
-            
-            // خطاهای شبکه - نیاز به retry
-            error is AppError.Network.NoInternet -> ErrorAction.ShowRetryDialog
-            error is AppError.Network.Timeout -> ErrorAction.ShowRetryDialog
-            error is AppError.Network.ServerUnavailable -> ErrorAction.ShowRetryDialog
-            
-            // خطاهای بیزنس - فقط نمایش پیام
-            error is AppError.Business.InsufficientFunds -> ErrorAction.ShowSnackbar
-            error is AppError.Business.InvalidAddress -> ErrorAction.ShowSnackbar
-            error is AppError.Business.General -> ErrorAction.ShowSnackbar
-            
-            // سایر خطاها
-            else -> ErrorAction.ShowSnackbar
-        }
-    }
-
-    /**
-     * نمایش snackbar ساده
-     */
-    suspend fun showSnackbar(message: String) {
-        _errorEvents.emit(
-            ErrorEvent(
-                error = AppError.Business.General(message = message),
-                action = ErrorAction.ShowSnackbar,
-                context = ErrorContext(component = "ErrorManager"),
-                severity = ErrorSeverity.LOW
-            )
-        )
-    }
-}
-
-/**
- * نتیجه هندل کردن خطا
- */
-data class ErrorHandlingResult(
-    val error: AppError,
-    val action: ErrorAction
-)
-
-/**
- * رویداد خطا که به UI ارسال می‌شود
- */
-data class ErrorEvent(
-    val error: AppError,
-    val action: ErrorAction,
-    val context: ErrorContext,
-    val severity: ErrorSeverity
-)
-
-/**
- * Action هایی که باید در UI انجام شود
- */
-sealed class ErrorAction {
-    data object ShowSnackbar : ErrorAction()
-    data object ShowRetryDialog : ErrorAction()
-    data object ForceLogout : ErrorAction()
-    data class NavigateTo(val destination: String) : ErrorAction()
-    data class ShowDialog(
-        val title: String,
-        val message: String,
-        val positiveButton: String = "تایید",
-        val negativeButton: String? = null
-    ) : ErrorAction()
 }
 
 /**
@@ -179,7 +193,8 @@ data class ErrorContext(
 )
 
 /**
- * سطح اهمیت خطا
+ * سطح اهمیت خطا — درجه‌ی لاگ. برای اینکه *چطور* به کاربر نشان داده شود به
+ * [com.mtd.domain.model.error.ErrorSurface] مراجعه کنید.
  */
 enum class ErrorSeverity {
     LOW,      // خطاهای جزئی که نیاز به action ندارند
@@ -187,4 +202,3 @@ enum class ErrorSeverity {
     HIGH,     // خطاهای مهم که نیاز به توجه دارند
     CRITICAL  // خطاهای بحرانی که نیاز به action فوری دارند
 }
-

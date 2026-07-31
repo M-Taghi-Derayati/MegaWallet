@@ -18,21 +18,7 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Phase 2 — closes the Auth phase by wiring the (previously never-invoked) sign-in flow to the wallet
- * lifecycle. Observes the unlocked wallet and drives the JWT session + realtime socket:
- *
- *  - **unlock / app-start:** the active wallet id goes non-null → baseline sign-in
- *    ([EnsureAuthenticatedUseCase]) which mints the JWT and connects `/ws`.
- *  - **switch wallet:** the id changes from one non-null to another → `forceFresh` (clear old session,
- *    re-auth for the new address).
- *  - **lock / delete wallet:** the id goes null → [SignOutUseCase] (server logout best-effort + local
- *    token clear + socket disconnect).
- *  - **proactive refresh:** after each successful auth, a single job slides the session shortly before
- *    its expiry so the user is never bounced to an anonymous (401) socket.
- *
- * Started once from [com.mtd.megawallet.ui.compose.MainActivityCompose]. Idempotent.
- */
+
 @Singleton
 class WalletSessionAuthCoordinator @Inject constructor(
     private val activeWalletProvider: IActiveWalletProvider,
@@ -83,13 +69,9 @@ class WalletSessionAuthCoordinator @Inject constructor(
         when (val r = ensureAuthenticated(forceFresh = forceFresh)) {
             is ResultResponse.Success -> {
                 scheduleProactiveRefresh()
-                // TASK-32 — now that the JWT is minted, enroll the active wallet for realtime/deposit
-                // monitoring. The use case is a no-op when this wallet was already enrolled (persisted
-                // set), so a plain wallet switch never re-sends — only a newly created/imported wallet
-                // triggers the network call. Fire-and-forget off the auth path.
+
                 enrollMonitoring()
-                // Item 10 (FCM) — register this install's push token now that we have a JWT (device
-                // identity). No-op when the token is unchanged, so it's cheap on every auth.
+
                 fcmTokenRegistrar.syncToken()
             }
             is ResultResponse.Error -> Timber.w(r.exception, "[Auth] sign-in failed for wallet=$walletId")

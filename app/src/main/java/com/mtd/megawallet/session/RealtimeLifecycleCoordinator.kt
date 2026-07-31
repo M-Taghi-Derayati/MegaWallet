@@ -9,22 +9,7 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * TASK-22 — ties the realtime `/ws` socket to the app's foreground/background lifecycle.
- *
- * Previously the socket was opened after sign-in ([WalletSessionAuthCoordinator]) and only ever closed
- * on sign-out, so it stayed connected while the app was backgrounded or the phone was locked — wasting
- * battery/data and holding a connection the OS may kill anyway. Background delivery is already covered
- * by FCM (events are de-duplicated across WS + FCM), so the live socket is only useful in the foreground.
- *
- * Enforces the invariant: **the socket is connected only when the app is in the foreground AND the user
- * has a session.** It touches only the transport, never the JWT session, so the proactive token refresh
- * keeps running in the background and a foreground return reconnects instantly with a valid bearer.
- *
- * Observes [ProcessLifecycleOwner] (not a single Activity) so it reflects true app-wide foreground state
- * and — unlike raw `Activity.onStop`/`onStart` — is debounced across configuration changes (e.g. a screen
- * rotation won't churn the socket).
- */
+
 @Singleton
 class RealtimeLifecycleCoordinator @Inject constructor(
     private val gateway: IRealtimeConnectionGateway,

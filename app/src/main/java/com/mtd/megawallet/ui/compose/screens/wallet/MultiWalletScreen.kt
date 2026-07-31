@@ -90,8 +90,8 @@ import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletCard
 import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletManagementMenuContent
 import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletPersonalizationContent
 import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletRecoveryMethodsContent
-import com.mtd.megawallet.viewmodel.news.AppLockViewModel
-import com.mtd.megawallet.viewmodel.news.MultiWalletViewModel
+import com.mtd.megawallet.viewmodel.AppLockViewModel
+import com.mtd.megawallet.viewmodel.MultiWalletViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.mtd.common_ui.theme.IranSansBold

@@ -12,7 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.mtd.megawallet.viewmodel.news.CreateWalletViewModel
+import com.mtd.megawallet.viewmodel.CreateWalletViewModel
 
 /**
  * Component for seed phrase generation step in create wallet flow.

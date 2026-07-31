@@ -1,5 +1,6 @@
 package com.mtd.data.datasource
 
+import com.mtd.domain.model.PreparedEvmTx
 import com.mtd.domain.model.TransactionParams
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.RawTransaction

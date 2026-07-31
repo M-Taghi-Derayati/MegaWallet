@@ -29,6 +29,7 @@ object ApiErrorMessageMapper {
         ApiError.RaceConditionLock -> "این تراکنش در حال پردازش است. لطفاً چند لحظه صبر کرده و دوباره تلاش کنید."
         ApiError.InsufficientGasCredit -> "اعتبار کارمزد (گس) شما کافی نیست."
         ApiError.RequoteRequired -> "نرخ تراکنش تغییر کرده است. لطفاً دوباره استعلام بگیرید."
+        ApiError.IdempotencyKeyConflict -> "درخواست مشابهی با همین شناسه قبلاً ثبت شده است. لطفاً دوباره تلاش کنید."
         is ApiError.RateLimited -> "تعداد درخواست‌ها زیاد بود. لطفاً کمی بعد دوباره تلاش کنید."
         ApiError.ServiceUnavailable -> "سرویس موقتاً در دسترس نیست. لطفاً بعداً تلاش کنید."
         ApiError.GasCreditUnavailable -> "اعتبار کارمزد رایگان در حال حاضر در دسترس نیست. می‌توانید کارمزد را از کیف پول پرداخت کنید."
@@ -39,7 +40,6 @@ object ApiErrorMessageMapper {
         ApiError.SwapNoRoutes -> "مسیری برای این تبدیل پیدا نشد."
         ApiError.InternalError -> "خطایی در سرور رخ داد. لطفاً دوباره تلاش کنید."
         is ApiError.Unknown -> "خطای ناشناخته‌ای رخ داد. لطفاً دوباره تلاش کنید."
-        else -> ""
     }
 
     /** English user-facing message for a typed [ApiError]. */
@@ -57,6 +57,7 @@ object ApiErrorMessageMapper {
         ApiError.RaceConditionLock -> "This transaction is already being processed. Please wait a moment and retry."
         ApiError.InsufficientGasCredit -> "Your gas credit balance is not enough."
         ApiError.RequoteRequired -> "The transaction rate changed. Please request a new quote."
+        ApiError.IdempotencyKeyConflict -> "A request with this same id was already submitted. Please try again."
         is ApiError.RateLimited -> "Too many requests. Please try again shortly."
         ApiError.ServiceUnavailable -> "The service is temporarily unavailable. Please try again later."
         ApiError.GasCreditUnavailable -> "Free gas credit is currently unavailable. You can pay the fee from your wallet instead."
@@ -67,7 +68,16 @@ object ApiErrorMessageMapper {
         ApiError.SwapNoRoutes -> "No route was found for this swap."
         ApiError.InternalError -> "A server error occurred. Please try again."
         is ApiError.Unknown -> "An unexpected error occurred. Please try again."
-        else -> ""
+    }
+
+    /**
+     * Machine-readable label for the "جزئیات" dialog and the log. Never shown as the primary
+     * message — [farsiMessage] owns that — and never carries server-supplied free text.
+     */
+    fun technicalCode(error: ApiError): String = when (error) {
+        is ApiError.Unknown -> error.code?.takeIf { it.isNotBlank() } ?: "UNKNOWN"
+        is ApiError.RateLimited -> "RATE_LIMITED"
+        else -> error::class.simpleName ?: "UNKNOWN"
     }
 
     /**

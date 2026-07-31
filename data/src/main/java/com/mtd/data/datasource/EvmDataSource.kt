@@ -3,7 +3,6 @@ package com.mtd.data.datasource
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.utils.AddressRegexUtils
-import com.mtd.data.datasource.IChainDataSource.FeeData
 import com.mtd.data.dto.EVMTokenTransferDto
 import com.mtd.data.dto.EVMTransactionDto
 import com.mtd.data.dto.NodeRealTransactionDto
@@ -12,6 +11,7 @@ import com.mtd.data.service.EVMApiService
 import com.mtd.data.utils.AssetNormalizer.normalize
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.EvmTransaction
+import com.mtd.domain.model.FeeData
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TokenTransferDetails
 import com.mtd.domain.model.TransactionParams
@@ -579,7 +579,7 @@ class EvmDataSource(
     }
 
 
-    private fun EVMTransactionDto.toDomainModel(userAddress: String, networkName: com.mtd.domain.model.core.NetworkName): EvmTransaction {
+    private fun EVMTransactionDto.toDomainModel(userAddress: String, networkName: NetworkName): EvmTransaction {
         val feeValue = (this.gasUsed ?: BigInteger.ZERO) * (this.gasPrice ?: BigInteger.ZERO)
         val timestampValue = try { Instant.parse(this.timestamp).epochSecond } catch (e: Exception) { 0L }
         return EvmTransaction(
@@ -615,9 +615,9 @@ class EvmDataSource(
                 from = this.fromAddress.hash,
                 to = this.toAddress.hash,
                 amount = this.total.value?.toBigIntegerOrNull() ?: BigInteger.ZERO,
-                tokenSymbol = this.token.symbol ?: "",
+                tokenSymbol = this.token.symbol ,
                 tokenDecimals = this.token.decimals?.toIntOrNull() ?: 18,
-                contractAddress = this.token.address ?: ""
+                contractAddress = this.token.address
             )
         )
     }

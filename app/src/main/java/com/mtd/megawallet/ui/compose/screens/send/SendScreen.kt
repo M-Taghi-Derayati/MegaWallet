@@ -41,8 +41,8 @@ import com.blankj.utilcode.util.ClipboardUtils
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.HomeUiState
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
-import com.mtd.megawallet.viewmodel.news.HomeViewModel
-import com.mtd.megawallet.viewmodel.news.SendViewModel
+import com.mtd.megawallet.viewmodel.HomeViewModel
+import com.mtd.megawallet.viewmodel.SendViewModel
 import kotlinx.coroutines.launch
 
 

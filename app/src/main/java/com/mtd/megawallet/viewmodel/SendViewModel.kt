@@ -1,4 +1,4 @@
-package com.mtd.megawallet.viewmodel.news
+package com.mtd.megawallet.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.mtd.core.manager.ErrorManager
@@ -22,11 +22,11 @@ import com.mtd.domain.model.UnifiedGaslessSession
 import com.mtd.domain.model.UnifiedTransferRequest
 import com.mtd.domain.model.capability.FeatureAvailabilityContext
 import com.mtd.domain.model.core.NetworkType
-import com.mtd.domain.model.gassless.FeeState
-import com.mtd.domain.model.gassless.FeeTrend
-import com.mtd.domain.model.gassless.GaslessAvailability
-import com.mtd.domain.model.gassless.GaslessPreviewState
-import com.mtd.domain.model.gassless.SubmitState
+import com.mtd.domain.model.FeeState
+import com.mtd.domain.model.FeeTrend
+import com.mtd.domain.model.GaslessAvailability
+import com.mtd.domain.model.GaslessPreviewState
+import com.mtd.domain.model.SubmitState
 import com.mtd.domain.usecase.asset.GetLatestAssetPricesUseCase
 import com.mtd.domain.usecase.asset.GetUsdToIrrRateUseCase
 import com.mtd.domain.usecase.network.GetNetworkTypeForAddressUseCase

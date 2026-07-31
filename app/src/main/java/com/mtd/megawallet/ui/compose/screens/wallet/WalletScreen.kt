@@ -73,7 +73,7 @@ import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.NetworkShare
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
-import com.mtd.megawallet.viewmodel.news.HomeViewModel
+import com.mtd.megawallet.viewmodel.HomeViewModel
 import java.math.BigDecimal
 import com.mtd.common_ui.theme.InterBoldBold
 import com.mtd.common_ui.theme.InterRegularMedium

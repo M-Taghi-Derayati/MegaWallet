@@ -63,7 +63,7 @@ import com.mtd.common_ui.R
 import com.mtd.domain.model.ReceiveUiState
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
-import com.mtd.megawallet.viewmodel.news.ReceiveViewModel
+import com.mtd.megawallet.viewmodel.ReceiveViewModel
 import java.util.EnumMap
 import com.mtd.common_ui.theme.InterRegular
 import com.mtd.common_ui.theme.IranSansRegular

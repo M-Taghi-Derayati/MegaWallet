@@ -3,7 +3,7 @@ package com.mtd.data.di
 import android.content.Context
 import android.content.SharedPreferences
 import com.mtd.core.di.CryptoModule
-import com.mtd.data.GoogleAuthManager
+import com.mtd.data.auth.GoogleAuthManager
 import com.mtd.data.config.ConfigSignatureVerifier
 import com.mtd.data.config.Secp256k1ConfigSignatureVerifier
 import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
@@ -59,7 +59,7 @@ import com.mtd.domain.interfaceRepository.ITransactionStatusRepository
 import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.IWalletBalanceSynchronizer
 import com.mtd.domain.interfaceRepository.IWalletRepository
-import com.mtd.domain.model.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides

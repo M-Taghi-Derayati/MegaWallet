@@ -4,11 +4,11 @@ package com.mtd.data
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.mtd.data.datasource.RelayerPriceDataSource
 import com.mtd.data.di.NetworkConnectionInterceptor
 import com.mtd.data.di.NetworkModule.httpLoggingInterceptorProvider
 import com.mtd.data.di.NetworkModule.provideGson
 import com.mtd.data.di.NetworkModule.provideOkHttpClient
-import com.mtd.data.datasource.RelayerPriceDataSource
 import com.mtd.data.repository.MarketDataRepositoryImpl
 import com.mtd.data.service.CoinDetailApiService
 import com.mtd.data.service.RelayerPriceApiService
@@ -61,7 +61,7 @@ class MarketDataRepositoryIntegrationTest {
     fun getLatestPrices_withRealApiCall_shouldReturnValidData() = runTest {
         // --- آماده‌سازی ---
         // لیستی از ارزهای معروف که می‌دانیم در CoinGecko وجود دارند
-        val assetIds = listOf("bitcoin", "ethereum", "binancecoin")
+        val assetIds = Pair(listOf("bitcoin", "ethereum", "binancecoin"),emptyList<String>())
 
         // --- اجرا ---
         val result = marketDataRepository.getLatestPrices(assetIds)
@@ -84,7 +84,7 @@ class MarketDataRepositoryIntegrationTest {
             println("Fetched price for ${assetPrice.assetId}: ${assetPrice.priceUsd} USD, 24h Change: ${assetPrice.priceChanges24h}%")
 
             // بررسی می‌کنیم که شناسه ارز در لیست درخواستی ما بوده است
-            assertTrue("Asset ID should be one of the requested IDs", assetIds.contains(assetPrice.assetId))
+            assertTrue("Asset ID should be one of the requested IDs", assetIds.first.get(0).contains(assetPrice.assetId))
 
             // بررسی می‌کنیم که قیمت یک عدد مثبت و معتبر است
             assertTrue("Price for ${assetPrice.assetId} should be greater than zero", assetPrice.priceUsd > BigDecimal.ZERO)

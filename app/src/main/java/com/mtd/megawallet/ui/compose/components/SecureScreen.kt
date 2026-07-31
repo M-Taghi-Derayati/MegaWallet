@@ -11,20 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * TASK-02 / TD-36 — screenshot & screen-recording protection for sensitive screens.
- *
- * While [active] is true, the host Activity window carries `FLAG_SECURE`, which blocks screenshots,
- * screen recording, and blanks the app-switcher (recents) thumbnail. The flag is removed when the
- * screen leaves composition or [active] becomes false.
- *
- * Reference-counted (single-window app assumption) so overlapping secure screens — e.g. an unlock
- * sheet over onboarding — do not clear the flag prematurely. Use this uniformly (rather than an
- * Activity-level `window.setFlags`) so a child's `onDispose` can never strip a parent's protection.
- *
- * Apply to any composable that renders a recovery phrase, private key, or passcode entry. Onboarding
- * covers all its screens by placing [SecureFlagEffect] at the top of its content.
- */
+
 private val secureRefCount = AtomicInteger(0)
 
 @Composable

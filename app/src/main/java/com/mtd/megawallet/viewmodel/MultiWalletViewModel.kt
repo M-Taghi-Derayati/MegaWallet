@@ -1,10 +1,12 @@
-package com.mtd.megawallet.viewmodel.news
+package com.mtd.megawallet.viewmodel
 
 import android.content.Intent
 import com.mtd.core.manager.ErrorManager
+import com.mtd.core.manager.ErrorSeverity
 import com.mtd.domain.model.DriveBackupState
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.Wallet
+import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.domain.usecase.wallet.BackupWalletToCloudUseCase
 import com.mtd.domain.usecase.wallet.DeleteWalletUseCase
@@ -83,7 +85,13 @@ class MultiWalletViewModel @Inject constructor(
                 refreshAllWalletsBalances(walletList, forceRefresh)
             }
             is ResultResponse.Error -> {
-                errorManager.showSnackbar("خطا در دریافت لیست کیف پول‌ها")
+                // User asked for the list and it is now empty on screen — worth a snackbar.
+                reportError(
+                    throwable = result.exception,
+                    userAction = "loadWallets",
+                    surface = ErrorSurface.SNACKBAR,
+                    fallbackMessage = "خطا در دریافت لیست کیف پول‌ها"
+                )
             }
         }
     }
@@ -95,7 +103,19 @@ class MultiWalletViewModel @Inject constructor(
                 async {
                     WalletUiItem(
                         wallet = wallet,
-                        totalBalance = try { getCachedWalletBalanceUseCase(wallet.id) } catch(e: Exception) { "$0" },
+                        // Cache read — a miss just means we show $0 until the network sync lands.
+                        // Logged, never surfaced (ErrorSurface.SILENT).
+                        totalBalance = try {
+                            getCachedWalletBalanceUseCase(wallet.id)
+                        } catch (e: Exception) {
+                            reportError(
+                                throwable = e,
+                                userAction = "getCachedWalletBalance",
+                                surface = ErrorSurface.SILENT,
+                                severity = ErrorSeverity.LOW
+                            )
+                            "$0"
+                        },
                         isActive = wallet.id == activeId,
                         isManualBackedUp = wallet.isManualBackedUp,
                         isCloudBackedUp = wallet.isCloudBackedUp
@@ -124,6 +144,17 @@ class MultiWalletViewModel @Inject constructor(
             val activeId = getActiveWalletIdUseCase()
             syncWalletBalancesUseCase(wallets, activeId, forceResync)
             updateWalletsUi(wallets, activeId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Background balance refresh — the cached figures stay on screen and the next open
+            // retries, so this must not nag (ErrorSurface.SILENT).
+            reportError(
+                throwable = e,
+                userAction = "refreshAllWalletsBalances",
+                surface = ErrorSurface.SILENT,
+                severity = ErrorSeverity.LOW
+            )
         } finally {
             isRefreshing.set(false)
         }
@@ -136,7 +167,12 @@ class MultiWalletViewModel @Inject constructor(
                     // تغییر موفقیت‌آمیز بود
                 }
                 is ResultResponse.Error -> {
-                    errorManager.showSnackbar("خطا در تغییر کیف پول")
+                    reportError(
+                        throwable = result.exception,
+                        userAction = "switchWallet",
+                        surface = ErrorSurface.SNACKBAR,
+                        fallbackMessage = "خطا در تغییر کیف پول"
+                    )
                 }
             }
         }
@@ -146,10 +182,21 @@ class MultiWalletViewModel @Inject constructor(
         launchSafe {
             when (val result = deleteWalletUseCase(walletId)) {
                 is ResultResponse.Success -> {
-                    loadWallets(forceRefresh = true) 
+                    loadWallets(forceRefresh = true)
+                    showSuccess("کیف پول حذف شد")
                 }
                 is ResultResponse.Error -> {
-                    errorManager.showSnackbar(result.toString() ?: "خطا در حذف کیف پول")
+                    // TASK-57 — was `showSnackbar(result.toString())`: it printed the raw
+                    // ResultResponse.Error object (exception text and all) straight to the user, and
+                    // the `?:` fallback was dead because toString() is never null. Deletion is
+                    // destructive, so a failure blocks rather than flashes past.
+                    reportError(
+                        throwable = result.exception,
+                        userAction = "deleteWallet",
+                        surface = ErrorSurface.BLOCKING,
+                        severity = ErrorSeverity.HIGH,
+                        fallbackMessage = "خطا در حذف کیف پول"
+                    )
                 }
             }
         }

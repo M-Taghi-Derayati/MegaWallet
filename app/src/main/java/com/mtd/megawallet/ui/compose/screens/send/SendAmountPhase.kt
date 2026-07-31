@@ -51,6 +51,7 @@ import coil.imageLoader
 import com.mtd.common_ui.R
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.domain.model.AssetItem
+import com.mtd.megawallet.ui.compose.components.RollingCounter
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
@@ -207,75 +208,38 @@ private fun AmountDisplaySection(
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // --- Main Amount Row with Slot-Machine Digit Animation ---
-        // AnimatedContent keyed on the raw `amount` string:
-        // Adding digits  -> new number rolls UP from below
-        // Removing digits -> new number rolls DOWN from above
-        AnimatedContent(
-            targetState = amount,
-            transitionSpec = {
-                val isGrowing = targetState.length >= initialState.length
-                if (isGrowing) {
-                    (
-                        slideInVertically(
-                            animationSpec = spring(dampingRatio = 0.62f, stiffness = 900f),
-                            initialOffsetY = { it / 2 }
-                        ) + fadeIn(tween(110))
-                    ).togetherWith(
-                        slideOutVertically(
-                            animationSpec = tween(90, easing = FastOutSlowInEasing),
-                            targetOffsetY = { -(it / 3) }
-                        ) + fadeOut(tween(80))
-                    )
-                } else {
-                    (
-                        slideInVertically(
-                            animationSpec = spring(dampingRatio = 0.62f, stiffness = 900f),
-                            initialOffsetY = { -(it / 2) }
-                        ) + fadeIn(tween(110))
-                    ).togetherWith(
-                        slideOutVertically(
-                            animationSpec = tween(90, easing = FastOutSlowInEasing),
-                            targetOffsetY = { it / 3 }
-                        ) + fadeOut(tween(80))
-                    )
-                }
-            },
-            label = "DigitChange",
-            contentAlignment = Alignment.Center
-        ) { displayAmount ->
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.Center
+        // --- Main Amount Row with per-digit Rolling Counter (odometer) ---
+        // شمارندهٔ اودومترِ مشترک: رشتهٔ تایپ‌شده را عیناً نشان می‌دهد و فقط ارقامِ تغییرکرده را در فازِ draw
+        // می‌غلتاند (بدونِ recomposition per-frame). همان موتوری که موجودیِ کل استفاده می‌کند.
+        Row(
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            RollingCounter(
+                text = amount,
+                style = TextStyle(
+                    fontSize = 52.sp,
+                    color = amountColor,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = InterBold
+                )
+            )
+
+            AnimatedVisibility(
+                visible = isUsdMode,
+                enter = fadeIn(tween(180)) + slideInVertically { it / 2 },
+                exit = fadeOut(tween(150)) + slideOutVertically { it / 2 }
             ) {
                 Text(
-                    text = displayAmount,
-                    style = TextStyle(
-                        fontSize = 52.sp,
-                        color = amountColor,
+                    text = "$",
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = WalletScreenConstants.CURRENCY_SYMBOL_FONT_SIZE,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = InterBold
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontFamily = InterRegularMedium
                     ),
-                    maxLines = 1,
-                    softWrap = false
+                    modifier = Modifier.padding(top = WalletScreenConstants.CURRENCY_SYMBOL_PADDING_TOP)
                 )
-
-                AnimatedVisibility(
-                    visible = isUsdMode,
-                    enter = fadeIn(tween(180)) + slideInVertically { it / 2 },
-                    exit = fadeOut(tween(150)) + slideOutVertically { it / 2 }
-                ) {
-                    Text(
-                        text = "$",
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontSize = WalletScreenConstants.CURRENCY_SYMBOL_FONT_SIZE,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = InterRegularMedium
-                        ),
-                        modifier = Modifier.padding(top = WalletScreenConstants.CURRENCY_SYMBOL_PADDING_TOP)
-                    )
-                }
             }
         }
 

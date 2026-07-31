@@ -1,13 +1,14 @@
 package com.mtd.data.datasource
 
-import com.mtd.data.datasource.IChainDataSource.FeeData
-import com.mtd.data.datasource.IChainDataSource.TransactionFeeDetails
+
 import com.mtd.data.dto.BatchBalanceWalletDto
 import com.mtd.data.dto.HistoryAddressDto
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.FeeData
 import com.mtd.domain.model.HistoryPage
 import com.mtd.domain.model.ResultResponse
+import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.error.ApiError

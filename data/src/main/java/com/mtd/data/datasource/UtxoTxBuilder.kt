@@ -1,5 +1,7 @@
 package com.mtd.data.datasource
 
+import com.mtd.domain.model.UtxoInput
+
 /**
  * Builder seam for PROXY-mode UTXO sends. The proxy `/prepare` returns only the spendable UTXO set
  * (no scriptPubKey, no change output, no absolute fee, no coin selection — Q2.12–14), so the client
@@ -26,9 +28,3 @@ interface UtxoTxBuilder {
     ): String
 }
 
-/** A spendable output the wallet controls (value in raw satoshis). */
-data class UtxoInput(
-    val txid: String,
-    val vout: Int,
-    val valueSat: Long
-)

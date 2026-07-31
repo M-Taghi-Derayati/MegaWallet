@@ -74,7 +74,7 @@ import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHisto
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryShimmer
 import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
-import com.mtd.megawallet.viewmodel.news.HomeViewModel
+import com.mtd.megawallet.viewmodel.HomeViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.mtd.common_ui.theme.IranSansBold
 import com.mtd.common_ui.theme.IranSansBoldBold

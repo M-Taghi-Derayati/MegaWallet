@@ -1,9 +1,9 @@
-package com.mtd.megawallet.viewmodel.news
+package com.mtd.megawallet.viewmodel.assetdetail
 
 import androidx.lifecycle.SavedStateHandle
 import com.mtd.core.manager.ErrorManager
 import com.mtd.domain.model.AssetItem
-import com.mtd.domain.model.HomeUiState.DisplayCurrency
+import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.usecase.asset.BuildAssetDetailItemUseCase
 import com.mtd.domain.usecase.asset.LoadAssetChartPointsUseCase
 import com.mtd.megawallet.core.BaseViewModel
@@ -17,7 +17,7 @@ class AssetDetailViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val buildAssetDetailItemUseCase: BuildAssetDetailItemUseCase,
     private val loadAssetChartPointsUseCase: LoadAssetChartPointsUseCase,
-    errorManager:ErrorManager
+    errorManager: ErrorManager
 ) : BaseViewModel(errorManager) {
 
     private val _asset = MutableStateFlow<AssetItem?>(null)
@@ -32,7 +32,7 @@ class AssetDetailViewModel @Inject constructor(
     private val _selectedTimeFrame = MutableStateFlow("1")
     val selectedTimeFrame = _selectedTimeFrame.asStateFlow()
 
-    private val _displayCurrency = MutableStateFlow(DisplayCurrency.USDT)
+    private val _displayCurrency = MutableStateFlow(HomeUiState.DisplayCurrency.USDT)
     val displayCurrency = _displayCurrency.asStateFlow()
 
     init {
@@ -69,7 +69,7 @@ class AssetDetailViewModel @Inject constructor(
         }
     }
 
-    fun setDisplayCurrency(currency: DisplayCurrency) {
+    fun setDisplayCurrency(currency: HomeUiState.DisplayCurrency) {
         _displayCurrency.value = currency
     }
 }
