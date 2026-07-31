@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.toColorInt
 import androidx.lifecycle.viewModelScope
 import com.mtd.core.manager.ErrorManager
+import com.mtd.core.manager.ErrorSeverity
 import com.mtd.domain.model.CloudWalletItem
 import com.mtd.domain.model.CreateWalletStep
 import com.mtd.domain.model.GoogleSignInEvent
@@ -17,6 +18,7 @@ import com.mtd.domain.model.ImportData
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.core.WalletKey
+import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.domain.usecase.wallet.ApplyWalletKeySymbolsUseCase
 import com.mtd.domain.usecase.wallet.BackupCloudWalletMetadataUseCase
 import com.mtd.domain.usecase.wallet.BuildCloudWalletMetadataUseCase
@@ -504,15 +506,29 @@ class CreateWalletViewModel @Inject constructor(
 
                 when (val result = deleteCloudBackupUseCase()) {
                     is ResultResponse.Success -> {
-                        showErrorSnackbar("فایل پشتیبان با موفقیت حذف شد")
+                        // TASK-57 — this was an *error*-styled snackbar for a success outcome.
+                        showSuccess("فایل پشتیبان با موفقیت حذف شد")
                     }
 
                     is ResultResponse.Error -> {
-                        showErrorSnackbar("خطا در حذف فایل: ${result.exception.message}")
+                        // Destructive backup operation whose outcome is now ambiguous — block.
+                        reportError(
+                            throwable = result.exception,
+                            userAction = "deleteCloudBackup",
+                            surface = ErrorSurface.BLOCKING,
+                            severity = ErrorSeverity.HIGH,
+                            fallbackMessage = "خطا در حذف فایل پشتیبان"
+                        )
                     }
                 }
             } catch (e: Exception) {
-                showErrorSnackbar("خطا در حذف فایل: ${e.message}")
+                reportError(
+                    throwable = e,
+                    userAction = "deleteCloudBackup",
+                    surface = ErrorSurface.BLOCKING,
+                    severity = ErrorSeverity.HIGH,
+                    fallbackMessage = "خطا در حذف فایل پشتیبان"
+                )
             }
         }
     }
