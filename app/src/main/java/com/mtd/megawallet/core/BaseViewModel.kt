@@ -80,12 +80,17 @@ abstract class BaseViewModel(
         launchLocal { reportError(throwable, userAction, surface, severity, title, fallbackMessage) }
     }
 
+    /**
+     * @param connectivitySurface how the "no internet" gate reports itself. Background work should
+     *   pass [ErrorSurface.SILENT] so a dropped connection does not produce a snackbar per tick.
+     */
     protected fun launchSafe(
         checkNetwork: Boolean = true,
+        connectivitySurface: ErrorSurface = ErrorSurface.SNACKBAR,
         block: suspend CoroutineScope.() -> Unit
     ): Job {
         return viewModelScope.launch(exceptionHandler) {
-            if (checkNetwork && !errorManager.ensureOnline()) {
+            if (checkNetwork && !errorManager.ensureOnline(connectivitySurface)) {
                 return@launch
             }
             block()
