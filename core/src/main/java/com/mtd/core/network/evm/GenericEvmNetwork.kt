@@ -27,6 +27,9 @@ class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
     override val faName = config.faName
     override val isTestnet: Boolean = config.isTestnet
     override val derivationPath = config.derivationPath
+    // TASK-53 — رفتارهای مخصوص زنجیره از روی کانفیگ می‌آیند، نه از روی نام شبکه.
+    override val explorerApi = config.explorerApi
+    override val hasL1DataFee = config.hasL1DataFee
 
     override fun deriveKeyFromMnemonic(mnemonic: String): WalletKey {
         val keyPair: ECKeyPair = EvmKeyDerivation.deriveKeyPairFromMnemonic(mnemonic, derivationPath)

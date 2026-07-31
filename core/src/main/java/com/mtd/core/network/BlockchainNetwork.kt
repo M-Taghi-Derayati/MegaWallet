@@ -25,6 +25,18 @@ interface BlockchainNetwork {
     val regex: String?
     val faName: String?
     val isTestnet: Boolean
+
+    /**
+     * TASK-53 — گویشِ API اکسپلورر (`etherscan` / `bscscan`). فقط برای EVM معنا دارد؛
+     * پیش‌فرضِ `null` یعنی [com.mtd.domain.model.core.NetworkConfig.DEFAULT_EXPLORER_API].
+     */
+    val explorerApi: String? get() = null
+
+    /**
+     * TASK-53 — زنجیرهٔ OP-Stack که علاوه بر گسِ L2 هزینهٔ دادهٔ L1 هم دارد.
+     * فقط برای EVM معنا دارد.
+     */
+    val hasL1DataFee: Boolean get() = false
     /**
      * تولید کلید از روی mnemonic (عبارت بازیابی)
      */

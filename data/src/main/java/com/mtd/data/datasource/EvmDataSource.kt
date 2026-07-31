@@ -18,16 +18,8 @@ import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.domain.model.assets.AssetConfig
+import com.mtd.domain.model.core.NetworkConfig
 import com.mtd.domain.model.core.NetworkName
-import com.mtd.domain.model.core.NetworkName.ARBITRUM
-import com.mtd.domain.model.core.NetworkName.ARBSEPOLIA
-import com.mtd.domain.model.core.NetworkName.BASE
-import com.mtd.domain.model.core.NetworkName.BASESEPOLIA
-import com.mtd.domain.model.core.NetworkName.BSC
-import com.mtd.domain.model.core.NetworkName.BSCTESTNET
-import com.mtd.domain.model.core.NetworkName.ETHEREUM
-import com.mtd.domain.model.core.NetworkName.POLTESTNET
-import com.mtd.domain.model.core.NetworkName.SEPOLIA
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -108,10 +100,11 @@ class EvmDataSource(
     override suspend fun getTransactionHistory(address: String): ResultResponse<List<TransactionRecord>> {
         for (explorer in network.explorers) {
             try {
-                val result = when (network.name) {
-                    ETHEREUM, SEPOLIA,ARBITRUM, ARBSEPOLIA, BASE, BASESEPOLIA, POLTESTNET -> fetchEVMTransactions(explorer, address)
-                    BSC, BSCTESTNET -> fetchBscScanTransactions(explorer, address)
-                    else -> null
+                // TASK-53 — گویشِ اکسپلورر داده است، نه کد. قبلاً این یک `when (network.name)` بود و
+                // شاخهٔ `else` آن یعنی هر زنجیرهٔ EVM جدیدی که سرور اضافه می‌کرد اصلاً تاریخچه نداشت.
+                val result = when (network.explorerApi ?: NetworkConfig.DEFAULT_EXPLORER_API) {
+                    NetworkConfig.EXPLORER_API_BSCSCAN -> fetchBscScanTransactions(explorer, address)
+                    else -> fetchEVMTransactions(explorer, address)
                 }
                 if (result is ResultResponse.Success) return result
             } catch (e: Exception) {
@@ -476,7 +469,7 @@ class EvmDataSource(
                 .add(networkPriorityFee.multiply(BigInteger.valueOf(2)))
 
 // محاسبه هزینه L1 با ضریب اطمینان ۱۰ درصدی برای پوشش نوسانات لحظه‌ای
-            val rawL1Fee = if (isL2StackOptimism()) {
+            val rawL1Fee = if (network.hasL1DataFee) {
                 val txTarget = asset?.contractAddress ?: recipientAddress
                 val txValue = if (asset?.contractAddress == null) transferAmount else BigInteger.ZERO
                 val txData = if (asset?.contractAddress == null) "" else {
@@ -523,10 +516,6 @@ class EvmDataSource(
         } catch (e: Exception) {
             ResultResponse.Error(e)
         }
-    }
-
-    private fun isL2StackOptimism(): Boolean {
-        return network.name == BASE || network.name == BASESEPOLIA
     }
 
     private suspend fun getL1DataFee(to: String, value: BigInteger, data: String): BigInteger {

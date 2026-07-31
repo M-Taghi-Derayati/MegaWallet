@@ -20,5 +20,29 @@ data class NetworkConfig(
     val explorerTxUrl: String? = null,
     val color: String? = null, // رنگ شبکه به صورت هگز
     val faName: String? = null, // نام فارسی شبکه
-    val isTestnet: Boolean = false // مشخص کننده شبکه تست
-)
+    val isTestnet: Boolean = false, // مشخص کننده شبکه تست
+
+    // TASK-53 — رفتارهای مخصوصِ هر زنجیره که قبلاً `when (network.name)` بودند و حالا داده‌اند.
+    // هدف: زنجیرهٔ EVM جدیدی که سرور اضافه می‌کند بدون تغییر کد کار کند.
+
+    /**
+     * گویشِ API اکسپلورر: `"etherscan"` یا `"bscscan"`.
+     * اگر null باشد [DEFAULT_EXPLORER_API] فرض می‌شود، چون گویش Etherscan عملاً استاندارد
+     * مشترک اکثر زنجیره‌های EVM است. (قبلاً شاخهٔ `else` هیچ تاریخچه‌ای برنمی‌گرداند.)
+     */
+    val explorerApi: String? = null,
+
+    /**
+     * آیا این زنجیره L2 مبتنی بر OP-Stack است و علاوه بر گس L2، هزینهٔ دادهٔ L1 هم دارد؟
+     * فقط برای [NetworkType.EVM] معنا دارد.
+     */
+    val hasL1DataFee: Boolean = false
+) {
+    companion object {
+        const val EXPLORER_API_ETHERSCAN = "etherscan"
+        const val EXPLORER_API_BSCSCAN = "bscscan"
+
+        /** گویشِ پیش‌فرض برای شبکه‌ای که `explorerApi` را اعلام نکرده است. */
+        const val DEFAULT_EXPLORER_API = EXPLORER_API_ETHERSCAN
+    }
+}
