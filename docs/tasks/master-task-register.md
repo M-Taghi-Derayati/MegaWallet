@@ -1112,7 +1112,61 @@ the investigation already produced an answer (TASK-53) it is recorded here rathe
   **Rollback:** hide the icon (pref defaults USD). **Regression:** all fiat formatting. **Testing:** JVM
   formatter tests for both currencies incl. rounding; on-device sweep of every fiat surface.
 
-### TASK-57 — Custom error surface: show every error the user needs to know
+### TASK-57 — Custom error surface: show every error the user needs to know — ✅ Implemented (needs build + on-device verify)
+- **Done (2026-07-30):**
+  - **The real defect was worse than "coverage".** `BaseViewModel` mirrored `ErrorManager.errorEvents`
+    into a **per-ViewModel** `uiEvents` channel, and the only two collectors in the whole app were
+    `CreateWalletScreen` and `AddExistingWalletScreen`. Every error raised anywhere in the main app —
+    including the failed-send path — was emitted into a channel nobody read. Fixed by making
+    `ErrorManager` the single app-wide message bus (`uiMessages: SharedFlow<UiEvent>`) with exactly one
+    `AppMessageHost` mounted per Activity (`MainActivityCompose`, `WelcomeActivityCompose`); the two
+    per-screen mounts were removed so nothing double-renders. `ErrorSnackbarHandler.kt` is deleted and
+    `ErrorEvent`/`ErrorAction`/`ErrorHandlingResult` (zero consumers outside `BaseViewModel`) collapsed
+    into that one flow.
+  - **Severity policy** — new `domain/model/error/ErrorSurface.kt`: `SILENT` (logs only — background
+    price/balance/fee refresh, sponsor+gasless preview enrichment, address-book warm-up, cache misses),
+    `SNACKBAR` (user-initiated read/write that failed and is retryable), `BLOCKING` (money, keys or data
+    at stake — send/broadcast, wallet delete, cloud-backup upload/delete, wallet restore/import). Applied
+    at every call site via `BaseViewModel.reportError(..., surface = …)`. `launchSafe` gained
+    `connectivitySurface` so a background refresh on an offline device no longer raises a snackbar per tick.
+  - **The confirmed bug** — `MultiWalletViewModel.deleteWallet` printed `result.toString()` (the raw
+    `ResultResponse.Error` object) with a dead `?:` fallback. Now `reportError(..., BLOCKING)` plus a
+    success snackbar on the happy path.
+  - **PII (TASK-25)** — new `ErrorTextSanitizer` scrubs EVM addresses/hashes/signed payloads, bare hex
+    blobs, Tron/BTC/DOGE base58, bech32, BIP-39 mnemonics and JWTs out of *all* technical text (dialog
+    **and** log), and clamps it to 400 chars. The short message never comes from an exception at all.
+  - **Success snackbar** — `UiEvent.ShowSuccessSnackbar` + `TopSnackbarStyle.ERROR/SUCCESS` in
+    `CustomTopSnackbar` (green `primary`, auto-dismiss, no "جزئیات"). Unblocks TASK-52 and TASK-58.
+    `deleteCloudBackup` was showing its **success** message in the red error snackbar — fixed.
+  - **`ErrorMapper` gaps closed** — `ApiError.IdempotencyKeyConflict` had no copy at all in either
+    language (the `else -> ""` branch produced an **empty** snackbar); the `else` is now removed so the
+    compiler enforces coverage. `AppError.Network.Unknown` and `Business.General` also had no branch and
+    fell through to "خطای ناشناخته". Added `userMessage(throwable, fallbackMessage)`: the taxonomy wins,
+    and the call site's Persian description of the action is used only when it has nothing to say.
+  - **Fixed in passing:** `SendViewModel.shouldRetryGasless` branched on **English substrings in
+    `e.message`** (violating API invariant #3, "branch on the code, never the message") — it now reads the
+    typed `ApiError` off the cause, with the substring pass kept only as a fallback. This mattered because
+    the 21 `throw IllegalStateException("<Persian>")` sites became `sendFailure(...)`
+    (`AppError.Business.General`, cause preserved) so their curated copy survives mapping. One English
+    leak ("EVM approve amount was not returned by server") translated. `CancellationException` is now
+    rethrown in the new catches rather than reported as a failure.
+  - **Follow-up cleanup (review, 2026-07-30):** `BaseViewModel` still carried the old per-ViewModel
+    `Channel<UiEvent>` (`_uiEvents`/`uiEvents`/`sendEvent`) after the app-wide bus replaced it. It had
+    **zero senders and zero collectors** — dead, but exactly the trap that caused the original defect, so
+    it is removed. `UiEvent` itself stays; it is the bus payload (`ErrorManager`, `AppMessageHost`,
+    `TopSnackbarViewHelper`).
+- **Tests:** `domain/src/test/.../error/ErrorMapperTest.kt` (24 `ApiError` variants — completeness is
+  compiler-enforced by an `else`-less `when`; asserts curated copy per variant, no code/class-name/raw
+  text leak, `reasonFa` only reachable for `Unknown`, technical-detail redaction, fallback precedence,
+  surface plumbing) and `ErrorTextSanitizerTest.kt` (per address family + mnemonic + JWT + clamp +
+  "leaves ordinary Persian intact"). Run: `./gradlew :domain:testDebugUnitTest`.
+- **Not built here** (Gradle unavailable) — inspection-verified only.
+- **Verify on-device:** force-fail a send (blocking dialog + "جزئیات" carries a code, no address/hash),
+  a wallet delete, a cloud-backup upload; go offline and confirm background refreshes stay quiet while a
+  pull-to-refresh still reports; confirm the success snackbar is green and self-dismissing; confirm no
+  double snackbar in the onboarding flow now that the per-screen hosts are gone.
+- **Original spec below.**
+
 - **Problem (user, item 8):** errors that matter to the user are inconsistently surfaced.
 - **Current state:** the machinery exists — `core/manager/ErrorManager` (+ `ErrorMapper`,
   `ApiErrorMessageMapper`, `AppError`/`ApiError` in `domain/model/error/`), `BaseViewModel` observes it

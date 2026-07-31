@@ -8,12 +8,9 @@ import com.mtd.core.manager.ErrorSeverity
 import com.mtd.domain.model.error.AppError
 import com.mtd.domain.model.error.ErrorMapper
 import com.mtd.domain.model.error.ErrorSurface
-import com.mtd.domain.model.ui.UiEvent
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -30,13 +27,6 @@ import kotlinx.coroutines.launch
 abstract class BaseViewModel(
     protected val errorManager: ErrorManager
 ) : ViewModel() {
-
-    /**
-     * ViewModel-local navigation/loading events. Snackbars and dialogs deliberately do **not**
-     * travel here — see the class doc.
-     */
-    private val _uiEvents = Channel<UiEvent>(Channel.UNLIMITED)
-    val uiEvents = _uiEvents.receiveAsFlow()
 
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
         handleException(throwable)
@@ -123,10 +113,6 @@ abstract class BaseViewModel(
         }
     }
 
-    protected suspend fun sendEvent(event: UiEvent) {
-        _uiEvents.send(event)
-    }
-
     /**
      * Shows an error snackbar from copy **you wrote**. [shortMessage] must be user-facing Persian;
      * put anything technical in [detailedMessage], which is rendered only behind "جزئیات".
@@ -150,10 +136,5 @@ abstract class BaseViewModel(
 
     protected fun showSuccessMessage(message: String) {
         launchLocal { showSuccess(message) }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        _uiEvents.close()
     }
 }
