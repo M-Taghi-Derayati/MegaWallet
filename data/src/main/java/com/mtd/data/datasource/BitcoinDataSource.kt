@@ -487,6 +487,7 @@ class BitcoinDataSource(
                     fee = BigInteger.ZERO,
                     timestamp = 0L,
                     status = TransactionStatus.PENDING,
+                    networkId = network.id,
                     networkName = network.name,
                     isOutgoing = false
                 )
@@ -503,6 +504,7 @@ class BitcoinDataSource(
                     fee = BigInteger.ZERO,
                     timestamp = 0L,
                     status = TransactionStatus.PENDING,
+                    networkId = network.id,
                     networkName = network.name,
                     isOutgoing = false
                 )
@@ -587,6 +589,7 @@ class BitcoinDataSource(
                 } else {
                     TransactionStatus.PENDING
                 },
+                networkId = network.id,
                 networkName = network.name,
                 isOutgoing = isOutgoing
             )
@@ -675,6 +678,7 @@ class BitcoinDataSource(
                         } else {
                             TransactionStatus.PENDING
                         },
+                        networkId = network.id,
                         networkName = network.name,
                         isOutgoing = isOutgoing
                     ),
@@ -995,7 +999,7 @@ class BitcoinDataSource(
             NetworkName.LTCTESTNET -> "Litecoin Testnet" to "LTC"
             NetworkName.DOGE -> "Dogecoin" to "DOGE"
             NetworkName.DOGETESTNET -> "Dogecoin Testnet" to "DOGE"
-            else -> network.name.name to network.currencySymbol
+            else -> (network.name?.name ?: network.id) to network.currencySymbol
         }
     }
 

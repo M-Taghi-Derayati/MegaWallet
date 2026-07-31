@@ -27,10 +27,10 @@ class GetTransactionHistoryUseCase @Inject constructor(
     private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(
-        networkName: NetworkName,
+        networkId: String,
         userAddress: String
     ): ResultResponse<List<TransactionRecord>> {
-        return walletRepository.get().getTransactionHistory(networkName, userAddress)
+        return walletRepository.get().getTransactionHistory(networkId, userAddress)
     }
 }
 
@@ -38,10 +38,10 @@ class GetTransactionFeeDetailsUseCase @Inject constructor(
     private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(
-        networkName: NetworkName,
+        networkId: String,
         txId: String
     ): ResultResponse<TransactionFeeDetails> {
-        return walletRepository.get().getTransactionFeeDetails(networkName, txId)
+        return walletRepository.get().getTransactionFeeDetails(networkId, txId)
     }
 }
 
@@ -124,8 +124,10 @@ class NormalizeTransactionHistoryUseCase @Inject constructor(
             return false
         }
 
-        val networkName = transaction.networkName ?: return true
-        val network = networkCatalog.getNetworkInfoByName(networkName) ?: return true
+        // TASK-53 — با هویت کانونی، و در نبودش با alias قدیمی (رکوردهای کش‌شدهٔ قدیمی).
+        val network = transaction.networkId?.let { networkCatalog.getNetworkInfoById(it) }
+            ?: transaction.networkName?.let { networkCatalog.getNetworkInfoByName(it) }
+            ?: return true
         val networkId = network.id
 
         val contractAddress = when (transaction) {
@@ -189,7 +191,7 @@ class NormalizeTransactionHistoryUseCase @Inject constructor(
 
     private fun transactionIdentity(transaction: TransactionRecord): String {
         return buildString {
-            append(transaction.networkName?.name ?: "unknown")
+            append(transaction.networkId ?: transaction.networkName?.name ?: "unknown")
             append('|')
             append(transaction.hash)
             append('|')
@@ -227,9 +229,11 @@ class NormalizeTransactionHistoryUseCase @Inject constructor(
 
 class BuildPendingHistoryTransactionUseCase @Inject constructor() {
     operator fun invoke(hint: PendingTransactionHint): TransactionRecord? {
-        val resolvedNetworkName = NetworkName.entries.find {
-            it.name.equals(hint.networkName, ignoreCase = true)
-        } ?: return null
+        // TASK-53 — `hint.networkName` هویتِ شبکه است (networkId یا نامِ قدیمی). قبلاً اگر با هیچ
+        // ثابتِ enum جور نمی‌شد کلِ تراکنشِ در انتظار دور ریخته می‌شد؛ حالا هویت حفظ می‌شود و
+        // alias فقط در صورت وجود پر می‌شود.
+        val resolvedNetworkId = hint.networkName?.trim()?.ifBlank { null } ?: return null
+        val resolvedNetworkName = NetworkName.fromConfigName(resolvedNetworkId)
         val amountValue = hint.amount.toBigIntegerOrNull() ?: return null
         val feeValue = hint.fee.toBigIntegerOrNull() ?: BigInteger.ZERO
         val tokenDetails = hint.contractAddress?.takeIf { it.isNotBlank() }?.let { contract ->
@@ -251,6 +255,7 @@ class BuildPendingHistoryTransactionUseCase @Inject constructor() {
                 pendingDurationSeconds = 0L,
                 fee = feeValue,
                 status = TransactionStatus.PENDING,
+                networkId = resolvedNetworkId,
                 networkName = resolvedNetworkName,
                 fromAddress = hint.fromAddress.orEmpty(),
                 toAddress = hint.toAddress.orEmpty(),
@@ -268,6 +273,7 @@ class BuildPendingHistoryTransactionUseCase @Inject constructor() {
                 pendingDurationSeconds = 0L,
                 fee = feeValue,
                 status = TransactionStatus.PENDING,
+                networkId = resolvedNetworkId,
                 networkName = resolvedNetworkName,
                 fromAddress = hint.fromAddress,
                 toAddress = hint.toAddress,
@@ -282,6 +288,7 @@ class BuildPendingHistoryTransactionUseCase @Inject constructor() {
                 pendingDurationSeconds = 0L,
                 fee = feeValue,
                 status = TransactionStatus.PENDING,
+                networkId = resolvedNetworkId,
                 networkName = resolvedNetworkName,
                 fromAddress = hint.fromAddress.orEmpty(),
                 toAddress = hint.toAddress.orEmpty(),

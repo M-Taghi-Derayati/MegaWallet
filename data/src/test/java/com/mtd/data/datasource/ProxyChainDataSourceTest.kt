@@ -4,8 +4,10 @@ import com.google.gson.GsonBuilder
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.data.network.wire.BigIntegerStringAdapter
 import com.mtd.data.service.MobileProxyApiService
+import com.mtd.domain.model.PreparedEvmTx
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionParams
+import com.mtd.domain.model.UtxoInput
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.error.ApiError
@@ -193,7 +195,7 @@ class ProxyChainDataSourceTest {
                 .setBody("""{"ok":false,"error":{"code":"SIMULATION_REVERTED","message":"revert"}}""")
         )
         val params = TransactionParams.Evm(
-            networkName = NetworkName.SEPOLIA,
+            networkId = "sepolia",
             to = "0x000000000000000000000000000000000000dEaD",
             amount = BigInteger("1000"),
             gasPrice = BigInteger("1000000000"),
@@ -245,7 +247,7 @@ class ProxyChainDataSourceTest {
         server.enqueue(MockResponse().setBody("""{"ok":true,"data":{"txHash":"0xabc123"}}""")) // broadcast
 
         val params = TransactionParams.Evm(
-            networkName = NetworkName.SEPOLIA,
+            networkId = "sepolia",
             to = "0x000000000000000000000000000000000000dEaD",
             amount = BigInteger("1000"),
             gasPrice = BigInteger("1000000000"),
@@ -274,7 +276,7 @@ class ProxyChainDataSourceTest {
         server.enqueue(MockResponse().setBody("""{"ok":true,"data":{"txHash":"0xapprove"}}"""))
 
         val params = TransactionParams.Evm(
-            networkName = NetworkName.SEPOLIA,
+            networkId = "sepolia",
             to = "0x186cca6904490818AB0DC409ca59D932A2366031",
             amount = BigInteger.ZERO,
             data = approveData,
@@ -307,7 +309,7 @@ class ProxyChainDataSourceTest {
         server.enqueue(MockResponse().setBody("""{"ok":true,"data":{"txHash":"abc123"}}""")) // broadcast
 
         val params = TransactionParams.Tvm(
-            networkName = NetworkName.TRON,
+            networkId = "tron_mainnet",
             toAddress = "TJRyWwFs9wTFGZg3JbrVriFbNfCug5tDeC",
             amount = BigInteger.TEN,
             assetId = "TRX-TRON"
@@ -333,7 +335,7 @@ class ProxyChainDataSourceTest {
         server.enqueue(MockResponse().setBody("""{"ok":true,"data":{"txHash":"approve123"}}"""))
 
         val params = TransactionParams.Tvm(
-            networkName = NetworkName.TRON,
+            networkId = "tron_mainnet",
             toAddress = "TVjsyZ7fYF3qLF6BQgPmTEZy1xrNNyVAAA",
             amount = BigInteger("115792089237316195423570985008687907853269984665640564039457584007913129639935"),
             contractAddress = "THHQqmx9XMj5N77a6SCr3dhgz6YJbArWzU",
@@ -358,7 +360,7 @@ class ProxyChainDataSourceTest {
     fun `TVM send without assetId is a typed ValidationError`() = runTest {
         every { network.networkType } returns NetworkType.TVM
         val params = TransactionParams.Tvm(
-            networkName = NetworkName.TRON,
+            networkId = "tron_mainnet",
             toAddress = "TJRyWwFs9wTFGZg3JbrVriFbNfCug5tDeC",
             amount = BigInteger.TEN
         )

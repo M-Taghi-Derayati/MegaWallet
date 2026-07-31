@@ -12,7 +12,7 @@ import org.web3j.crypto.ECKeyPair
 class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
     override val id: String=config.id
     override val networkType = NetworkType.valueOf(config.networkType)
-    override val name = NetworkName.valueOf(config.name)
+    override val name = NetworkName.fromConfigName(config.name)
     override val chainId = config.chainId
     override val decimals=config.decimals
     override val iconUrl=config.iconUrl
@@ -35,6 +35,7 @@ class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
         val keyPair: ECKeyPair = EvmKeyDerivation.deriveKeyPairFromMnemonic(mnemonic, derivationPath)
         val credentials = EvmKeyDerivation.getCredentialsFromKeyPair(keyPair)
         return WalletKey(
+            networkId = id,
             networkName = name,
             networkType = networkType,
             chainId = chainId,
@@ -47,6 +48,7 @@ class GenericEvmNetwork(config: NetworkConfig) : BlockchainNetwork {
     override fun deriveKeyFromPrivateKey(privateKey: String): WalletKey {
         val credentials = Credentials.create(privateKey)
         return WalletKey(
+            networkId = id,
             networkName = name,
             networkType = networkType,
             chainId = chainId,

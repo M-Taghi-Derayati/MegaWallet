@@ -92,7 +92,7 @@ class UnifiedTransferCoordinatorTest {
         val slot = slot<TransactionParams>()
         coVerify(exactly = 1) { walletRepository.sendTransaction(capture(slot)) }
         val tx = slot.captured as TransactionParams.Evm
-        assertEquals(NetworkName.SEPOLIA, tx.networkName)
+        assertEquals("sepolia", tx.networkId)
         assertEquals(request.toAddress, tx.to)
         assertEquals(request.amount, tx.amount)
         assertEquals(request.gasPrice, tx.gasPrice)
@@ -121,7 +121,7 @@ class UnifiedTransferCoordinatorTest {
         val slot = slot<TransactionParams>()
         coVerify(exactly = 1) { walletRepository.sendTransaction(capture(slot)) }
         val tx = slot.captured as TransactionParams.Tvm
-        assertEquals(NetworkName.SHASTA, tx.networkName)
+        assertEquals("shasta_testnet", tx.networkId)
         assertEquals(request.toAddress, tx.toAddress)
         assertEquals(request.tokenAddress, tx.contractAddress)
         assertEquals(request.amount, tx.amount)
@@ -184,7 +184,7 @@ class UnifiedTransferCoordinatorTest {
                 amount = BigInteger("1"),
                 permit2Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
             ),
-            networkName = NetworkName.SEPOLIA,
+            networkId = "sepolia",
             userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
             chainId = 11155111L,
             assetId = "USDC-SEPOLIA",
@@ -232,7 +232,7 @@ class UnifiedTransferCoordinatorTest {
                     amount = BigInteger("1"),
                     permit2Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
                 ),
-                networkName = NetworkName.SEPOLIA,
+                networkId = "sepolia",
                 userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
                 chainId = 11155111L,
                 assetId = "USDC-SEPOLIA",
@@ -270,7 +270,7 @@ class UnifiedTransferCoordinatorTest {
                     amount = BigInteger("1"),
                     permit2Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
                 ),
-                networkName = NetworkName.SEPOLIA,
+                networkId = "sepolia",
                 userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
                 chainId = 11155111L,
                 assetId = "USDC-SEPOLIA",
@@ -309,7 +309,7 @@ class UnifiedTransferCoordinatorTest {
                     assetId = "USDT-TRON",
                     amount = BigInteger("1")
                 ),
-                networkName = NetworkName.SHASTA,
+                networkId = "shasta_testnet",
                 userAddress = "TAUNv6F6m3n9aYH6Q4qk8Vh8W5u7WkQF5A",
                 chainId = 2494104990L,
                 assetId = "USDT-TRON",

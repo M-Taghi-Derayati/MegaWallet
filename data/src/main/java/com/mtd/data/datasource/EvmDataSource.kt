@@ -19,7 +19,6 @@ import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.domain.model.assets.AssetConfig
 import com.mtd.domain.model.core.NetworkConfig
-import com.mtd.domain.model.core.NetworkName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -94,7 +93,7 @@ class EvmDataSource(
             }
         }
 
-        throw lastException ?: Exception("All RPC nodes are unreachable for ${network.name}")
+        throw lastException ?: Exception("All RPC nodes are unreachable for ${network.id}")
     }
 
     override suspend fun getTransactionHistory(address: String): ResultResponse<List<TransactionRecord>> {
@@ -125,10 +124,10 @@ class EvmDataSource(
             val allRecords = mutableListOf<TransactionRecord>()
 
             if (nativeTxsResponse.isSuccessful) {
-                nativeTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address, network.name)) }
+                nativeTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address)) }
             }
             if (tokenTxsResponse.isSuccessful) {
-                tokenTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address, network.name)) }
+                tokenTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address)) }
             }
             
             if (!nativeTxsResponse.isSuccessful && !tokenTxsResponse.isSuccessful) {
@@ -183,6 +182,7 @@ class EvmDataSource(
             toAddress = dto.to,
             amount = amount,
             isOutgoing = dto.from.equals(address, ignoreCase = true),
+            networkId = network.id,
             networkName = network.name,
             contractAddress = if (dto.category == "20") dto.contractAddress else null,
             tokenTransferDetails = if (dto.category == "20") {
@@ -568,7 +568,7 @@ class EvmDataSource(
     }
 
 
-    private fun EVMTransactionDto.toDomainModel(userAddress: String, networkName: NetworkName): EvmTransaction {
+    private fun EVMTransactionDto.toDomainModel(userAddress: String): EvmTransaction {
         val feeValue = (this.gasUsed ?: BigInteger.ZERO) * (this.gasPrice ?: BigInteger.ZERO)
         val timestampValue = try { Instant.parse(this.timestamp).epochSecond } catch (e: Exception) { 0L }
         return EvmTransaction(
@@ -583,11 +583,12 @@ class EvmDataSource(
             gasUsed = this.gasUsed,
             gasPrice = this.gasPrice,
             isOutgoing = this.from.hash.equals(userAddress, true),
-            networkName = networkName
+            networkId = network.id,
+            networkName = network.name
         )
     }
 
-    private fun EVMTokenTransferDto.toDomainModel(userAddress: String, networkName: NetworkName): EvmTransaction {
+    private fun EVMTokenTransferDto.toDomainModel(userAddress: String): EvmTransaction {
         val timestampValue = try { Instant.parse(this.timestamp).epochSecond } catch (e: Exception) { 0L }
         return EvmTransaction(
             hash = this.txHash,
@@ -599,7 +600,8 @@ class EvmDataSource(
             amount = this.total.value?.toBigIntegerOrNull() ?: BigInteger.ZERO,
             isOutgoing = this.fromAddress.hash.equals(userAddress, true),
             contractAddress = this.token.address,
-            networkName = networkName,
+            networkId = network.id,
+            networkName = network.name,
             tokenTransferDetails = TokenTransferDetails(
                 from = this.fromAddress.hash,
                 to = this.toAddress.hash,

@@ -203,6 +203,7 @@ class TronDataSource(
                         bandwidthUsed = tx.bandwidth,
                         energyUsed = tx.energy,
                         tokenTransferDetails = null,
+                        networkId = network.id,
                         networkName = network.name
                     )
                 )
@@ -227,6 +228,7 @@ class TronDataSource(
                         contractAddress = tx.tokenInfo?.address,
                         bandwidthUsed = null,
                         energyUsed = null,
+                        networkId = network.id,
                         networkName = network.name,
                         tokenTransferDetails = TokenTransferDetails(
                             from = tx.from,

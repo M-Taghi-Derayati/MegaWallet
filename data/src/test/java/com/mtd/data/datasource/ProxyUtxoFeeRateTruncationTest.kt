@@ -6,6 +6,7 @@ import com.mtd.data.network.wire.BigIntegerStringAdapter
 import com.mtd.data.service.MobileProxyApiService
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.TransactionParams
+import com.mtd.domain.model.UtxoInput
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.NetworkType
 import io.mockk.every

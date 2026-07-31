@@ -455,9 +455,9 @@ class WalletRepositoryImpl @Inject constructor(
         ): ResultResponse<String> {
             return safeApiCall {
                 val chainId = when (params) {
-                    is TransactionParams.Evm -> blockchainRegistry.getNetworkByName(params.networkName)?.chainId
+                    is TransactionParams.Evm -> blockchainRegistry.getNetworkById(params.networkId)?.chainId
                     is TransactionParams.Utxo -> params.chainId
-                    is TransactionParams.Tvm -> blockchainRegistry.getNetworkByName(params.networkName)?.chainId
+                    is TransactionParams.Tvm -> blockchainRegistry.getNetworkById(params.networkId)?.chainId
                 }
                     ?: throw IllegalStateException("Network chain id is missing for transaction params")
                 val privateKey =
@@ -475,25 +475,27 @@ class WalletRepositoryImpl @Inject constructor(
         }
 
         override suspend fun getAssets(
-            networkName: NetworkName
+            networkId: String
         ): ResultResponse<List<Asset>> {
             return safeApiCall {
-                val chainId = blockchainRegistry.getNetworkByName(networkName)
-                val userAddress = activeWalletManager.getAddressForNetwork(chainId?.chainId!!)
+                val network = blockchainRegistry.getNetworkById(networkId)
+                    ?: throw IllegalStateException("Network $networkId not found")
+                val userAddress = activeWalletManager.getAddressForNetwork(network.chainId!!)
                     ?: throw IllegalStateException("Active wallet or address not found for network.")
-                val dataSource = dataSourceFactory.get().create(chainId.chainId!!)
+                val dataSource = dataSourceFactory.get().create(network)
                 val result = dataSource.getBalanceAssets(userAddress)
                 if (result is ResultResponse.Success) result.data else throw Exception("Failed to fetch assets")
             }
         }
 
         override suspend fun getTransactionHistory(
-            networkName: NetworkName,
+            networkId: String,
             userAddress: String
         ): ResultResponse<List<TransactionRecord>> {
             return safeApiCall {
-                val chainId = blockchainRegistry.getNetworkByName(networkName)
-                val dataSource = dataSourceFactory.get().create(chainId?.chainId!!)
+                val network = blockchainRegistry.getNetworkById(networkId)
+                    ?: throw IllegalStateException("Network $networkId not found")
+                val dataSource = dataSourceFactory.get().create(network)
                 val result = dataSource.getTransactionHistory(userAddress)
                 if (result is ResultResponse.Success) result.data else throw Exception("Failed to fetch history")
             }
@@ -529,13 +531,13 @@ class WalletRepositoryImpl @Inject constructor(
         }
 
         override suspend fun getTransactionFeeDetails(
-            networkName: NetworkName,
+            networkId: String,
             txId: String
         ): ResultResponse<TransactionFeeDetails> {
             return safeApiCall {
-                val chainId = blockchainRegistry.getNetworkByName(networkName)
-                    ?: throw IllegalStateException("Network not found")
-                val dataSource = dataSourceFactory.get().create(chainId.chainId!!)
+                val network = blockchainRegistry.getNetworkById(networkId)
+                    ?: throw IllegalStateException("Network $networkId not found")
+                val dataSource = dataSourceFactory.get().create(network)
                 when (val result = dataSource.getTransactionFeeDetails(txId)) {
                     is ResultResponse.Success -> result.data.toDomainModel()
                     is ResultResponse.Error -> throw result.exception
@@ -552,18 +554,18 @@ class WalletRepositoryImpl @Inject constructor(
             val networkInfo = blockchainRegistry.getNetworkById(networkId) ?: return null
 
             // پیدا کردن آدرس کیف پول در شبکه مورد نظر از لیست کلیدها
-            return activeWallet.keys.find { it.networkName == networkInfo.name }?.address
+            return activeWallet.keys.find { it.networkId == networkInfo.id }?.address
         }
 
         override suspend fun getBalancesForMultipleWallets(
-            networkName: NetworkName,
+            networkId: String,
             walletIds: List<String>
         ): ResultResponse<Map<String, List<Asset>>> {
             return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 try {
-                    val chainConfig = blockchainRegistry.getNetworkByName(networkName)
-                        ?: return@withContext ResultResponse.Error(Exception("Network not found"))
-                    val dataSource = dataSourceFactory.get().create(chainConfig.chainId!!)
+                    val chainConfig = blockchainRegistry.getNetworkById(networkId)
+                        ?: return@withContext ResultResponse.Error(Exception("Network $networkId not found"))
+                    val dataSource = dataSourceFactory.get().create(chainConfig)
 
                     // Map<WalletId, Address>
                     val walletAddresses = mutableMapOf<String, String>()
@@ -584,7 +586,7 @@ class WalletRepositoryImpl @Inject constructor(
                         } else {
                             // تولید از کلید خصوصی
                             keyManager.generateWalletKeysFromPrivateKey(secret)
-                                .find { it.networkName == networkName }?.address
+                                .find { it.networkId == chainConfig.id }?.address
                         }
 
                         if (address != null) {

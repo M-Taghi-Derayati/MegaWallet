@@ -6,9 +6,15 @@ import com.mtd.domain.model.core.WalletKey
 
 
 interface BlockchainNetwork {
+    /** TASK-53 — هویتِ کانونیِ شبکه. همهٔ تطبیق‌ها و کلیدزنی‌ها باید با این باشد. */
     val id: String
     val networkType: NetworkType
-    val name: NetworkName
+
+    /**
+     * TASK-53 — alias قدیمی؛ برای شبکه‌ای که فقط در باندلِ سرور هست `null` می‌شود.
+     * برای مقایسهٔ هویت از [id] استفاده کنید.
+     */
+    val name: NetworkName?
     val chainId: Long?
     val decimals: Int
     val iconUrl:String

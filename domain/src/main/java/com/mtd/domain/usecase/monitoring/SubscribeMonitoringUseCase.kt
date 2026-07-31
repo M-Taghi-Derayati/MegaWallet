@@ -40,7 +40,8 @@ class SubscribeMonitoringUseCase @Inject constructor(
 
         val pairs = wallet.keys
             .mapNotNull { key ->
-                val networkId = networkCatalog.getNetworkInfoByName(key.networkName)?.id
+                // TASK-53 — هویت مستقیماً روی کلید است؛ فقط بررسی می‌کنیم شبکه واقعاً ثبت شده باشد.
+                val networkId = networkCatalog.getNetworkInfoById(key.networkId)?.id
                     ?: return@mapNotNull null
                 MonitoringSubscription(address = key.address, networkId = networkId)
             }

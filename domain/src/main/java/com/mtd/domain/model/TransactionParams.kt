@@ -1,11 +1,11 @@
 package com.mtd.domain.model
 
-import com.mtd.domain.model.core.NetworkName
 import java.math.BigInteger
 
 sealed class TransactionParams {
     data class Evm(
-        val networkName: NetworkName,
+        /** TASK-53 — شناسهٔ کانونیِ شبکه؛ ارسال روی زنجیرهٔ فقط-در-باندل هم باید کار کند. */
+        val networkId: String,
         val to: String,
         val amount: BigInteger,
         val data: String? = null,
@@ -24,7 +24,8 @@ sealed class TransactionParams {
     ) : TransactionParams()
 
     data class Tvm(
-        val networkName: NetworkName,
+        /** TASK-53 — شناسهٔ کانونیِ شبکه. */
+        val networkId: String,
         val toAddress: String,
         val amount: BigInteger,
         val contractAddress: String? = null, // If null, it's native TRX. If set, it's TRC20.

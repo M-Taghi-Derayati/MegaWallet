@@ -12,6 +12,6 @@ class BitcoinNetwork(
 ) : AbstractUtxoNetwork(config, params) {
     override val explorers=config.explorers
     override val networkType = NetworkType.valueOf(config.networkType)
-    override val name = NetworkName.valueOf(config.name)
+    override val name = NetworkName.fromConfigName(config.name)
 
 }

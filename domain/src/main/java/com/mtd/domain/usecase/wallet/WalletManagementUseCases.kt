@@ -30,10 +30,10 @@ class GetBalancesForMultipleWalletsUseCase @Inject constructor(
     private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(
-        networkName: NetworkName,
+        networkId: String,
         walletIds: List<String>
     ): ResultResponse<Map<String, List<Asset>>> {
-        return walletRepository.get().getBalancesForMultipleWallets(networkName, walletIds)
+        return walletRepository.get().getBalancesForMultipleWallets(networkId, walletIds)
     }
 }
 

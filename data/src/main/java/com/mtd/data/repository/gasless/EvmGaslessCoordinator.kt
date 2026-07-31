@@ -144,7 +144,7 @@ class EvmGaslessCoordinator @Inject constructor(
 
             val session = EvmGaslessSession(
                 request = request,
-                networkName = network.name,
+                networkId = network.id,
                 userAddress = userAddress,
                 assetId = request.assetId,
                 chainId = prepareData.chainId,
@@ -178,7 +178,7 @@ class EvmGaslessCoordinator @Inject constructor(
         _state.value = GaslessCoordinatorState.AWAITING_APPROVE_CONFIRMATION
 
         return TransactionParams.Evm(
-            networkName = session.networkName,
+            networkId = session.networkId,
             to = session.request.tokenAddress,
             amount = BigInteger.ZERO,
             assetId = session.assetId,

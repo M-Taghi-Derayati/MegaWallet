@@ -26,7 +26,7 @@ class SendAssetDataSourceImpl @Inject constructor(
         return try {
             val network = blockchainRegistry.getNetworkById(asset.networkId)
                 ?: return ResultResponse.Success(null)
-            val senderAddress = wallet.keys.find { it.networkName == network.name }?.address
+            val senderAddress = wallet.keys.find { it.networkId == network.id }?.address
                 ?: return ResultResponse.Success(null)
 
             when (val result = dataSourceFactory.get().create(network).getBalanceAssets(senderAddress)) {
@@ -70,7 +70,7 @@ class SendAssetDataSourceImpl @Inject constructor(
         return try {
             val network = blockchainRegistry.getNetworkById(asset.networkId)
                 ?: return ResultResponse.Error(IllegalStateException("Network ${asset.networkId} not found"))
-            val senderAddress = wallet.keys.find { it.networkName == network.name }?.address
+            val senderAddress = wallet.keys.find { it.networkId == network.id }?.address
                 ?: return ResultResponse.Error(IllegalStateException("Sender address for ${network.name} not found"))
 
             val domainAsset = Asset(

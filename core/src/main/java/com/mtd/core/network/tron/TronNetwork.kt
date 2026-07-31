@@ -16,7 +16,7 @@ import org.web3j.utils.Numeric.toHexStringNoPrefix
 class TronNetwork(config: NetworkConfig) : BlockchainNetwork {
     override val id: String = config.id
     override val networkType: NetworkType = NetworkType.valueOf(config.networkType)
-    override val name: NetworkName = NetworkName.valueOf(config.name)
+    override val name: NetworkName? = NetworkName.fromConfigName(config.name)
     override val chainId: Long? = config.chainId
     override val decimals: Int = config.decimals
     override val iconUrl: String = config.iconUrl
@@ -46,6 +46,7 @@ class TronNetwork(config: NetworkConfig) : BlockchainNetwork {
         val address = TronUtils.getAddressFromPublicKey(childKeyPair.publicKey)
         
         return WalletKey(
+            networkId = id,
             networkName = name,
             networkType = networkType,
             chainId = chainId,
@@ -62,6 +63,7 @@ class TronNetwork(config: NetworkConfig) : BlockchainNetwork {
         val address = TronUtils.getAddressFromPublicKey(keyPair.publicKey)
 
         return WalletKey(
+            networkId = id,
             networkName = name,
             networkType = networkType,
             chainId = chainId,

@@ -66,7 +66,7 @@ class TronDataSourceTest {
             if (balanceTrx > BigDecimal.TEN) {
                 println("\n3. Sending Transaction (Self-Transfer)...")
                 val params = TransactionParams.Tvm(
-                    networkName = NetworkName.SHASTA,
+                    networkId = "shasta_testnet",
                     toAddress = walletKey.address, // Send to self
                     amount = BigInteger.valueOf(1_000_000) // 1 TRX
                 )

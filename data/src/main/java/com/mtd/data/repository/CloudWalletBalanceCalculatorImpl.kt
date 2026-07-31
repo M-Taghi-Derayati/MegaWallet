@@ -63,7 +63,8 @@ class CloudWalletBalanceCalculatorImpl @Inject constructor(
         keys.forEach { key ->
             val chainId = key.chainId ?: return@forEach
             val dataSource = dataSourceFactory.get().create(chainId)
-            val networkId = blockchainRegistry.getNetworkByName(key.networkName)?.id
+            // TASK-53 — هویت مستقیماً روی کلید هست؛ نیازی به رفت‌وبرگشت از طریق alias نیست.
+            val networkId = key.networkId
 
             if (key.networkType == NetworkType.EVM) {
                 val result = dataSource.getBalanceAssets(key.address)

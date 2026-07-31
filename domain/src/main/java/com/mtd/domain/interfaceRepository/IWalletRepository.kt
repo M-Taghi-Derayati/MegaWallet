@@ -1,6 +1,5 @@
 package com.mtd.domain.interfaceRepository
 
-import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.Asset
 import com.mtd.domain.model.HistoryAddress
 import com.mtd.domain.model.HistoryPage
@@ -105,10 +104,10 @@ interface IWalletRepository {
 
     /**
      * لیست تمام دارایی‌های کاربر (توکن‌ها) را برای یک شبکه خاص به همراه موجودی آن‌ها برمی‌گرداند.
-     * @param networkName نام شبکه‌ای که می‌خواهیم دارایی‌های آن را بگیریم.
+     * @param networkId شناسهٔ کانونی شبکه‌ای که می‌خواهیم دارایی‌های آن را بگیریم (TASK-53).
      * @return یک Result که در صورت موفقیت، حاوی لیستی از Asset است.
      */
-    suspend fun getAssets(networkName: NetworkName): ResultResponse<List<Asset>>
+    suspend fun getAssets(networkId: String): ResultResponse<List<Asset>>
 
     /**
      * لیست تمام کیف پول‌های ذخیره شده در دستگاه (فقط متادیتا) را برمی‌گرداند.
@@ -125,7 +124,7 @@ interface IWalletRepository {
      */
     suspend fun getActiveWalletId(): String?
  
-    suspend fun getTransactionHistory( networkName: NetworkName, userAddress: String): ResultResponse<List<TransactionRecord>>
+    suspend fun getTransactionHistory(networkId: String, userAddress: String): ResultResponse<List<TransactionRecord>>
 
     /**
      * Unified multi-network history (§1.7, `POST /api/mobile/v1/history`) — PROXY mode only.
@@ -139,18 +138,18 @@ interface IWalletRepository {
         limit: Int? = null
     ): ResultResponse<HistoryPage>
 
-    suspend fun getTransactionFeeDetails(networkName: NetworkName, txId: String): ResultResponse<TransactionFeeDetails>
+    suspend fun getTransactionFeeDetails(networkId: String, txId: String): ResultResponse<TransactionFeeDetails>
   
     suspend fun getActiveAddressForNetwork(networkId: String): String?
 
     /**
      * دریافت موجودی دارایی‌ها برای چندین کیف پول در یک شبکه خاص (Batch Fetching)
      * در این متد، آدرس‌ها به صورت داخلی و امن تولید می‌شوند.
-     * @param networkName شبکه مورد نظر
+     * @param networkId شناسهٔ کانونی شبکه مورد نظر (TASK-53)
      * @param walletIds لیست آیدی‌های کیف پول
      * @return مپ از <WalletId, List<Asset>>
      */
-    suspend fun getBalancesForMultipleWallets(networkName: NetworkName, walletIds: List<String>): ResultResponse<Map<String, List<Asset>>>
+    suspend fun getBalancesForMultipleWallets(networkId: String, walletIds: List<String>): ResultResponse<Map<String, List<Asset>>>
  
     /**
      * بروزرسانی وضعیت پشتیبان‌گیری یک کیف پول خاص.

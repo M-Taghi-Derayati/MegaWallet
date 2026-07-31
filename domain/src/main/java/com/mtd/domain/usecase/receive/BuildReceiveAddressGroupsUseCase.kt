@@ -24,7 +24,10 @@ class BuildReceiveAddressGroupsUseCase @Inject constructor(
                 networkName = "EVM Networks",
                 networkFaName = "شبکه‌های اتریومی",
                 address = evmKey.address,
-                iconUrl = networkCatalog.getNetworkInfoByName(NetworkName.SEPOLIA)?.iconUrl,
+                // TASK-53 — قبلاً آیکونِ گروهِ EVM از روی نامِ هاردکدِ SEPOLIA خوانده می‌شد، که هم
+                // به enum گره خورده بود و هم اگر سپولیا ثبت نمی‌شد آیکون خالی می‌ماند.
+                iconUrl = networkCatalog.getNetworkInfoById(evmKey.networkId)?.iconUrl
+                    ?: evmNetworks.firstNotNullOfOrNull { it.iconUrl },
                 supportedNetworkIcons = evmNetworks.mapNotNull { it.iconUrl },
                 supportedNetworkIds = evmNetworks.map { it.id }
             )
@@ -41,11 +44,15 @@ class BuildReceiveAddressGroupsUseCase @Inject constructor(
         val otherKeys = activeWallet.keys.filter { it.networkType != NetworkType.EVM }
         if (otherKeys.isNotEmpty()) {
             val items = otherKeys.map { key ->
-                val networkInfo = networkCatalog.getNetworkInfoByName(key.networkName)
+                // TASK-53 — جست‌وجو با networkId؛ alias ممکن است null باشد.
+                val networkInfo = networkCatalog.getNetworkInfoById(key.networkId)
                 ReceiveUiState.AddressItem(
-                    id = networkInfo?.id ?: key.networkName.name,
-                    symbol = networkInfo?.currencySymbol ?: key.networkName.name,
+                    id = networkInfo?.id ?: key.networkId,
+                    symbol = networkInfo?.currencySymbol
+                        ?: key.networkName?.name
+                        ?: key.networkId,
                     networkName = networkInfo?.name?.name?.replaceFirstChar { it.titlecase() }
+                        ?: networkInfo?.id
                         ?: "Unknown",
                     networkFaName = networkInfo?.faName,
                     address = key.address,

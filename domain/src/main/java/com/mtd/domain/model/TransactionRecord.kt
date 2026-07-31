@@ -10,6 +10,12 @@ sealed class TransactionRecord {
     abstract val pendingDurationSeconds: Long? // For Stepper UI
     abstract val fee: BigInteger?
     abstract val status: TransactionStatus
+    /**
+     * TASK-53 — شناسهٔ کانونیِ شبکه. برای رکوردهای قدیمیِ کش‌شده ممکن است `null` باشد؛
+     * در آن حالت [networkName] به‌عنوان fallback استفاده می‌شود.
+     */
+    abstract val networkId: String?
+    /** TASK-53 — alias قدیمی؛ برای شبکه‌های فقط-در-باندل `null` است. برای تطبیق از [networkId] استفاده کنید. */
     abstract val networkName: NetworkName?
     abstract val fromAddress: String?
     abstract val toAddress: String?
@@ -25,6 +31,7 @@ data class EvmTransaction(
     override val pendingDurationSeconds: Long? = null,
     override val fee: BigInteger,
     override val status: TransactionStatus,
+    override val networkId: String? = null,
     override val networkName: NetworkName? = null,
     override val fromAddress: String,
     override val toAddress: String,
@@ -47,6 +54,7 @@ data class TronTransaction(
     override val pendingDurationSeconds: Long? = null,
     override val fee: BigInteger?, // Often 0 if energy is used, or TRX burned
     override val status: TransactionStatus,
+    override val networkId: String? = null,
     override val networkName: NetworkName? = null,
     override val fromAddress: String,
     override val toAddress: String,
@@ -69,6 +77,7 @@ data class BitcoinTransaction(
     override val pendingDurationSeconds: Long? = null,
     override val fee: BigInteger,
     override val status: TransactionStatus,
+    override val networkId: String? = null,
     override val networkName: NetworkName? = null,
     override val fromAddress: String?,
     override val toAddress: String?,

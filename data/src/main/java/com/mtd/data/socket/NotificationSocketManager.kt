@@ -270,8 +270,11 @@ class NotificationSocketManager @Inject constructor(
      * silently dropped. The **legacy** events stay coarse (whole-wallet) as before.
      */
     private fun dispatchRefreshFor(event: SocketEvent) {
+        // TASK-53 — قبلاً این‌جا `?.name?.name` بود، یعنی شناسه به alias قدیمی تبدیل می‌شد و
+        // برای شبکه‌ای که فقط در باندل هست (alias ندارد) اسکوپ از دست می‌رفت. حالا خودِ
+        // networkId کانونی برگردانده می‌شود؛ قرارداد «ناشناخته ⇒ null ⇒ refresh بدون اسکوپ» حفظ است.
         val refreshEvents = SocketRefreshMapper.refreshEventsFor(event) { networkId ->
-            networkCatalog.getNetworkInfoById(networkId)?.name?.name
+            networkCatalog.getNetworkInfoById(networkId)?.id
         }
         if (refreshEvents.isEmpty()) return
         scope.launch { refreshEvents.forEach { appEventBus.postEvent(it) } }

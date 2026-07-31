@@ -149,7 +149,7 @@ class TronGaslessCoordinator @Inject constructor(
 
             val session = TronGaslessSession(
                 request = request,
-                networkName = network.name,
+                networkId = network.id,
                 userAddress = userAddress,
                 chainId = prepareData.chainId,
                 relayerContract = prepareData.relayerContract,
@@ -182,7 +182,7 @@ class TronGaslessCoordinator @Inject constructor(
         _state.value = GaslessCoordinatorState.AWAITING_APPROVE_CONFIRMATION
 
         return TransactionParams.Tvm(
-            networkName = session.networkName,
+            networkId = session.networkId,
             toAddress = session.relayerContract,
             amount = approveAmount,
             assetId = session.assetId,

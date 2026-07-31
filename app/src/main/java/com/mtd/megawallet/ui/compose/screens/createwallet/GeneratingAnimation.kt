@@ -1367,8 +1367,28 @@ fun BackUpPreview() {
     MaterialTheme {
         Box(modifier = Modifier.padding(16.dp)) {
 
-            val key=listOf<WalletKey>(WalletKey(NetworkName.SHASTA, NetworkType.TVM,0,"","","","TRX"),
-                WalletKey(NetworkName.SHASTA, NetworkType.TVM,0,"","","","TRX"))
+            val key = listOf(
+                WalletKey(
+                    networkId = "shasta_testnet",
+                    networkType = NetworkType.TVM,
+                    chainId = 0,
+                    derivationPath = "",
+                    address = "",
+                    publicKeyHex = "",
+                    symbol = "TRX",
+                    networkName = NetworkName.SHASTA
+                ),
+                WalletKey(
+                    networkId = "shasta_testnet",
+                    networkType = NetworkType.TVM,
+                    chainId = 0,
+                    derivationPath = "",
+                    address = "",
+                    publicKeyHex = "",
+                    symbol = "TRX",
+                    networkName = NetworkName.SHASTA
+                )
+            )
 
 
 

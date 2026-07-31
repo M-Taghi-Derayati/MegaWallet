@@ -1006,7 +1006,7 @@ class SendViewModel @Inject constructor(
         val senderAddress = network?.let { resolvedNetwork ->
             getActiveWalletUseCase()
                 ?.keys
-                ?.firstOrNull { it.networkName == resolvedNetwork.name }
+                ?.firstOrNull { it.networkId == resolvedNetwork.id }
                 ?.address
         }
 
@@ -1022,12 +1022,13 @@ class SendViewModel @Inject constructor(
         runCatching {
             appEventBus.postEvent(
                 AppEvent.TransactionHistoryNeedsRefresh(
-                    networkName = network?.name?.name,
+                    // TASK-53 — هویتِ شبکه در این رویدادها networkId است، نه نامِ enum.
+                    networkName = network?.id,
                     userAddress = senderAddress,
                     pendingTransaction = network?.let {
                         PendingTransactionHint(
                             hash = transactionId,
-                            networkName = it.name.name,
+                            networkName = it.id,
                             networkType = it.networkType.name,
                             fromAddress = senderAddress,
                             toAddress = recipient,
@@ -1171,7 +1172,7 @@ class SendViewModel @Inject constructor(
         }
 
         // Find the corresponding wallet key for this network using the NetworkName enum
-        val senderAddress = wallet.keys.find { it.networkName == network.name }?.address
+        val senderAddress = wallet.keys.find { it.networkId == network.id }?.address
         
         if (senderAddress == null) {
             if (!silent) _feeState.value = FeeState.Error("آدرس فرستنده برای شبکه ${network.name} یافت نشد")

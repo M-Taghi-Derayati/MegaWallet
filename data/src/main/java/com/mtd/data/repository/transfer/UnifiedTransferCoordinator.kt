@@ -58,7 +58,7 @@ class UnifiedTransferCoordinator @Inject constructor(
                     if (connectionModeProvider.currentMode() == BlockchainConnectionMode.PROXY) {
                         // PROXY: forward raw {recipient, amount, assetId}; the relayer builds the
                         // unsigned tx (native-vs-token from the registry) and the client signs it.
-                        sendEvmViaProxy(request, network.name)
+                        sendEvmViaProxy(request, network.id)
                     } else {
                     val gasPrice = request.gasPrice
                         ?: throw IllegalStateException("gasPrice is required for EVM normal transfer")
@@ -67,7 +67,7 @@ class UnifiedTransferCoordinator @Inject constructor(
 
                     val params = if (request.tokenAddress.isNullOrBlank()) {
                         TransactionParams.Evm(
-                            networkName = network.name,
+                            networkId = network.id,
                             to = request.toAddress,
                             amount = request.amount,
                             data = request.data,
@@ -81,7 +81,7 @@ class UnifiedTransferCoordinator @Inject constructor(
                             amount = request.amount
                         )
                         TransactionParams.Evm(
-                            networkName = network.name,
+                            networkId = network.id,
                             to = request.tokenAddress!!,
                             amount = BigInteger.ZERO,
                             data = transferData,
@@ -99,10 +99,10 @@ class UnifiedTransferCoordinator @Inject constructor(
                     if (connectionModeProvider.currentMode() == BlockchainConnectionMode.PROXY) {
                         // PROXY: forward raw {recipient, amount, assetId}; the relayer builds the
                         // unsigned tx (native-vs-TRC20 from the registry) and the client signs it.
-                        sendTvmViaProxy(request, network.name)
+                        sendTvmViaProxy(request, network.id)
                     } else {
                     val params = TransactionParams.Tvm(
-                        networkName = network.name,
+                        networkId = network.id,
                         toAddress = request.toAddress,
                         amount = request.amount,
                         assetId = request.assetId,
@@ -518,10 +518,10 @@ class UnifiedTransferCoordinator @Inject constructor(
      */
     private suspend fun sendEvmViaProxy(
         request: UnifiedTransferRequest,
-        networkName: com.mtd.domain.model.core.NetworkName
+        networkId: String
     ): ResultResponse<String> {
         val params = TransactionParams.Evm(
-            networkName = networkName,
+            networkId = networkId,
             to = request.toAddress,
             amount = request.amount,
             data = null,
@@ -541,10 +541,10 @@ class UnifiedTransferCoordinator @Inject constructor(
      */
     private suspend fun sendTvmViaProxy(
         request: UnifiedTransferRequest,
-        networkName: com.mtd.domain.model.core.NetworkName
+        networkId: String
     ): ResultResponse<String> {
         val params = TransactionParams.Tvm(
-            networkName = networkName,
+            networkId = networkId,
             toAddress = request.toAddress,
             amount = request.amount,
             assetId = resolveProxyAssetId(request),

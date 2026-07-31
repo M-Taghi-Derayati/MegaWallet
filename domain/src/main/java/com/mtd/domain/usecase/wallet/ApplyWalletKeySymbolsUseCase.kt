@@ -9,7 +9,8 @@ class ApplyWalletKeySymbolsUseCase @Inject constructor(
 ) {
     operator fun invoke(keys: List<WalletKey>): List<WalletKey> {
         return keys.onEach { key ->
-            val networkInfo = networkCatalog.getNetworkInfoByName(key.networkName)
+            // TASK-53 — با شناسهٔ کانونی جست‌وجو می‌شود تا شبکه‌های فقط-در-باندل هم نماد بگیرند.
+            val networkInfo = networkCatalog.getNetworkInfoById(key.networkId)
             key.symbol = (networkInfo?.currencySymbol ?: "ETH").lowercase()
         }
     }

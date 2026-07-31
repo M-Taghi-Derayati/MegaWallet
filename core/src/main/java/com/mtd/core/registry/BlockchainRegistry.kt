@@ -45,7 +45,14 @@ class BitcoinNetworkFactory : NetworkFactory {
     }
 
     override fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork {
-        val networkName = NetworkName.valueOf(config.name.uppercase())
+        // TASK-53 — زنجیره‌های UTXO هنوز به پارامترهای bitcoinjِ مخصوصِ خودشان نیاز دارند، پس
+        // alias برای این خانواده اجباری است. اگر ناشناخته بود شبکه ساخته نمی‌شود (خطا پرتاب
+        // می‌شود و رجیستری آن را رد می‌کند) — برخلاف EVM که کاملاً داده‌محور است.
+        val networkName = NetworkName.fromConfigName(config.name)
+            ?: throw IllegalArgumentException(
+                "UTXO network '${config.id}' has no known NetworkName alias; " +
+                    "a new UTXO chain still needs bitcoinj parameters in code."
+            )
         val params = UtxoNetworkParametersResolver.resolve(networkName)
         return BitcoinNetwork(config, params)
     }
@@ -57,7 +64,14 @@ class UtxoNetworkFactory : NetworkFactory {
     }
 
     override fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork {
-        val networkName = NetworkName.valueOf(config.name.uppercase())
+        // TASK-53 — زنجیره‌های UTXO هنوز به پارامترهای bitcoinjِ مخصوصِ خودشان نیاز دارند، پس
+        // alias برای این خانواده اجباری است. اگر ناشناخته بود شبکه ساخته نمی‌شود (خطا پرتاب
+        // می‌شود و رجیستری آن را رد می‌کند) — برخلاف EVM که کاملاً داده‌محور است.
+        val networkName = NetworkName.fromConfigName(config.name)
+            ?: throw IllegalArgumentException(
+                "UTXO network '${config.id}' has no known NetworkName alias; " +
+                    "a new UTXO chain still needs bitcoinj parameters in code."
+            )
         val params = UtxoNetworkParametersResolver.resolve(networkName)
         return BitcoinNetwork(config, params)
     }
@@ -287,14 +301,26 @@ class BlockchainRegistry @Inject constructor() : INetworkCatalog {
 
         configs
             .filter { config -> config.isTestnet == true }
-            .forEach { config ->
-            val networkType =
-                runCatching { NetworkType.valueOf(config.networkType.uppercase()) }.getOrNull()
-                    ?: return@forEach
-            val factory = networkFactories.firstOrNull { it.supports(networkType, config) }
-            val network = factory?.create(networkType, config)
-            network?.let { registerNetwork(it) }
-        }
+            .forEach { config -> registerFromConfig(config) }
+    }
+
+    /**
+     * TASK-53 — ساختِ یک شبکه از روی کانفیگ، با ایزوله‌سازیِ خطا.
+     *
+     * یک ورودیِ خرابِ منفرد (خانوادهٔ ناشناخته، یا زنجیرهٔ UTXO بدون پارامترهای bitcoinj) فقط
+     * خودش رد می‌شود و بقیهٔ کاتالوگ سالم بار می‌آید. قبلاً `NetworkName.valueOf` روی هر نامِ
+     * ناشناخته استثنا پرتاب می‌کرد و کلِ بارگذاری را می‌ترکاند.
+     *
+     * @return شبکهٔ ثبت‌شده، یا `null` اگر ورودی قابل ساخت نبود.
+     */
+    private fun registerFromConfig(config: NetworkConfig): BlockchainNetwork? {
+        val networkType =
+            runCatching { NetworkType.valueOf(config.networkType.uppercase()) }.getOrNull()
+                ?: return null
+        val factory = networkFactories.firstOrNull { it.supports(networkType, config) } ?: return null
+        val network = runCatching { factory.create(networkType, config) }.getOrNull() ?: return null
+        registerNetwork(network)
+        return network
     }
 
     private fun indexAddressRegex(configs: List<NetworkConfig>) {

@@ -69,8 +69,9 @@ class ChainDataSourceFactory @Inject constructor(
                 }
 
                 override fun create(network: BlockchainNetwork): IChainDataSource {
-                    val networkParams = UtxoNetworkParametersResolver.resolve(network.name)
-                    return BitcoinDataSource(network, retrofitBuilder, networkParams,okHttpClient)
+                    return BitcoinDataSource(
+                        network, retrofitBuilder, utxoParamsFor(network), okHttpClient
+                    )
                 }
             },
             object : ChainDataSourceProvider {
@@ -110,7 +111,7 @@ class ChainDataSourceFactory @Inject constructor(
                         network.networkType == NetworkType.BITCOIN ||
                         network.networkType == NetworkType.UTXO
                     ) {
-                        BitcoinjUtxoTxBuilder(network, UtxoNetworkParametersResolver.resolve(network.name))
+                        BitcoinjUtxoTxBuilder(network, utxoParamsFor(network))
                     } else {
                         null
                     }
@@ -119,6 +120,23 @@ class ChainDataSourceFactory @Inject constructor(
             }
         )
     }
+
+    /**
+     * TASK-53 — پارامترهای bitcoinj برای یک زنجیرهٔ UTXO.
+     *
+     * این‌جا **نباید** هیچ پیش‌فرضی وجود داشته باشد: اگر alias نامعلوم باشد و ما بی‌صدا
+     * روی بیت‌کوینِ mainnet بیفتیم، آدرس‌ها با پارامترهای زنجیرهٔ اشتباه ساخته و اعتبارسنجی
+     * می‌شوند — یعنی ارسال به آدرسی که کاربر کنترلش را ندارد. خانوادهٔ UTXO هنوز داده‌محور
+     * نیست و زنجیرهٔ جدیدِ آن به کد نیاز دارد، پس بلند و صریح شکست می‌خوریم.
+     */
+    private fun utxoParamsFor(network: BlockchainNetwork) =
+        UtxoNetworkParametersResolver.resolve(
+            network.name ?: throw IllegalStateException(
+                "UTXO network '${network.id}' has no NetworkName alias, so its bitcoinj " +
+                    "parameters are unknown. A new UTXO chain requires code; refusing to " +
+                    "guess and derive addresses on the wrong chain."
+            )
+        )
 
     fun create(chainId: Long): IChainDataSource {
         val network = blockchainRegistry.getNetworkByChainId(chainId)

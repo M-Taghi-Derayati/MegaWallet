@@ -21,9 +21,10 @@ class BuildHistoryNetworkOptionsUseCase @Inject constructor(
         now: Long,
         staleAfterMs: Long
     ): List<HistoryNetworkOption> {
+        // TASK-53 — گروه‌بندی و شناسهٔ گزینه‌ها با networkId کانونی، نه با alias قدیمی.
         val sources = keys
-            .distinctBy { key -> key.networkName.name to key.address.lowercase(Locale.US) }
-        val sourceIds = sources.map { key -> optionId(key.networkName.name, key.address) }
+            .distinctBy { key -> key.networkId to key.address.lowercase(Locale.US) }
+        val sourceIds = sources.map { key -> optionId(key.networkId, key.address) }
 
         val resolvedSelectedId = selectedId
             ?.takeIf { id -> id == HISTORY_ALL_NETWORKS_OPTION_ID || id in sourceIds }
@@ -51,15 +52,16 @@ class BuildHistoryNetworkOptionsUseCase @Inject constructor(
         )
 
         val networkOptions = sources.mapNotNull { key ->
-            val network = networkCatalog.getNetworkInfoByName(key.networkName) ?: return@mapNotNull null
+            val network = networkCatalog.getNetworkInfoById(key.networkId) ?: return@mapNotNull null
             val nativeAsset = assetCatalog.getAssetConfigsForNetwork(network.id)
                 .firstOrNull { it.contractAddress == null }
-            val id = optionId(key.networkName.name, key.address)
+            val id = optionId(key.networkId, key.address)
             val lastUpdatedAt = lastRefreshTimes[id]
 
             HistoryNetworkOption(
                 id = id,
-                networkName = key.networkName.name,
+                // نمایشی است، نه هویت — هویت در [HistoryNetworkOption.networkId] است.
+                networkName = network.name?.name ?: network.id,
                 networkFaName = network.faName,
                 networkId = network.id,
                 symbol = key.symbol ?: nativeAsset?.symbol ?: network.currencySymbol,

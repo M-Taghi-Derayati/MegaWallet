@@ -47,7 +47,8 @@ data class EvmApproveRequirement(
 
 data class EvmGaslessSession(
     val request: EvmGaslessTransferRequest,
-    val networkName: NetworkName,
+    /** TASK-53 — شناسهٔ کانونیِ شبکه (قبلاً NetworkName بود). */
+    val networkId: String,
     val userAddress: String,
     val chainId: Long,
     val assetId: String,

@@ -13,9 +13,11 @@ interface INetworkCatalog {
 }
 
 data class NetworkInfo(
+    /** TASK-53 — هویتِ کانونی. */
     val id: String,
     val networkType: NetworkType,
-    val name: NetworkName,
+    /** TASK-53 — alias قدیمی؛ برای شبکه‌های فقط-در-باندل `null`. */
+    val name: NetworkName?,
     val currencySymbol: String,
     val iconUrl: String?,
     val faName: String?,

@@ -27,7 +27,8 @@ data class TronApproveRequirement(
 
 data class TronGaslessSession(
     val request: TronGaslessTransferRequest,
-    val networkName: NetworkName,
+    /** TASK-53 — شناسهٔ کانونیِ شبکه (قبلاً NetworkName بود). */
+    val networkId: String,
     val userAddress: String,
     val chainId: Long,
     val assetId:String,

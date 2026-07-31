@@ -182,7 +182,7 @@ class EvmGaslessCoordinatorTest {
                 feeAmount = BigInteger("1"),
                 deadlineEpochSeconds = 1_900_000_000L
             ),
-            networkName = NetworkName.SEPOLIA,
+            networkId = "sepolia",
             userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
             chainId = 11155111L,
             assetId = "USDC-SEPOLIA",
@@ -322,7 +322,7 @@ class EvmGaslessCoordinatorTest {
                 amount = BigInteger("100"),
                 permit2Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
             ),
-            networkName = NetworkName.SEPOLIA,
+            networkId = "sepolia",
             userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
             chainId = 11155111L,
             assetId = "USDC-SEPOLIA",
@@ -362,7 +362,7 @@ class EvmGaslessCoordinatorTest {
                 amount = BigInteger("100"),
                 permit2Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
             ),
-            networkName = NetworkName.SEPOLIA,
+            networkId = "sepolia",
             userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
             chainId = 11155111L,
             assetId = "USDC-SEPOLIA",
@@ -402,7 +402,7 @@ class EvmGaslessCoordinatorTest {
             feeAmount = BigInteger("1"),
             deadlineEpochSeconds = 1_900_000_000L
         ),
-        networkName = NetworkName.SEPOLIA,
+        networkId = "sepolia",
         userAddress = "0x17b51d4928668B50065C589bAfBC32736f196216",
         chainId = 11155111L,
         assetId = "USDC-SEPOLIA",

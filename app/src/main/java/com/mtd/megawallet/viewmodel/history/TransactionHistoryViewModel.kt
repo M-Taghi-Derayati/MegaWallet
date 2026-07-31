@@ -60,7 +60,8 @@ import java.math.BigDecimal
 import java.util.Locale
 import javax.inject.Inject
 
-private const val HISTORY_CACHE_SCHEMA_VERSION = 3
+// TASK-53 — v4: کلیدهای کش و شناسهٔ گزینه‌ها حالا networkId را کد می‌کنند، نه NetworkName.
+private const val HISTORY_CACHE_SCHEMA_VERSION = 4
 private const val HISTORY_NETWORK_STALE_MS = 10 * 60 * 1000L
 private const val HISTORY_PAGE_LIMIT = 20
 private const val MAX_HISTORY_PAIRS = 25
@@ -181,8 +182,9 @@ class TransactionHistoryViewModel @Inject constructor(
             return
         }
 
+        // TASK-53 — هویت از networkId می‌آید؛ networkName فقط برای نمایش است.
         refresh(
-            networkNameStr = selected.networkName.takeIf { it.isNotBlank() } ?: fallbackNetworkNameStr,
+            networkNameStr = selected.networkId.takeIf { it.isNotBlank() } ?: fallbackNetworkNameStr,
             userAddress = selected.address.takeIf { it.isNotBlank() } ?: fallbackUserAddress
         )
     }
@@ -194,7 +196,7 @@ class TransactionHistoryViewModel @Inject constructor(
         if (option.isAllNetworks) {
             loadHistory(null, null, forceRefresh = false)
         } else {
-            loadHistory(option.networkName, option.address, forceRefresh = false)
+            loadHistory(option.networkId, option.address, forceRefresh = false)
         }
     }
 
@@ -212,7 +214,7 @@ class TransactionHistoryViewModel @Inject constructor(
         val fallbackSource = selectedNetworkSource()
         val explicitNetwork = networkNameStr?.trim().orEmpty().ifBlank { null }
         val explicitAddress = userAddress?.trim().orEmpty().ifBlank { null }
-        val normalizedNetwork = explicitNetwork ?: fallbackSource?.takeUnless { it.isAllNetworks }?.networkName
+        val normalizedNetwork = explicitNetwork ?: fallbackSource?.takeUnless { it.isAllNetworks }?.networkId
         val normalizedAddress = explicitAddress ?: fallbackSource?.takeUnless { it.isAllNetworks }?.address
         currentNetworkNameStr = normalizedNetwork
         currentUserAddress = normalizedAddress
@@ -242,7 +244,7 @@ class TransactionHistoryViewModel @Inject constructor(
             // Build the (networkId,address) pair-set + matching refreshing markers.
             val wallet = if (isAll) getActiveWalletUseCase() else null
             val allKeys = wallet?.keys
-                ?.distinctBy { key -> key.networkName.name to key.address.lowercase(Locale.US) }
+                ?.distinctBy { key -> key.networkId to key.address.lowercase(Locale.US) }
                 .orEmpty()
             val pairs = if (isAll) {
                 buildHistoryPairs(allKeys)
@@ -252,7 +254,7 @@ class TransactionHistoryViewModel @Inject constructor(
             currentPairs = pairs
 
             val refreshingIds = if (isAll) {
-                allKeys.map { optionId(it.networkName.name, it.address) } + HISTORY_ALL_NETWORKS_OPTION_ID
+                allKeys.map { optionId(it.networkId, it.address) } + HISTORY_ALL_NETWORKS_OPTION_ID
             } else {
                 listOfNotNull(optionIdFor(normalizedNetwork, normalizedAddress))
             }
@@ -371,17 +373,16 @@ class TransactionHistoryViewModel @Inject constructor(
         }
     }
 
-    private fun buildSinglePair(networkName: String?, address: String?): List<HistoryAddress> {
-        if (networkName.isNullOrBlank() || address.isNullOrBlank()) return emptyList()
-        val resolved = NetworkName.entries.find { it.name.equals(networkName, ignoreCase = true) } ?: return emptyList()
-        val networkId = networkCatalog.getNetworkInfoByName(resolved)?.id ?: return emptyList()
-        return listOf(HistoryAddress(networkId, address))
+    private fun buildSinglePair(networkId: String?, address: String?): List<HistoryAddress> {
+        if (networkId.isNullOrBlank() || address.isNullOrBlank()) return emptyList()
+        // TASK-53 — شناسه مستقیماً networkId است؛ دیگر از enum عبور نمی‌کند.
+        val resolved = networkCatalog.getNetworkInfoById(networkId)?.id ?: return emptyList()
+        return listOf(HistoryAddress(resolved, address))
     }
 
     private fun buildHistoryPairs(keys: List<WalletKey>): List<HistoryAddress> {
         val pairs = keys.mapNotNull { key ->
-            val networkId = networkCatalog.getNetworkInfoByName(key.networkName)?.id ?: return@mapNotNull null
-            HistoryAddress(networkId, key.address)
+            HistoryAddress(key.networkId, key.address)
         }
         if (pairs.size > MAX_HISTORY_PAIRS) {
             Timber.w(
@@ -406,7 +407,7 @@ class TransactionHistoryViewModel @Inject constructor(
                 _errorMessage.value = "No active wallet selected"
                 return
             }
-            val keys = wallet.keys.distinctBy { key -> key.networkName.name to key.address.lowercase(Locale.US) }
+            val keys = wallet.keys.distinctBy { key -> key.networkId to key.address.lowercase(Locale.US) }
             val aggregatedResults = mutableListOf<TransactionRecord>()
             val resultMutex = Mutex()
 
@@ -429,13 +430,14 @@ class TransactionHistoryViewModel @Inject constructor(
             markNetworksUpdated(refreshingIds)
             cacheStore.put(cacheKey, finalHistory.toTypedArray())
         } else {
-            val networkName = NetworkName.entries.find { it.name.equals(normalizedNetwork, ignoreCase = true) }
-            if (networkName == null || normalizedAddress == null) {
+            // TASK-53 — normalizedNetwork همان networkId است.
+            val networkId = normalizedNetwork?.takeIf { networkCatalog.getNetworkInfoById(it) != null }
+            if (networkId == null || normalizedAddress == null) {
                 _transactions.value = emptyList()
                 _errorMessage.value = "Network not found"
                 return
             }
-            when (val result = getTransactionHistoryUseCase(networkName, normalizedAddress)) {
+            when (val result = getTransactionHistoryUseCase(networkId, normalizedAddress)) {
                 is ResultResponse.Success -> {
                     val history = normalizeTransactionHistoryUseCase(result.data, normalizedAddress)
                     _transactions.value = history
@@ -591,16 +593,20 @@ class TransactionHistoryViewModel @Inject constructor(
     /** Only surface a local pending in views it belongs to: all-networks, or its own network. */
     private fun pendingMatchesCurrentFilter(rec: TransactionRecord): Boolean {
         val net = currentNetworkNameStr ?: return true // "all networks" view shows every pending
-        return rec.networkName?.name?.equals(net, ignoreCase = true) == true
+        return rec.networkId?.equals(net, ignoreCase = true) == true
     }
 
     private fun applyHistoryRefreshEvent(event: AppEvent.TransactionHistoryNeedsRefresh) {
-        val networkName = event.networkName?.let { raw ->
-            NetworkName.entries.find { it.name.equals(raw, ignoreCase = true) }
+        // TASK-53 — سرور ممکن است networkId بفرستد یا نامِ قدیمی؛ هر دو به networkId کانونی
+        // تبدیل می‌شوند. اگر هیچ‌کدام در کاتالوگ نبود، به refresh عمومی برمی‌گردیم.
+        val networkId = event.networkName?.trim()?.ifBlank { null }?.let { raw ->
+            networkCatalog.getNetworkInfoById(raw)?.id
+                ?: NetworkName.fromConfigName(raw)
+                    ?.let { alias -> networkCatalog.getNetworkInfoByName(alias)?.id }
         }
         val address = event.userAddress?.trim().orEmpty().ifBlank { null }
 
-        if (networkName == null || address == null) {
+        if (networkId == null || address == null) {
             refresh(currentNetworkNameStr, currentUserAddress)
             return
         }
@@ -612,11 +618,12 @@ class TransactionHistoryViewModel @Inject constructor(
                 val key = getActiveWalletUseCase()
                     ?.keys
                     ?.firstOrNull {
-                        it.networkName == networkName &&
+                        it.networkId == networkId &&
                             it.address.equals(address, ignoreCase = true)
                     }
                     ?: WalletKey(
-                        networkName = networkName,
+                        networkId = networkId,
+                        networkName = networkCatalog.getNetworkInfoById(networkId)?.name,
                         networkType = NetworkType.OTHER,
                         chainId = null,
                         derivationPath = null,
@@ -635,7 +642,7 @@ class TransactionHistoryViewModel @Inject constructor(
                 val walletId = getActiveWalletIdUseCase() ?: "unknown"
                 val mergedForNetwork = merged.filter { matchesWalletKey(it, key) }
                 cacheStore.put(
-                    getHistoryCacheKey(walletId, networkName.name, address),
+                    getHistoryCacheKey(walletId, networkId, address),
                     mergedForNetwork.toTypedArray()
                 )
 
@@ -748,12 +755,12 @@ class TransactionHistoryViewModel @Inject constructor(
         // Per-address fan-out: one chain failing must not blank the whole merged list, and the
         // stale-warning banner already tells the user the view may be incomplete.
         return try {
-            when (val result = getTransactionHistoryUseCase(key.networkName, key.address)) {
+            when (val result = getTransactionHistoryUseCase(key.networkId, key.address)) {
                 is ResultResponse.Success -> normalizeTransactionHistoryUseCase(result.data, key.address)
                 is ResultResponse.Error -> {
                     reportError(
                         throwable = result.exception,
-                        userAction = "fetchHistoryFor(${key.networkName})",
+                        userAction = "fetchHistoryFor(${key.networkId})",
                         surface = ErrorSurface.SILENT,
                         severity = ErrorSeverity.LOW
                     )
@@ -765,7 +772,7 @@ class TransactionHistoryViewModel @Inject constructor(
         } catch (e: Exception) {
             reportError(
                 throwable = e,
-                userAction = "fetchHistoryFor(${key.networkName})",
+                userAction = "fetchHistoryFor(${key.networkId})",
                 surface = ErrorSurface.SILENT,
                 severity = ErrorSeverity.LOW
             )
@@ -788,7 +795,10 @@ class TransactionHistoryViewModel @Inject constructor(
     }
 
     private fun matchesWalletKey(record: TransactionRecord, key: WalletKey): Boolean {
-        if (record.networkName != key.networkName) return false
+        // TASK-53 — تطبیق با هویت کانونی؛ رکوردهای قدیمیِ کش‌شده networkId ندارند و از alias کمک می‌گیرند.
+        if (record.networkId != null) {
+            if (!record.networkId.equals(key.networkId, ignoreCase = true)) return false
+        } else if (record.networkName != key.networkName) return false
         val address = key.address.lowercase(Locale.US)
         return record.fromAddress?.lowercase(Locale.US) == address ||
             record.toAddress?.lowercase(Locale.US) == address
@@ -826,7 +836,12 @@ class TransactionHistoryViewModel @Inject constructor(
 
     fun loadTransactionDetails(transaction: TransactionRecord) {
         if (transaction !is TronTransaction) return
-        val networkName = transaction.networkName ?: return
+        // TASK-53 — use-case حالا با networkId کار می‌کند. alias فقط برای رکوردهای کشِ قدیمی است و
+        // باید از طریق کاتالوگ به id ترجمه شود؛ خودِ ثابتِ enum یک شناسهٔ رجیستری نیست
+        // (`getNetworkById` یک lookup ساده روی `config.id` است، مثل "tron" نه "TRON").
+        val networkId = transaction.networkId
+            ?: transaction.networkName?.let { networkCatalog.getNetworkInfoByName(it)?.id }
+            ?: return
         val key = transactionDetailKey(transaction) ?: return
         if (_transactionFeeDetails.value.containsKey(key) ||
             _transactionFeeDetailsLoading.value.contains(key)
@@ -837,7 +852,7 @@ class TransactionHistoryViewModel @Inject constructor(
         _transactionFeeDetailsLoading.update { it + key }
         launchSafe {
             try {
-                when (val result = getTransactionFeeDetailsUseCase(networkName, transaction.hash)) {
+                when (val result = getTransactionFeeDetailsUseCase(networkId, transaction.hash)) {
                     is ResultResponse.Success -> {
                         _transactionFeeDetails.update { it + (key to result.data) }
                         applyTransactionFeeDetails(key, result.data)
@@ -943,7 +958,7 @@ class TransactionHistoryViewModel @Inject constructor(
     }
 
     private fun transactionDetailKey(transaction: TransactionRecord): String? {
-        val networkName = transaction.networkName?.name ?: return null
+        val networkName = transaction.networkId ?: transaction.networkName?.name ?: return null
         val hash = transaction.hash.takeIf { it.isNotBlank() } ?: return null
         return "${networkName.lowercase(Locale.US)}:${hash.lowercase(Locale.US)}"
     }

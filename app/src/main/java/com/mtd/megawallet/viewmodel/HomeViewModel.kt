@@ -4,8 +4,8 @@ import com.mtd.core.manager.ErrorManager
 import com.mtd.core.manager.ErrorSeverity
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.core.utils.FiatConversion
-import com.mtd.core.utils.withFiatBalances
 import com.mtd.core.utils.formatWithSeparator
+import com.mtd.core.utils.withFiatBalances
 import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.IAppCacheStore.Companion.ASSETS_TTL
 import com.mtd.domain.interfaceRepository.IAppEventBus
@@ -13,12 +13,12 @@ import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
-import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.CachedAssetBalance
-import com.mtd.domain.model.HomeUiState
+import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.FiatCurrency
+import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.NetworkShare
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.assets.AssetConfig
@@ -388,7 +388,7 @@ class HomeViewModel @Inject constructor(
 
             val jobs = networkCatalog.getAllNetworkInfos().map { network ->
                 launchSafe {
-                    val result = getBalancesForMultipleWalletsUseCase(network.name, listOf(wallet.id))
+                    val result = getBalancesForMultipleWalletsUseCase(network.id, listOf(wallet.id))
                     if (result is ResultResponse.Success) {
                         val walletAssets = result.data[wallet.id] ?: return@launchSafe
                         val assetsInNetwork = assetCatalog.getAssetConfigsForNetwork(network.id)
@@ -440,7 +440,7 @@ class HomeViewModel @Inject constructor(
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
 
             try {
-                when (val result = getBalancesForMultipleWalletsUseCase(network.name, listOf(wallet.id))) {
+                when (val result = getBalancesForMultipleWalletsUseCase(network.id, listOf(wallet.id))) {
                     is ResultResponse.Success -> {
                         val walletAssets = result.data[wallet.id].orEmpty()
                         targetConfigs.forEach { config ->
@@ -538,6 +538,7 @@ class HomeViewModel @Inject constructor(
                     iconUrl = assetConfig.iconUrl,
                     balance = BalanceFormatter.formatBalance(balance, assetConfig.decimals),
                     balanceRaw = balance,
+                    balanceUsdt = currentPrice.toString(),
                     priceUsdRaw = currentPrice,
                     priceChange24h = currentChange,
                     decimals = assetConfig.decimals,
@@ -640,6 +641,7 @@ class HomeViewModel @Inject constructor(
                         symbol = symbol, networkName = finalNetworkName, iconUrl = first.iconUrl,
                         balance = BalanceFormatter.formatBalance(totalBal, first.decimals),
                         balanceRaw = totalBal, priceUsdRaw = first.priceUsdRaw, priceChange24h = first.priceChange24h,
+                        balanceUsdt = first.balanceUsdt,
                         decimals = first.decimals, isNativeToken = first.isNativeToken, isGroupHeader = true, groupAssets = assets, networkDistribution = dist
                     )
                 } else assets.first()

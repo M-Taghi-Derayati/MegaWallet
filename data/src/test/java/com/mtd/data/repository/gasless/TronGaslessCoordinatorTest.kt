@@ -111,7 +111,7 @@ class TronGaslessCoordinatorTest {
                 assetId = "USDT-TRON",
                 amount = BigInteger("100")
             ),
-            networkName = NetworkName.SHASTA,
+            networkId = "shasta_testnet",
             userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             chainId = 2494104990L,
             assetId = "USDT-TRON",
@@ -129,7 +129,7 @@ class TronGaslessCoordinatorTest {
             approveAmount = BigInteger("250")
         )
 
-        assertEquals(NetworkName.SHASTA, tx.networkName)
+        assertEquals("shasta_testnet", tx.networkId)
         assertEquals("approve(address,uint256)", tx.contractFunction)
         assertTrue(!tx.contractParameter.isNullOrBlank())
         assertEquals(BigInteger("250"), tx.amount)
@@ -185,7 +185,7 @@ class TronGaslessCoordinatorTest {
                 feeAmount = BigInteger("1"),
                 deadlineEpochSeconds = 1_900_000_000L
             ),
-            networkName = NetworkName.SHASTA,
+            networkId = "shasta_testnet",
             userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             chainId = 2494104990L,
             assetId = "USDT-TRON",
@@ -264,7 +264,7 @@ class TronGaslessCoordinatorTest {
                 feeAmount = BigInteger("1"),
                 deadlineEpochSeconds = 1_900_000_000L
             ),
-            networkName = NetworkName.SHASTA,
+            networkId = "shasta_testnet",
             userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             chainId = 2494104990L,
             assetId = "USDT-TRON",
@@ -318,7 +318,7 @@ class TronGaslessCoordinatorTest {
                 assetId = "USDT-TRON",
                 amount = BigInteger("100")
             ),
-            networkName = NetworkName.SHASTA,
+            networkId = "shasta_testnet",
             userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             chainId = 2494104990L,
             assetId = "USDT-TRON",
@@ -370,7 +370,7 @@ class TronGaslessCoordinatorTest {
                 assetId = "USDT-TRON",
                 amount = BigInteger("100")
             ),
-            networkName = NetworkName.SHASTA,
+            networkId = "shasta_testnet",
             userAddress = "TGzz8gjYiYRqpfmDwnLxfgPuLVNmpCswVp",
             chainId = 2494104990L,
             assetId = "USDT-TRON",

@@ -51,8 +51,10 @@ class SubscribeMonitoringUseCaseTest {
             userPreferences = userPreferences
         )
 
-        every { networkCatalog.getNetworkInfoByName(any()) } answers {
-            networkInfo(firstArg())
+        // TASK-53 — جست‌وجو با networkId انجام می‌شود؛ fixture همان قرارداد id = نامِ کوچک‌شده را دارد.
+        every { networkCatalog.getNetworkInfoById(any()) } answers {
+            val id = firstArg<String>()
+            NetworkName.fromConfigName(id)?.let { networkInfo(it) }
         }
         coEvery { monitoringRepository.subscribe(any()) } returns
             ResultResponse.Success(MonitoringSubscribeResult(0, 0))
@@ -114,7 +116,7 @@ class SubscribeMonitoringUseCaseTest {
 
     @Test
     fun `drops keys whose network is not in the catalog`() = runTest {
-        every { networkCatalog.getNetworkInfoByName(NetworkName.DOGE) } returns null
+        every { networkCatalog.getNetworkInfoById("doge") } returns null
         activeWallet(wallet("w1", key(NetworkName.SEPOLIA, "0xA"), key(NetworkName.DOGE, "Dx")))
 
         val captured = slot<List<MonitoringSubscription>>()
@@ -164,6 +166,7 @@ class SubscribeMonitoringUseCaseTest {
         Wallet(id = id, hasMnemonic = true, keys = keys.toList())
 
     private fun key(network: NetworkName, address: String) = WalletKey(
+        networkId = network.name.lowercase(),
         networkName = network,
         networkType = NetworkType.EVM,
         chainId = null,

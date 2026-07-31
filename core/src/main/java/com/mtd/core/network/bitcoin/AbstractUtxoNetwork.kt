@@ -74,6 +74,7 @@ abstract class AbstractUtxoNetwork(
         val publicKeyHex = deterministicKey.pubKey.toHexString()
 
         return WalletKey(
+            networkId = id,
             networkName = name,
             networkType = networkType,
             chainId = chainId,
@@ -116,6 +117,7 @@ abstract class AbstractUtxoNetwork(
         val publicKeyHex = key.pubKey.toHexString()
 
         return WalletKey(
+            networkId = id,
             networkName = name,
             networkType = networkType,
             chainId = chainId,

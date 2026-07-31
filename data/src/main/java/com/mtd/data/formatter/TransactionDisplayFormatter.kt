@@ -237,11 +237,20 @@ class TransactionDisplayFormatter @Inject constructor(
         }
     }
 
+    /**
+     * TASK-53 — شبکهٔ یک رکورد را با هویتِ کانونی پیدا می‌کند و فقط در نبودِ آن به alias قدیمی
+     * برمی‌گردد (رکوردهای کش‌شدهٔ قبل از این تغییر `networkId` ندارند).
+     */
+    private fun networkOf(transaction: TransactionRecord) =
+        transaction.networkId?.let { networkCatalog.getNetworkInfoById(it) }
+            ?: transaction.networkName?.let { networkCatalog.getNetworkInfoByName(it) }
+
     fun networkDisplayName(transaction: TransactionRecord): String {
-        return networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "Network")
+        return networkOf(transaction)
             ?.faName
             ?.takeIf { it.isNotBlank() }
             ?: transaction.networkName?.name
+            ?: transaction.networkId
             ?: "Network"
     }
 
@@ -279,16 +288,14 @@ class TransactionDisplayFormatter @Inject constructor(
     }
 
     fun historyAssetTitle(transaction: TransactionRecord): String {
-        val network = networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "Asset")
-        val networkId = network?.id.orEmpty()
+        val networkId = networkOf(transaction)?.id ?: transaction.networkId.orEmpty()
         val symbol = transactionSymbol(transaction)
         val contractAddr = contractAddressOf(transaction)
         return resolveAssetName(networkId, contractAddr, symbol)
     }
 
     fun historyAssetIconUrl(transaction: TransactionRecord): String? {
-        val network = networkCatalog.getNetworkInfoByName(transaction.networkName ?: return null)
-        val networkId = network?.id.orEmpty()
+        val networkId = networkOf(transaction)?.id ?: transaction.networkId.orEmpty()
         val symbol = transactionSymbol(transaction)
         val contractAddr = contractAddressOf(transaction)
         return resolveAssetConfig(networkId, contractAddr, symbol)?.symbol
@@ -306,7 +313,7 @@ class TransactionDisplayFormatter @Inject constructor(
      * string that a path was then appended to.
      */
     fun buildExplorerUrl(transaction: TransactionRecord): String? {
-        val network = networkCatalog.getNetworkInfoByName(transaction.networkName ?: return null) ?: return null
+        val network = networkOf(transaction) ?: return null
         val hash = transaction.hash.takeIf { it.isNotBlank() } ?: return null
 
         network.explorerTxUrl?.takeIf { it.isNotBlank() }?.let { template ->
@@ -337,7 +344,7 @@ class TransactionDisplayFormatter @Inject constructor(
     }
 
     fun networkId(transaction: TransactionRecord): String {
-        return networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "")?.id ?: ""
+        return networkOf(transaction)?.id ?: transaction.networkId.orEmpty()
     }
 
     // ---- private helpers ----
@@ -374,24 +381,24 @@ class TransactionDisplayFormatter @Inject constructor(
                 if (!forFee && transaction.tokenTransferDetails != null) {
                     transaction.tokenTransferDetails!!.tokenSymbol
                 } else {
-                    networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "")?.currencySymbol.orEmpty()
+                    networkOf(transaction)?.currencySymbol.orEmpty()
                 }
             }
             is TronTransaction -> {
                 if (!forFee && transaction.tokenTransferDetails != null) {
                     transaction.tokenTransferDetails!!.tokenSymbol
                 } else {
-                    networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "")?.currencySymbol.orEmpty()
+                    networkOf(transaction)?.currencySymbol.orEmpty()
                 }
             }
             is BitcoinTransaction -> {
-                networkCatalog.getNetworkInfoByName(transaction.networkName ?: return "")?.currencySymbol.orEmpty()
+                networkOf(transaction)?.currencySymbol.orEmpty()
             }
         }
     }
 
     private fun networkDecimals(transaction: TransactionRecord): Int {
-        return networkCatalog.getNetworkInfoByName(transaction.networkName ?: return 0)?.decimals ?: 0
+        return networkOf(transaction)?.decimals ?: 0
     }
 
     private fun contractAddressOf(transaction: TransactionRecord): String? {

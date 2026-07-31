@@ -12,7 +12,6 @@ import com.mtd.domain.model.Asset
 import com.mtd.domain.model.CachedAssetBalance
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.assets.AssetPriceDto
-import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.Wallet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -104,12 +103,12 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
             networkCatalog.getAllNetworkInfos()
                 .map { network ->
                     async {
-                        val result = walletRepository.getBalancesForMultipleWallets(network.name, walletsToFetch)
+                        val result = walletRepository.getBalancesForMultipleWallets(network.id, walletsToFetch)
                         if (result is ResultResponse.Success) {
                             withContext(Dispatchers.IO) {
                                 result.data.forEach { (walletId, assets) ->
                                     assets.forEach { asset ->
-                                        updateAssetBalanceCache(walletId, asset, network.name)
+                                        updateAssetBalanceCache(walletId, asset, network.id)
                                     }
                                 }
                             }
@@ -142,9 +141,8 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
     private suspend fun updateAssetBalanceCache(
         walletId: String,
         asset: Asset,
-        networkName: NetworkName
+        networkId: String
     ) {
-        val networkId = networkCatalog.getNetworkInfoByName(networkName)?.id ?: return
         val assetConfig = assetCatalog.getAssetConfigsForNetwork(networkId).find {
             if (it.contractAddress == null) {
                 asset.contractAddress == null && it.symbol.equals(asset.symbol, true)

@@ -12,13 +12,16 @@ import java.math.BigInteger
 
 /** Maps the polymorphic history DTO → the existing [TransactionRecord] domain models. */
 fun HistoryItemDto.toDomain(): TransactionRecord {
-    val net = NetworkName.entries.find { it.name.equals(network, ignoreCase = true) }
+    // TASK-53 — `network` از سرور همان networkId کانونی است و مستقیماً منتقل می‌شود.
+    // تطبیق با enum فقط برای alias نمایشیِ قدیمی است و ممکن است null شود (مثلاً شبکه‌ای که
+    // فقط در باندل امضاشده وجود دارد) — که کاملاً قابل قبول است.
+    val net = NetworkName.fromConfigName(network)
     val st = status.toTransactionStatus()
     return when (this) {
         is HistoryItemDto.EvmHistoryDto -> {
             val td = tokenDetails(fromAddress, toAddress, valueRaw, tokenSymbol, tokenDecimals, tokenAmountRaw, contractAddress)
             EvmTransaction(
-                hash = hash, timestamp = timestamp, fee = feeRaw, status = st, networkName = net,
+                hash = hash, timestamp = timestamp, fee = feeRaw, status = st, networkId = network, networkName = net,
                 fromAddress = fromAddress.orEmpty(), toAddress = toAddress.orEmpty(),
                 // For a token transfer use the token amount, not native valueRaw (which may be 0).
                 amount = td?.amount ?: valueRaw, isOutgoing = isOutgoing,
@@ -30,7 +33,7 @@ fun HistoryItemDto.toDomain(): TransactionRecord {
         is HistoryItemDto.TronHistoryDto -> {
             val td = tokenDetails(fromAddress, toAddress, valueRaw, tokenSymbol, tokenDecimals, tokenAmountRaw, contractAddress)
             TronTransaction(
-                hash = hash, timestamp = timestamp, fee = feeRaw, status = st, networkName = net,
+                hash = hash, timestamp = timestamp, fee = feeRaw, status = st, networkId = network, networkName = net,
                 fromAddress = fromAddress.orEmpty(), toAddress = toAddress.orEmpty(),
                 amount = td?.amount ?: valueRaw, isOutgoing = isOutgoing,
                 bandwidthUsed = bandwidthUsed, energyUsed = energyUsed,
@@ -39,7 +42,7 @@ fun HistoryItemDto.toDomain(): TransactionRecord {
             )
         }
         is HistoryItemDto.BitcoinHistoryDto -> BitcoinTransaction(
-            hash = hash, timestamp = timestamp, fee = feeRaw, status = st, networkName = net,
+            hash = hash, timestamp = timestamp, fee = feeRaw, status = st, networkId = network, networkName = net,
             fromAddress = fromAddress, toAddress = toAddress,
             amount = valueRaw, isOutgoing = isOutgoing,
             feeRateSatsPerByte = feeRateSatPerVByte
