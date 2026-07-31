@@ -444,7 +444,7 @@
       "id": "doge_testnet",
       "name": "DOGETESTNET",
       "networkType": "UTXO",
-    "chainId": 3,
+    "chainId": -4,
     "derivationPath": "m/44'/3'/0'/0/0",
     "rpcUrls": [],
     "explorers": [
