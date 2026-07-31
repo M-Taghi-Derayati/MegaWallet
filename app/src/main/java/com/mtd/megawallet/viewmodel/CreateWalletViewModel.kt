@@ -220,13 +220,15 @@ class CreateWalletViewModel @Inject constructor(
 
                 backupAnimationState = BackupAnimationState.SUCCESS
             } catch (e: Exception) {
-                launchLocal {
-                    showErrorSnackbar(
-                        shortMessage = "خطا در بازیابی کیف پول",
-                        detailedMessage = e.message ?: "خطای نامشخص",
-                        errorTitle = "خطا"
-                    )
-                }
+                // Restoring a wallet is the whole point of this screen; if it fails the user must
+                // acknowledge it rather than watch a snackbar slide past mid-animation.
+                reportErrorAsync(
+                    throwable = e,
+                    userAction = "restoreWallet",
+                    surface = ErrorSurface.BLOCKING,
+                    severity = ErrorSeverity.HIGH,
+                    fallbackMessage = "خطا در بازیابی کیف پول"
+                )
                 isRestoreMode = false
             }
         }
@@ -281,13 +283,14 @@ class CreateWalletViewModel @Inject constructor(
                 }
 
                 is ResultResponse.Error -> {
-                    launchLocal {
-                        showErrorSnackbar(
-                            shortMessage = "خطا در ساخت کیف پول",
-                            detailedMessage = result.exception.message ?: "خطای نامشخص",
-                            errorTitle = "خطا"
-                        )
-                    }
+                    // Without a wallet the flow cannot continue — block.
+                    reportErrorAsync(
+                        throwable = result.exception,
+                        userAction = "generateWallet",
+                        surface = ErrorSurface.BLOCKING,
+                        severity = ErrorSeverity.HIGH,
+                        fallbackMessage = "خطا در ساخت کیف پول"
+                    )
                 }
             }
         }
@@ -298,7 +301,14 @@ class CreateWalletViewModel @Inject constructor(
     private suspend fun navigateToCloudPasswordStep() {
         hasExistingCloudBackup = try {
             hasCloudBackupUseCase()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // Probe only — "no existing backup" is a safe answer and the next screen still works.
+            reportError(
+                throwable = e,
+                userAction = "hasCloudBackup",
+                surface = ErrorSurface.SILENT,
+                severity = ErrorSeverity.LOW
+            )
             false
         }
         currentStep = CreateWalletStep.CLOUD_BACKUP_PASSWORD
@@ -318,21 +328,27 @@ class CreateWalletViewModel @Inject constructor(
                     navigateToCloudPasswordStep()
                 }
             } catch (e: Exception) {
-                launchLocal {
-                    showErrorSnackbar("خطا در بررسی اتصال به گوگل درایو: ${e.message}")
-                }
+                reportError(
+                    throwable = e,
+                    userAction = "checkCloudBackupConnection",
+                    surface = ErrorSurface.SNACKBAR,
+                    fallbackMessage = "خطا در بررسی اتصال به گوگل درایو"
+                )
             }
         }
     }
 
     fun handleGoogleSignInResult(data: Intent?) {
         viewModelScope.launch {
-            when (connectCloudBackupUseCase(data)) {
+            when (val result = connectCloudBackupUseCase(data)) {
                 is ResultResponse.Success -> navigateToCloudPasswordStep()
                 is ResultResponse.Error -> {
-                    launchLocal {
-                        showSnackbarMessage("ورود به گوگل ناموفق بود. لطفا دوباره تلاش کنید.")
-                    }
+                    reportError(
+                        throwable = result.exception,
+                        userAction = "connectCloudBackup",
+                        surface = ErrorSurface.SNACKBAR,
+                        fallbackMessage = "ورود به گوگل ناموفق بود. لطفا دوباره تلاش کنید."
+                    )
                 }
             }
         }
@@ -366,7 +382,12 @@ class CreateWalletViewModel @Inject constructor(
                 )) {
                     is ResultResponse.Success -> result.data
                     is ResultResponse.Error -> {
-                        showSnackbarMessage(result.exception.message ?: "اطلاعات کیف پول یافت نشد")
+                        reportError(
+                            throwable = result.exception,
+                            userAction = "buildCloudWalletMetadata",
+                            surface = ErrorSurface.SNACKBAR,
+                            fallbackMessage = "اطلاعات کیف پول یافت نشد"
+                        )
                         backupAnimationState = BackupAnimationState.IDLE
                         return@launch
                     }
@@ -384,29 +405,34 @@ class CreateWalletViewModel @Inject constructor(
                         val isPasswordError = result.exception is IllegalArgumentException &&
                                 result.exception.message == "Incorrect cloud backup password"
                         if (isPasswordError) {
-                            launchSafe {
-                                showErrorSnackbar(
-                                    shortMessage = "رمز عبور اشتباه است",
-                                    detailedMessage = "برای اضافه کردن کیف جدید به بکاپ قبلی، باید رمز بکاپ قبلی را وارد کنید.",
-                                    errorTitle = "خطای رمز عبور"
-                                )
-                            }
+                            // Wrong password is a user-correctable input error, not a fault.
+                            showErrorSnackbar(
+                                shortMessage = "رمز عبور اشتباه است",
+                                detailedMessage = "برای اضافه کردن کیف جدید به بکاپ قبلی، باید رمز بکاپ قبلی را وارد کنید.",
+                                errorTitle = "خطای رمز عبور"
+                            )
                         } else {
-                            launchSafe {
-                                showErrorSnackbar(
-                                    shortMessage = "خطا در آپلود پشتیبان",
-                                    detailedMessage = "جزئیات خطا: ${result.exception.message ?: "خطای نامشخص"}",
-                                    errorTitle = "خطا در آپلود پشتیبان"
-                                )
-                            }
+                            // The wallet exists but is now unbacked-up — the user must know.
+                            reportError(
+                                throwable = result.exception,
+                                userAction = "backupCloudWalletMetadata",
+                                surface = ErrorSurface.BLOCKING,
+                                severity = ErrorSeverity.HIGH,
+                                title = "خطا در آپلود پشتیبان",
+                                fallbackMessage = "خطا در آپلود پشتیبان"
+                            )
                         }
                         backupAnimationState = BackupAnimationState.IDLE
                     }
                 }
             } catch (e: Exception) {
-                launchSafe {
-                    showErrorSnackbar("خطا در پردازش پشتیبان: ${e.message ?: "خطای نامشخص"}")
-                }
+                reportError(
+                    throwable = e,
+                    userAction = "onCloudPasswordSubmit",
+                    surface = ErrorSurface.BLOCKING,
+                    severity = ErrorSeverity.HIGH,
+                    fallbackMessage = "خطا در پردازش پشتیبان"
+                )
                 backupAnimationState = BackupAnimationState.IDLE
             }
         }
