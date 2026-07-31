@@ -9,6 +9,8 @@ import com.mtd.domain.interfaceRepository.IAppCacheStore.Companion.ASSETS_TTL
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.INetworkCatalog
+import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
+import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.CachedAssetBalance
@@ -22,7 +24,6 @@ import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.domain.usecase.asset.GetLatestAssetPricesUseCase
-import com.mtd.domain.usecase.asset.GetUsdToIrrRateUseCase
 import com.mtd.domain.usecase.network.GetNetworkTypeByIdUseCase
 import com.mtd.domain.usecase.network.GetNetworkTypeForAddressUseCase
 import com.mtd.domain.usecase.wallet.GetActiveWalletUseCase
@@ -33,6 +34,7 @@ import com.mtd.domain.usecase.wallet.ObserveActiveWalletUseCase
 import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -49,7 +51,8 @@ class HomeViewModel @Inject constructor(
     private val appEventBus: IAppEventBus,
     private val cacheStore: IAppCacheStore,
     private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
-    private val getUsdToIrrRateUseCase: GetUsdToIrrRateUseCase,
+    /** TASK-54 — shared observable Toman rate; replaces this VM's private cache. */
+    private val usdToIrrRateProvider: IUsdToIrrRateProvider,
     private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
     private val getActiveWalletUseCase: GetActiveWalletUseCase,
     private val loadExistingWalletUseCase: LoadExistingWalletUseCase,
@@ -71,14 +74,22 @@ class HomeViewModel @Inject constructor(
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab = _selectedTab.asStateFlow()
 
-    // Cache برای نرخ تتر به تومان
-    private var cachedIrrRate: BigDecimal? = null
-    private var lastIrrRateUpdateTime: Long = 0
+    /**
+     * TASK-54 — نرخ تتر به تومان دیگر اینجا کش نمی‌شود.
+     *
+     * The private `cachedIrrRate` field this replaces was invisible to the UI: a fresh Wallex rate
+     * updated the field, but nothing could observe a field, so screens kept rendering the value they
+     * had pulled once. [usdToIrrRate] is the shared observable state; collect it.
+     */
+    val usdToIrrRate: StateFlow<CurrencyRate?> = usdToIrrRateProvider.rate
+
+    /** Latest known rate, or ZERO when it is not known yet. For non-reactive internal math only. */
+    private val currentIrrRate: BigDecimal
+        get() = usdToIrrRateProvider.rate.value?.rate ?: BigDecimal.ZERO
 
     // زمان‌بندی‌های مجزا برای رفرش دیتای خودکار
     private val RR_PRICE_REFRESH_INTERVAL = 5 * 60 * 1000L // 2 دقیقه برای قیمت‌ها
     private val RR_BALANCE_REFRESH_INTERVAL = 10 * 60 * 1000L // 5 دقیقه برای موجودی‌ها
-    private val IRR_RATE_CACHE_DURATION_MS = 3 * 60 * 1000L // 3 دقیقه
 
     // کلیدهای ذخیره زمان آخرین آپدیت در کش
     private val LAST_PRICE_SYNC_TIME_KEY = "last_price_sync_time"
@@ -241,8 +252,11 @@ class HomeViewModel @Inject constructor(
         }
 
         //  عدم بلاک کردن UI برای دریافت نرخ ارز
-        val savedRate = cacheStore.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull()
-        val irrRate = cachedIrrRate ?: savedRate ?: BigDecimal("0")
+        // TASK-54 — seed-only: reads the persisted last-known rate, never the network, so this path
+        // stays as fast as the direct cache read it replaces. The network refresh happens in
+        // refreshPrices() and reaches the UI through the observable rate.
+        usdToIrrRateProvider.ensureSeeded()
+        val irrRate = currentIrrRate
         val usdtRate = BigDecimal.ONE
 
         // محاسبه اولیه برای نمایش سریع کش
@@ -288,11 +302,11 @@ class HomeViewModel @Inject constructor(
      */
     private fun refreshPrices() {
         launchSafe {
-            val (usdtRate, irrRate) = fetchExchangeRates().apply {
-                cachedIrrRate = this.second
-                lastIrrRateUpdateTime = System.currentTimeMillis()
-                cacheStore.put("LAST_IRR_RATE", this.second.toPlainString())
-            }
+            // TASK-54 — the provider owns the TTL, the persistence and the shared state; refreshing it
+            // is what makes every observing screen update, which the old private field could not do.
+            usdToIrrRateProvider.refresh()
+            val usdtRate = BigDecimal.ONE
+            val irrRate = currentIrrRate
 
             val allAssets = assetCatalog.getAllAssetConfigs()
             val symbols = allAssets.map { it.symbol }.distinct()
@@ -352,7 +366,7 @@ class HomeViewModel @Inject constructor(
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
 
             // ابتدا از همان نرخ IRR کش شده استفاده می‌کنیم
-            val irrRate = cachedIrrRate ?: cacheStore.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            val irrRate = currentIrrRate
             val usdtRate = BigDecimal.ONE
 
             val jobs = networkCatalog.getAllNetworkInfos().map { network ->
@@ -409,9 +423,7 @@ class HomeViewModel @Inject constructor(
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
 
             try {
-                val irrRate = cachedIrrRate
-                    ?: cacheStore.get("LAST_IRR_RATE", String::class.java)?.toBigDecimalOrNull()
-                    ?: BigDecimal.ZERO
+                val irrRate = currentIrrRate
                 val usdtRate = BigDecimal.ONE
 
                 when (val result = getBalancesForMultipleWalletsUseCase(network.name, listOf(wallet.id))) {
@@ -547,7 +559,7 @@ class HomeViewModel @Inject constructor(
      * توسط Channel فراخوانی می‌شود تا بار پردازشی کاهش یابد.
      */
     private fun processUiUpdate() {
-        val irrRate = cachedIrrRate ?: BigDecimal.ZERO
+        val irrRate = currentIrrRate
         val usdtRate = BigDecimal.ONE
 
         _uiState.update { currentState ->
@@ -657,27 +669,15 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private suspend fun fetchExchangeRates() = Pair(BigDecimal.ONE, getUsdToIrrRate())
-
     /**
-     * دریافت نرخ تتر به تومان (برای استفاده در سایر کامپوننت‌ها)
-     * با cache: اگر کمتر از 3 دقیقه از آخرین به‌روزرسانی گذشته باشد، مقدار cache شده را برمی‌گرداند
-     * در غیر این صورت از API می‌گیرد و cache را به‌روز می‌کند
+     * TASK-54 — نرخ تتر به تومان را تازه می‌کند؛ نتیجه روی [usdToIrrRate] منتشر می‌شود.
+     *
+     * This replaces the old `suspend fun getUsdToIrrRate(): BigDecimal`. Returning the rate invited
+     * callers to snapshot it into a local `var` and never look again — which is precisely why a fresh
+     * Wallex rate reached the log but not the screen. There is deliberately no return value: observe
+     * [usdToIrrRate] instead.
      */
-    suspend fun getUsdToIrrRate(): BigDecimal {
-        val currentTime = System.currentTimeMillis()
-
-        // بررسی cache: اگر نرخ cache شده وجود دارد و کمتر از 3 دقیقه گذشته است
-        if (cachedIrrRate != null && cachedIrrRate!= BigDecimal.ZERO && (currentTime - lastIrrRateUpdateTime) < IRR_RATE_CACHE_DURATION_MS) {
-            return cachedIrrRate!!
-        }
-
-        // از API بگیر و cache را به‌روز کن
-        val rate = (getUsdToIrrRateUseCase() as? ResultResponse.Success)?.data?.rate ?: BigDecimal.ZERO
-        cachedIrrRate = rate
-        lastIrrRateUpdateTime = currentTime
-        return rate
-    }
+    suspend fun refreshUsdToIrrRate(force: Boolean = false) = usdToIrrRateProvider.refresh(force)
 
     // Item 4 (revised) — unlike the history screen, the wallet screen is the SINGLE writer of the shared
     // per-asset balance cache (asset_balance_*) that EVERY other screen reads on open (asset detail,

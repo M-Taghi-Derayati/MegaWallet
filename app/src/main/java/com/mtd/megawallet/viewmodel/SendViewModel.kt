@@ -8,6 +8,8 @@ import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IFeatureAvailabilityResolver
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
+import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
+import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.EvmSponsorMode
@@ -34,7 +36,6 @@ import com.mtd.domain.model.GaslessAvailability
 import com.mtd.domain.model.GaslessPreviewState
 import com.mtd.domain.model.SubmitState
 import com.mtd.domain.usecase.asset.GetLatestAssetPricesUseCase
-import com.mtd.domain.usecase.asset.GetUsdToIrrRateUseCase
 import com.mtd.domain.usecase.network.GetNetworkTypeForAddressUseCase
 import com.mtd.domain.usecase.network.ValidateAddressForNetworkUseCase
 import com.mtd.domain.usecase.send.EstimateSendFeesUseCase
@@ -47,6 +48,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -69,7 +71,8 @@ class SendViewModel @Inject constructor(
     private val featureAvailabilityResolver: IFeatureAvailabilityResolver,
     private val appEventBus: IAppEventBus,
     private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
-    private val getUsdToIrrRateUseCase: GetUsdToIrrRateUseCase,
+    /** TASK-54 — shared observable Toman rate; replaces the one-shot fetch + hardcoded fallback. */
+    private val usdToIrrRateProvider: IUsdToIrrRateProvider,
     private val refreshSelectedAssetBalanceUseCase: RefreshSelectedAssetBalanceUseCase,
     private val estimateSendFeesUseCase: EstimateSendFeesUseCase,
     private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
@@ -149,21 +152,21 @@ class SendViewModel @Inject constructor(
         .map { it?.name ?: "کیف پول من" }
         .stateIn(viewModelScope, SharingStarted.Lazily, "کیف پول من")
 
-    private var currentIrrRate: BigDecimal = BigDecimal("70000") // Default fallback
+    /**
+     * TASK-54 — نرخ تتر به تومان از منبع مشترک.
+     *
+     * Was `private var currentIrrRate = BigDecimal("70000")`, fetched once in `init` with the failure
+     * swallowed by `else -> {}`. That hardcoded fallback silently priced every Toman amount — and the
+     * MAX-send math — off a stale magic number whenever the fetch failed, and the value never updated
+     * afterwards. Now it tracks the shared provider, and "unknown" is ZERO rather than a fabricated rate.
+     */
+    val usdToIrrRate: StateFlow<CurrencyRate?> = usdToIrrRateProvider.rate
+
+    private val currentIrrRate: BigDecimal
+        get() = usdToIrrRateProvider.rate.value?.rate ?: BigDecimal.ZERO
 
     init {
-        fetchIrrRate()
-    }
-
-    private fun fetchIrrRate() {
-        launchSafe {
-            when (val result = getUsdToIrrRateUseCase()) {
-                is ResultResponse.Success -> {
-                    currentIrrRate = result.data.rate
-                }
-                else -> {}
-            }
-        }
+        launchSafe(connectivitySurface = ErrorSurface.SILENT) { usdToIrrRateProvider.refresh() }
     }
 
     fun setSubtractionMode(enabled: Boolean) {

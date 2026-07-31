@@ -1034,34 +1034,85 @@ the investigation already produced an answer (TASK-53) it is recorded here rathe
   derivation, address validation, balance reads. **Testing:** `ConfigManagerOfflineFirstTest` extended with
   an apply step; a bundle-only network fixture; on-device first-launch + tampered-signature run.
 
-### TASK-54 — USDT price inconsistent / stale across screens
-- **Problem (user, item 5):** the USDT price differs between sections and doesn't update consistently.
-- **Root cause (three independent price paths, no single source of truth):**
-  1. `HomeViewModel` is the only writer of the shared `asset_balance_*` cache and stamps `priceUsdRaw` onto
-     each `AssetItem` (`HomeViewModel.kt:305,457-516`) — with an explicit "keep the previous price if the new
-     one is null" fallback (`:457-466`), so a failed fetch silently persists a stale price indefinitely.
-  2. `TransactionHistoryViewModel:182` builds its **own** `symbol→price` map from whatever assets happen to
-     be loaded (`filter { priceUsdRaw > ZERO }.associate { symbol.uppercase() to priceUsdRaw }`) — keyed by
-     **symbol**, so USDT on two networks collapses to one arbitrary entry.
-  3. `SendViewModel:1064-1077` resolves the price a **third** way (native short-circuit, then a lookup).
-  Compounding it: `SendTokenList.kt:305-320` synthesizes an *average* price across networks for the grouped
-  row. For USDT specifically this is worst-case — it's held on several chains under composite ids
-  (`USDT-SEPOLIA`) while the server keys prices by bare symbol (`usdt`), the same id/symbol mismatch class
-  that caused **TASK-45**.
-- **Do:** make one component own price state — a `PriceCache`/`IPriceRepository` (data) keyed by the
-  **canonical asset id with a symbol fallback** (mirror TASK-45's "id OR symbol OR contract" matcher), with
-  an explicit TTL and a `null`-means-unknown contract (no silent stale carry-forward). All three consumers
-  read from it; delete the local maps. Stablecoins are the acceptance canary (USDT should read identically
-  on wallet / detail / send / history).
-- **Files:** `viewmodel/HomeViewModel.kt`, `viewmodel/history/TransactionHistoryViewModel.kt`,
-  `viewmodel/SendViewModel.kt`, `screens/send/SendTokenList.kt`,
-  `data/repository/MarketDataRepositoryImpl.kt`, `data/datasource/RelayerPriceDataSource.kt`.
-  **Modules:** data, app. **Deps:** relates to **TASK-35** (`change24h`, server-blocked) and **TASK-45**.
-- **Difficulty:** Med · **Est:** 1.5 · **Risk:** Med (money display) · **Priority:** P1.
-- **Acceptance:** USDT shows the same price on wallet list, asset detail, send, and history at the same
-  instant; a failed price fetch shows a stale-marker/placeholder rather than a silently frozen number.
-  **Rollback:** per consumer. **Regression:** every fiat display + MAX-send math. **Testing:** JVM tests for
-  the resolver (multi-network USDT, id-vs-symbol mismatch, TTL expiry, null-price handling).
+### TASK-54 — USDT→Toman (Wallex) rate is fetched but the UI never updates — ✅ Implemented (needs build + on-device verify)
+- **Done (2026-07-30):**
+  - New `IUsdToIrrRateProvider` (domain) + `UsdToIrrRateProvider` (data, `@Singleton`, bound in
+    `DataModule`): `rate: StateFlow<CurrencyRate?>`, `ensureSeeded()` (local only, never network) and
+    `refresh(force)`. Owns the 3-minute TTL, single-flights concurrent refreshes behind a `Mutex`, seeds
+    from the existing `LAST_IRR_RATE` key on cold start and persists on success. `null` = unknown; a
+    failed refresh keeps the last good value and never fabricates one.
+  - `HomeViewModel`: private `cachedIrrRate`/`lastIrrRateUpdateTime`/`IRR_RATE_CACHE_DURATION_MS` and all
+    four ad-hoc `LAST_IRR_RATE` cache reads/writes deleted; the five internal uses read
+    `currentIrrRate` off the provider, and `usdToIrrRate` is exposed for the UI. The initial-load path
+    uses `ensureSeeded()` so it stays as fast as the direct cache read it replaces.
+  - **`suspend fun getUsdToIrrRate(): BigDecimal` replaced by `refreshUsdToIrrRate()` returning Unit.**
+    Returning the rate is what invited callers to snapshot it into a field and stop noticing updates;
+    there is now no way to take a private copy through the VM.
+  - `SendViewModel`: the one-shot `init` fetch and the **hardcoded `BigDecimal("70000")` fallback** are
+    gone (that number silently priced every Toman amount *and the MAX-send math* whenever the fetch
+    failed, with the failure swallowed by `else -> {}`). Now tracks the provider; unknown is ZERO.
+  - `AssetDetailScreen`: `collectAsStateWithLifecycle()` replaces
+    `LaunchedEffect(homeViewModel) { irrRate = it.getUsdToIrrRate() }` — the effect key never changed,
+    which is the precise reason the screen froze the rate it read on entry.
+  - `GetUsdToIrrRateUseCase` **removed** — it was the one-shot accessor the bug was built on, and the
+    provider is now the only production caller of `IMarketDataRepository.getUsdToIrrRate()`.
+- **Tests:** `UsdToIrrRateProviderTest` (:data, MockK + `runTest`) — TTL reuse, forced refresh,
+  single-flight under 8 concurrent callers, seed-without-network, seed-once, failure keeps the last good
+  value, and failure before any value leaves it `null` rather than `0`.
+  Run: `./gradlew :data:testDebugUnitTest --tests "*UsdToIrrRateProviderTest"`.
+- **Not built here** (Gradle unavailable) — inspection-verified.
+- **Verify on-device:** open asset detail and leave it open across a rate change → the Toman value
+  updates **without reopening the screen**; wallet / asset detail / send agree at the same instant;
+  kill the network → the last known value stays and no `70000` appears.
+- **Original spec below.**
+- **Problem (user, clarified 2026-07-30):** the **Toman** price of USDT — fetched from **Wallex** — is
+  visibly retrieved in the log, yet the UI keeps showing the old value. It applies **everywhere the rate
+  is used**, and different screens can disagree with each other.
+- **⚠️ Scope correction.** An earlier version of this entry diagnosed the *USD* price and blamed
+  id-vs-symbol keying (the TASK-45 class of bug). That was wrong. The USD path is not the subject; the
+  defect is in the **USD→IRR/Toman rate** and the mechanism is **observability**, not keying.
+- **Root cause — the rate is a value that gets *pulled*, never state that can be *observed*.**
+  The fetch itself is fine: `MarketDataRepositoryImpl.getUsdToIrrRate()` calls Wallex
+  (`USDTApiService` → `GET https://api.wallex.ir/v1/all-fairPrice`, field `result.uSDTTMN`) and returns a
+  `CurrencyRate`. That call is what shows up in the log. Nothing downstream is reactive:
+  1. **`HomeViewModel.getUsdToIrrRate()` (`:667`)** is a `suspend fun` returning `BigDecimal`, behind a
+     private 3-minute cache (`cachedIrrRate` / `lastIrrRateUpdateTime`, `:75-81`). It is **not** a
+     `StateFlow`, so when a fresh rate arrives **nothing is notified**. Six call sites read the private
+     field directly (`:245, 291-294, 355, 412, 550`).
+  2. **`AssetDetailScreen` (`:449-455`)** — the visible symptom:
+     ```kotlin
+     var irrRate by remember { mutableStateOf(BigDecimal("0")) }
+     LaunchedEffect(homeViewModel) { irrRate = it.getUsdToIrrRate() }
+     ```
+     the effect key is `homeViewModel`, which **never changes for the life of the screen**, so the rate is
+     read **once on open and then frozen** — even if the app stays open for an hour.
+  3. **`SendViewModel` (`:152-163`)** calls `fetchIrrRate()` once in `init` into a plain
+     `var currentIrrRate` (not state), used for the Toman display and MAX math (`:277, 1141, 1249, 1276`).
+     Its default is a **hardcoded `BigDecimal("70000")`**, so a failed fetch silently prices Toman off a
+     stale magic number. The failure is swallowed by `else -> {}`.
+  4. Persistence is ad-hoc: `LAST_IRR_RATE` is read/written straight from `HomeViewModel` at four sites.
+  Net effect: three independent copies of the rate, captured at three different moments, none observable —
+  which is exactly "the log has the new price but the screen does not", on every screen that uses it.
+- **Do:** give the rate a single observable owner.
+  - `domain/interfaceRepository/IUsdToIrrRateProvider.kt` — `val rate: StateFlow<CurrencyRate?>` +
+    `suspend fun refresh(force: Boolean = false)`. Mirrors the existing `IActiveWalletProvider` shape;
+    `null` means **not yet known** and must render as a placeholder, never `0` and never a guess.
+  - `data/repository/UsdToIrrRateProvider.kt` — `@Singleton`, owns the TTL, single-flights concurrent
+    refreshes behind a `Mutex`, seeds from `LAST_IRR_RATE` on cold start and persists on success.
+  - Consumers **collect** instead of pulling: `HomeViewModel` drops its private cache and the four
+    `LAST_IRR_RATE` call sites; `SendViewModel` collects (and loses the `70000` fallback);
+    `AssetDetailScreen` uses `collectAsStateWithLifecycle()` instead of `LaunchedEffect` + `var`.
+- **Files:** new `IUsdToIrrRateProvider` + `UsdToIrrRateProvider` (+ `DataModule` binding),
+  `viewmodel/HomeViewModel.kt`, `viewmodel/SendViewModel.kt`,
+  `ui/compose/screens/wallet/AssetDetailScreen.kt`. **Modules:** domain, data, app.
+  **Deps:** **TASK-56** (Toman toggle) multiplies by this rate on every fiat surface — it must land after.
+- **Difficulty:** Med · **Est:** 1.5 · **Risk:** Med (money display + MAX-send math) · **Priority:** P1.
+- **Acceptance:** the Toman value updates on screen as soon as a new Wallex rate arrives, without
+  reopening the screen; wallet, asset detail and send agree at any instant; a failed fetch shows a
+  placeholder rather than `0`, a frozen number, or `70000`.
+  **Rollback:** per consumer. **Regression:** every Toman display + MAX-send math.
+  **Testing:** JVM tests for the provider (TTL reuse, forced refresh, single-flight under concurrency,
+  cold-start seed from cache, failure keeps last good value and never invents one).
 
 ### TASK-55 — Token list from server search (assets not in the bundle)
 - **Problem (user, item 6):** tokens outside the config bundle should be findable via server search; the

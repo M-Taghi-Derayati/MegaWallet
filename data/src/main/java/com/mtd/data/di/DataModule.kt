@@ -14,6 +14,7 @@ import com.mtd.data.repository.CachedWalletBalanceReaderImpl
 import com.mtd.data.repository.CloudWalletBalanceCalculatorImpl
 import com.mtd.data.repository.GsonCloudWalletBackupCodec
 import com.mtd.data.repository.MarketDataRepositoryImpl
+import com.mtd.data.repository.UsdToIrrRateProvider
 import com.mtd.data.repository.MonitoringRepositoryImpl
 import com.mtd.data.repository.SendAssetDataSourceImpl
 import com.mtd.data.repository.TransactionStatusRepositoryImpl
@@ -59,6 +60,7 @@ import com.mtd.domain.interfaceRepository.ITransactionStatusRepository
 import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.IWalletBalanceSynchronizer
 import com.mtd.domain.interfaceRepository.IWalletRepository
+import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import dagger.Binds
 import dagger.Module
@@ -225,6 +227,11 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMarketDataRepository(impl: MarketDataRepositoryImpl): IMarketDataRepository
+
+    /** TASK-54 — must be @Singleton: it IS the shared rate state every screen observes. */
+    @Binds
+    @Singleton
+    abstract fun bindUsdToIrrRateProvider(impl: UsdToIrrRateProvider): IUsdToIrrRateProvider
 
     @Binds
     abstract fun bindCloudWalletBalanceCalculator(

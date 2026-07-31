@@ -445,14 +445,18 @@ private fun AssetDetailTopSection(
         MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
     }
 
-    // دریافت نرخ تتر به تومان از HomeViewModel
-    var irrRate by remember { mutableStateOf(BigDecimal("0")) } // مقدار پیش‌فرض
+    // TASK-54 — نرخ تتر به تومان را «مشاهده» می‌کنیم، نه اینکه یک‌بار بخوانیم.
+    //
+    // This was `var irrRate by remember { … }` filled by `LaunchedEffect(homeViewModel) { irrRate =
+    // it.getUsdToIrrRate() }`. The effect key was the ViewModel itself, which never changes while the
+    // screen is open, so the rate was read once on entry and then frozen — the reported "the log has
+    // the new price but the screen still shows the old one". Collecting keeps it live.
+    val irrRateState = homeViewModel?.usdToIrrRate?.collectAsStateWithLifecycle()
+    val irrRate = irrRateState?.value?.rate ?: BigDecimal.ZERO
 
-    // دریافت نرخ از HomeViewModel
+    // Ask for a refresh on entry; the result arrives through the flow above, not as a return value.
     LaunchedEffect(homeViewModel) {
-        homeViewModel?.let {
-            irrRate = it.getUsdToIrrRate()
-        }
+        homeViewModel?.refreshUsdToIrrRate()
     }
 
     // فرمت کردن قیمت نمایش داده شده (اگر scrubbing فعال باشد، قیمت لحظه‌ای چارت، در غیر این صورت قیمت فعلی ارز)
