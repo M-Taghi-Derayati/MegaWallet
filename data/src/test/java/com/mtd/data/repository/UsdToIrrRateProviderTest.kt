@@ -30,7 +30,9 @@ class UsdToIrrRateProviderTest {
     private lateinit var provider: UsdToIrrRateProvider
 
     private fun rate(value: String, updatedAt: Long = System.currentTimeMillis()) = CurrencyRate(
-        quoteCurrency = "IRR",
+        // TASK-56 — "TMN": the Wallex value is تومان, and `FiatConversion` resolves the unit from
+        // this label, so the fixture must not claim rial.
+        quoteCurrency = "TMN",
         baseCurrency = "USDT",
         rate = BigDecimal(value),
         lastUpdated = updatedAt

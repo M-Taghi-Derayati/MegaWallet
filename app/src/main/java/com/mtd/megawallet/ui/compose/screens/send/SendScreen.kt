@@ -60,7 +60,11 @@ fun SendScreen(
     val recipientText by sendViewModel.recipientAddress.collectAsStateWithLifecycle()
     val selectedAsset by sendViewModel.selectedAsset.collectAsStateWithLifecycle()
     val amountText by sendViewModel.amountText.collectAsStateWithLifecycle()
-    val isUsdMode by sendViewModel.isUsdMode.collectAsStateWithLifecycle()
+    val isFiatMode by sendViewModel.isFiatMode.collectAsStateWithLifecycle()
+    val isMaxAmount by sendViewModel.isMaxAmount.collectAsStateWithLifecycle()
+    // TASK-56 — واحد فیات انتخاب‌شده؛ باکس مبلغ و معادلِ زیر آن هر دو از این پیروی می‌کنند.
+    val fiatCurrency by sendViewModel.fiatCurrency.collectAsStateWithLifecycle()
+    val usdToIrrRate by sendViewModel.usdToIrrRate.collectAsStateWithLifecycle()
     val showConfirmScreen by sendViewModel.showConfirmScreen.collectAsStateWithLifecycle()
     val recipientNetworkType by sendViewModel.recipientNetworkType.collectAsStateWithLifecycle()
 
@@ -216,19 +220,19 @@ fun SendScreen(
                             AmountInputPhase(
                                 asset = asset,
                                 amountText = amountText,
-                                isUsdMode = isUsdMode,
+                                isFiatMode = isFiatMode,
+                                fiatCurrency = fiatCurrency,
+                                usdToIrrRate = usdToIrrRate,
+                                isMaxAmount = isMaxAmount,
                                 isExiting = isAmountExiting,
                                 hasValidAddress = hasValidRecipientAddress,
                                 onAmountChanged = { sendViewModel.setAmount(it) },
-                                onToggleMode = { sendViewModel.toggleUsdMode() },
-                                onUseMax = {
-                                    val maxAmount = if (isUsdMode) {
-                                        asset.balanceUsdt.replace("$", "").replace(",", "").trim()
-                                    } else {
-                                        asset.balance.replace(",", "").trim()
-                                    }
-                                    sendViewModel.setAmount(maxAmount)
-                                },
+                                onToggleMode = { sendViewModel.toggleFiatMode() },
+                                // TASK-56 — MAX is now a ViewModel operation, not a string the screen
+                                // assembles. It has to know the selected currency AND flag the entry as
+                                // "the whole balance" so the amount that is actually sent is the exact
+                                // balance rather than a value parsed back out of a rounded display string.
+                                onUseMax = { sendViewModel.useMax(asset) },
                                 onContinue = { sendViewModel.setShowConfirmScreen(true) }
                             )
                         }
@@ -242,9 +246,13 @@ fun SendScreen(
                                 !hasRecipientAddress -> HintState(text = "برای شروع، آدرس مقصد را وارد کنید")
                                 !hasValidRecipientAddress -> HintState(text = "آدرس وارد شده معتبر نیست", isError = true)
                                 else -> {
-                                    val tokenItems = remember(successState.assets, recipientNetworkType) {
+                                    val tokenItems = remember(
+                                        successState.assets, recipientNetworkType, fiatCurrency, usdToIrrRate
+                                    ) {
                                         val networkType = recipientNetworkType ?: return@remember emptyList()
                                         buildSendableAssetList(
+                                            fiatCurrency = fiatCurrency,
+                                            usdToIrrRate = usdToIrrRate,
                                             source = successState.assets,
                                             networkType = networkType,
                                             networkTypeResolver = { homeViewModel.getNetworkTypeForNetworkId(it) }
@@ -255,6 +263,7 @@ fun SendScreen(
                                         HintState(text = "دارایی با موجودی در این شبکه یافت نشد")
                                     } else {
                                         TokenList(
+                                            fiatCurrency = fiatCurrency,
                                             assets = tokenItems,
                                             selectedAssetId = selectedAsset?.id,
                                             onTokenClick = { asset ->

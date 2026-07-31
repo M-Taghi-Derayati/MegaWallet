@@ -76,7 +76,11 @@ class MarketDataRepositoryImpl @Inject constructor(
             }
 
             CurrencyRate(
-                quoteCurrency = "IRR", // We show Toman but internally it's IRR/Toman value
+                // TASK-56 — the label now matches the value. Wallex's field is `uSDTTMN`, i.e. تومان,
+                // which is why the local is called `latestPriceToman`; labelling it "IRR" claimed a
+                // unit ten times smaller than what is actually in there. `FiatConversion.tomanPerUsd`
+                // resolves the unit from this string, so a wrong label is a 10× money error.
+                quoteCurrency = "TMN",
                 baseCurrency = "USDT", // Assumed USDT ~ USD
                 rate = latestPriceToman,
                 lastUpdated = System.currentTimeMillis()

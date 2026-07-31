@@ -21,8 +21,7 @@ class SendAssetDataSourceImpl @Inject constructor(
 
     override suspend fun refreshAssetBalance(
         wallet: Wallet,
-        asset: AssetItem,
-        irrRate: BigDecimal
+        asset: AssetItem
     ): ResultResponse<AssetItem?> {
         return try {
             val network = blockchainRegistry.getNetworkById(asset.networkId)
@@ -43,14 +42,13 @@ class SendAssetDataSourceImpl @Inject constructor(
                     if (target == null || target.balance == asset.balanceRaw) {
                         ResultResponse.Success(null)
                     } else {
-                        val usd = target.balance.multiply(asset.priceUsdRaw)
-                        val irr = usd.multiply(irrRate)
+                        // TASK-56 — balance only. The fiat strings are the caller's job now (see
+                        // ISendAssetDataSource); producing them here meant the send screen could
+                        // disagree with the wallet list about both format and currency.
                         ResultResponse.Success(
                             asset.copy(
                                 balanceRaw = target.balance,
-                                balance = BalanceFormatter.formatBalance(target.balance, asset.decimals),
-                                balanceUsdt = "$${BalanceFormatter.formatUsdValue(usd)}",
-                                balanceIrr = "${BalanceFormatter.formatNumberWithSeparator(irr)} تومان "
+                                balance = BalanceFormatter.formatBalance(target.balance, asset.decimals)
                             )
                         )
                     }

@@ -64,6 +64,9 @@ import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.InterRegularMedium
 import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.common_ui.theme.MegaWalletTheme
+import com.mtd.core.utils.FiatConversion
+import com.mtd.domain.model.CurrencyRate
+import com.mtd.domain.model.FiatCurrency
 
 /**
  * فاز ورود مبلغ: نمایش مبلغ بزرگ، کارت اطلاعات دارایی، کیبورد عددی و دکمهٔ ادامه.
@@ -72,7 +75,10 @@ import com.mtd.common_ui.theme.MegaWalletTheme
 internal fun AmountInputPhase(
     asset: AssetItem,
     amountText: String,
-    isUsdMode: Boolean,
+    isFiatMode: Boolean,
+    fiatCurrency: FiatCurrency,
+    usdToIrrRate: CurrencyRate?,
+    isMaxAmount: Boolean,
     isExiting: Boolean,
     hasValidAddress: Boolean,
     onAmountChanged: (String) -> Unit,
@@ -87,19 +93,27 @@ internal fun AmountInputPhase(
         amountText.endsWith(".") -> amountText + "0"
         else -> amountText
     }
-    val isOverBalance = remember(calculationAmount, isUsdMode, asset) {
+    // TASK-56 — the over-balance check is done in the unit the user is TYPING in.
+    //
+    // It used to compare a typed fiat amount against `balanceRaw * priceUsdRaw`, i.e. against the
+    // balance in USD. With تومان selected that compared تومان to dollars and flagged almost every
+    // valid amount as over-balance. Both sides are now converted to the same unit first.
+    val isOverBalance = remember(calculationAmount, isFiatMode, fiatCurrency, usdToIrrRate, isMaxAmount, asset) {
         try {
             val bdVal = BigDecimal(calculationAmount)
-            if (bdVal <= BigDecimal.ZERO) false
+            // MAX is the balance by construction. Comparing its *rounded display text* back against the
+            // balance is what used to need a string-equality escape hatch here.
+            if (isMaxAmount) false
+            else if (bdVal <= BigDecimal.ZERO) false
+            else if (!isFiatMode) bdVal > asset.balanceRaw
             else {
-                // Determine the exact max string that is displayed in UI based on mode
-                val maxStr = if (isUsdMode) asset.balanceUsdt.replace("$", "").replace(",", "").trim()
-                             else asset.balance.replace(",", "").trim()
-
-                // If they typed exactly what is max formatted, trust it's fine!
-                if (calculationAmount == maxStr) false
-                else if (isUsdMode) bdVal > asset.balanceRaw.multiply(asset.priceUsdRaw)
-                else bdVal > asset.balanceRaw
+                val balanceUsd = asset.balanceRaw.multiply(asset.priceUsdRaw)
+                val balanceInFiat = when (fiatCurrency) {
+                    FiatCurrency.USD -> balanceUsd
+                    FiatCurrency.TOMAN -> FiatConversion.usdToToman(balanceUsd, usdToIrrRate)
+                }
+                // Rate unknown ⇒ we cannot judge; do not paint a valid amount red.
+                if (balanceInFiat == null) false else bdVal > balanceInFiat
             }
         } catch (e: Exception) { false }
     }
@@ -124,7 +138,9 @@ internal fun AmountInputPhase(
                     asset = asset,
                     amount = amountText,
                     calculationAmount = calculationAmount,
-                    isUsdMode = isUsdMode,
+                    isFiatMode = isFiatMode,
+                    fiatCurrency = fiatCurrency,
+                    usdToIrrRate = usdToIrrRate,
                     isOverBalance = isOverBalance,
                     onToggle = onToggleMode
                 )
@@ -177,22 +193,36 @@ private fun AmountDisplaySection(
     asset: AssetItem,
     amount: String,
     calculationAmount: String,
-    isUsdMode: Boolean,
+    isFiatMode: Boolean,
+    fiatCurrency: FiatCurrency,
+    usdToIrrRate: CurrencyRate?,
     isOverBalance: Boolean,
     onToggle: () -> Unit
 ) {
     val price = asset.priceUsdRaw
-    val equivalent = remember(calculationAmount, isUsdMode) {
+    // TASK-56 — the "other side" of the amount box, in the selected currency rather than always USD.
+    val equivalent = remember(calculationAmount, isFiatMode, fiatCurrency, usdToIrrRate) {
         try {
             val bdVal = BigDecimal(calculationAmount)
-            if (isUsdMode) {
-                val cryptoVal = bdVal.divide(price, 8, RoundingMode.HALF_UP)
-                "${BalanceFormatter.formatBalance(cryptoVal, asset.decimals)} ${asset.symbol}"
+            if (isFiatMode) {
+                val usdVal = when (fiatCurrency) {
+                    FiatCurrency.USD -> bdVal
+                    FiatCurrency.TOMAN -> FiatConversion.tomanToUsd(bdVal, usdToIrrRate)
+                }
+                if (usdVal == null || price <= BigDecimal.ZERO) {
+                    FiatConversion.UNKNOWN_PLACEHOLDER
+                } else {
+                    val cryptoVal = usdVal.divide(price, 8, RoundingMode.DOWN)
+                    "${BalanceFormatter.formatBalance(cryptoVal, asset.decimals)} ${asset.symbol}"
+                }
             } else {
-                val usdVal = bdVal.multiply(price)
-                "$${BalanceFormatter.formatUsdValue(usdVal, false)}"
+                BalanceFormatter.formatFiatValue(
+                    usdAmount = bdVal.multiply(price),
+                    currency = fiatCurrency,
+                    rate = usdToIrrRate
+                )
             }
-        } catch (e: Exception) { "—" }
+        } catch (e: Exception) { FiatConversion.UNKNOWN_PLACEHOLDER }
     }
 
     val amountColor = if (isOverBalance) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary
@@ -226,12 +256,12 @@ private fun AmountDisplaySection(
             )
 
             AnimatedVisibility(
-                visible = isUsdMode,
+                visible = isFiatMode,
                 enter = fadeIn(tween(180)) + slideInVertically { it / 2 },
                 exit = fadeOut(tween(150)) + slideOutVertically { it / 2 }
             ) {
                 Text(
-                    text = "$",
+                    text = BalanceFormatter.fiatSymbol(fiatCurrency),
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontSize = WalletScreenConstants.CURRENCY_SYMBOL_FONT_SIZE,
                         fontWeight = FontWeight.Bold,
@@ -247,7 +277,7 @@ private fun AmountDisplaySection(
 
         // --- Equivalent / Swap Row ---
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (!isUsdMode) {
+            if (!isFiatMode) {
                 val iconRes = getLocalIconResId(asset.symbol).let { if (it == 0) R.drawable.ic_wallet else it }
                 Image(
                     painter = painterResource(id = iconRes),
@@ -498,7 +528,9 @@ private fun AmountDisplaySectionDarkPreview() {
                     asset = sampleConfirmAsset,
                     amount = "0.25",
                     calculationAmount = "0.25",
-                    isUsdMode = false,
+                    isFiatMode = false,
+                    fiatCurrency = FiatCurrency.USD,
+                    usdToIrrRate = null,
                     isOverBalance = false,
                     onToggle = {}
                 )

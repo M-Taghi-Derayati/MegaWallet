@@ -3,6 +3,9 @@ package com.mtd.megawallet.viewmodel
 import android.content.Intent
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.manager.ErrorSeverity
+import com.mtd.core.utils.BalanceFormatter
+import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
+import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.model.DriveBackupState
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.Wallet
@@ -29,7 +32,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import java.math.BigDecimal
 import javax.inject.Inject
 
 @HiltViewModel
@@ -38,6 +44,10 @@ class MultiWalletViewModel @Inject constructor(
     private val observeActiveWalletIdUseCase: ObserveActiveWalletIdUseCase,
     private val getActiveWalletIdUseCase: GetActiveWalletIdUseCase,
     private val getCachedWalletBalanceUseCase: GetCachedWalletBalanceUseCase,
+    /** TASK-56 — selected fiat unit; the wallet totals below are rendered in it. */
+    private val fiatCurrencyProvider: IFiatCurrencyProvider,
+    /** TASK-56 — USD→تومان rate; `null` renders as a placeholder, never as zero. */
+    private val usdToIrrRateProvider: IUsdToIrrRateProvider,
     private val syncWalletBalancesUseCase: SyncWalletBalancesUseCase,
     private val switchActiveWalletUseCase: SwitchActiveWalletUseCase,
     private val deleteWalletUseCase: DeleteWalletUseCase,
@@ -56,10 +66,40 @@ class MultiWalletViewModel @Inject constructor(
     private val _wallets = MutableStateFlow<List<WalletUiItem>>(emptyList())
     val wallets = _wallets.asStateFlow()
 
+    /**
+     * TASK-56 — the wallet switcher was the one fiat surface the USD⇄تومان toggle could not reach: the
+     * data layer returned an already-formatted `"$1,234"`, so the currency was fixed before this
+     * ViewModel ever saw the number. Totals are now held raw in [WalletUiItem.totalUsd] and re-rendered
+     * whenever the currency OR the rate changes — the rate matters too, because a تومان total is
+     * wrong until the first Wallex value lands.
+     */
+    private fun observeFiatDisplayInputs() {
+        launchSafe(checkNetwork = false) { fiatCurrencyProvider.ensurePrimed() }
+        launchSafe(checkNetwork = false) {
+            combine(fiatCurrencyProvider.currency, usdToIrrRateProvider.rate) { _, _ -> Unit }
+                .collect { reformatTotals() }
+        }
+    }
+
+    private fun reformatTotals() {
+        _wallets.update { items -> items.map { it.copy(totalBalance = formatTotal(it.totalUsd)) } }
+    }
+
+    private fun formatTotal(totalUsd: BigDecimal): String = BalanceFormatter.formatFiatValue(
+        usdAmount = totalUsd,
+        currency = fiatCurrencyProvider.currency.value,
+        rate = usdToIrrRateProvider.rate.value
+    )
+
     val activeWalletId = observeActiveWalletIdUseCase()
 
     data class WalletUiItem(
         val wallet: Wallet,
+        /**
+         * TASK-56 — the raw **USD** total. Kept alongside the rendered [totalBalance] so a currency
+         * switch or a fresh Wallex rate can re-format the list with no cache re-read.
+         */
+        val totalUsd: BigDecimal = BigDecimal.ZERO,
         val totalBalance: String = "$0",
         val isActive: Boolean = false,
         val isManualBackedUp: Boolean = false,
@@ -70,6 +110,7 @@ class MultiWalletViewModel @Inject constructor(
         launchSafe {
             loadWallets()
         }
+        observeFiatDisplayInputs()
     }
 
     suspend fun loadWallets(forceRefresh: Boolean = false) {
@@ -101,21 +142,23 @@ class MultiWalletViewModel @Inject constructor(
         val items = withContext(kotlinx.coroutines.Dispatchers.Default) {
             val deferredItems = walletList.map { wallet ->
                 async {
+                    val totalUsd = try {
+                        getCachedWalletBalanceUseCase(wallet.id)
+                    } catch (e: Exception) {
+                        // Cache read — a miss just means we show zero until the network sync lands.
+                        // Logged, never surfaced (ErrorSurface.SILENT).
+                        reportError(
+                            throwable = e,
+                            userAction = "getCachedWalletBalance",
+                            surface = ErrorSurface.SILENT,
+                            severity = ErrorSeverity.LOW
+                        )
+                        BigDecimal.ZERO
+                    }
                     WalletUiItem(
                         wallet = wallet,
-                        // Cache read — a miss just means we show $0 until the network sync lands.
-                        // Logged, never surfaced (ErrorSurface.SILENT).
-                        totalBalance = try {
-                            getCachedWalletBalanceUseCase(wallet.id)
-                        } catch (e: Exception) {
-                            reportError(
-                                throwable = e,
-                                userAction = "getCachedWalletBalance",
-                                surface = ErrorSurface.SILENT,
-                                severity = ErrorSeverity.LOW
-                            )
-                            "$0"
-                        },
+                        totalUsd = totalUsd,
+                        totalBalance = formatTotal(totalUsd),
                         isActive = wallet.id == activeId,
                         isManualBackedUp = wallet.isManualBackedUp,
                         isCloudBackedUp = wallet.isCloudBackedUp

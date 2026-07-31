@@ -125,11 +125,20 @@ Add getters/setters to `domain/.../interfaceRepository/IUserPreferencesRepositor
   defaults `darkTheme = isSystemInDarkTheme()`. Add a `themeMode` param and resolve dark/light from
   the pref. **Two call sites must both read the pref:** `MainActivityCompose.kt` and
   `WelcomeActivityCompose.kt` (the only two roots; other `MegaWalletTheme` refs are `@Preview`s).
-- **Fiat currency (USD/IRR).** Model `domain/model/CurrencyRate.kt` already supports
-  `quoteCurrency`/`baseCurrency`/`rate`; `MarketDataRepositoryImpl` provides rates. But
-  `BalanceFormatter.formatUsdValue` and `data/.../formatter/TransactionDisplayFormatter.kt` currently
-  hardcode USD — they must honor the selected currency + apply the IRR rate. Touch points:
-  `core/.../utils/BalanceFormatter.kt`, the formatter, and every fiat display call site.
+- **Fiat currency (USD/تومان).** ✅ **DONE (2026-07-31) — built with TASK-56**, since the toggle is
+  unusable without the pref and building the pref twice was the real risk. See TASK-56 in the task
+  register for the full write-up. What exists now, for the Settings screen to reuse rather than rebuild:
+  - `domain/model/FiatCurrency.kt` (USD / TOMAN, default USD) — replaced `HomeUiState.DisplayCurrency`.
+  - `IUserPreferencesRepository.get/setFiatCurrency` for storage, and `IFiatCurrencyProvider`
+    (impl `data/repository/FiatCurrencyProvider`, `@Singleton`) as the **observable** value every screen
+    collects. **Settings must bind its radio/segmented control to the provider**, not to the suspend
+    getter — a snapshot is exactly how the Toman rate went stale before TASK-54.
+  - `core/utils/FiatConversion` is the one and only place that knows تومان vs rial. The Wallex value is
+    **already تومان** (`uSDTTMN`), so there is no `/10` in the production path; the unit is resolved from
+    `CurrencyRate.quoteCurrency`, which the producers now correctly label `"TMN"`.
+  - `BalanceFormatter.formatFiatValue` + `AssetItem.withFiatBalances` are the only fiat formatters.
+  - Still USD-only (not part of TASK-56's four surfaces): `CachedWalletBalanceReaderImpl` and
+    `CloudWalletBalanceCalculatorImpl`.
 - **Date calendar (Jalali/Gregorian).** `core/.../utils/JalaliCalendar.kt` +
   `core/.../utils/DateTimeUtils.kt` (`getDateHeader`) exist; make date formatting read the pref.
   Formatter already centralizes date display (`TransactionDisplayFormatter.historyDateHeader/…`).
@@ -151,7 +160,9 @@ Add getters/setters to `domain/.../interfaceRepository/IUserPreferencesRepositor
    `onMoreOptionsClick`; add rows that **link** to existing Security + Wallets. (No new prefs yet.)
 2. Connection mode DIRECT/PROXY toggle on the existing pref.
 3. Theme pref + enum + plumb both roots + `MegaWalletTheme` param.
-4. Fiat currency + date calendar prefs + formatter/`BalanceFormatter` changes.
+4. Date calendar pref + `JalaliCalendar`/`DateTimeUtils` wiring. (**Fiat currency: already done** —
+   TASK-56 shipped the pref, the provider and the formatters; Settings only needs a control bound to
+   `IFiatCurrencyProvider`.)
 5. Screenshot block + notifications toggles.
 6. About/Developer section.
 

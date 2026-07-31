@@ -112,7 +112,12 @@ class UsdToIrrRateProvider @Inject constructor(
         /** Same key the old ad-hoc HomeViewModel persistence used, so existing installs keep their value. */
         const val CACHE_KEY = "LAST_IRR_RATE"
 
-        const val QUOTE_CURRENCY = "IRR"
+        /**
+         * TASK-56 — must match what [MarketDataRepositoryImpl] emits: the cached number is the same
+         * Wallex تومان value, so seeding it as "IRR" would make `FiatConversion` divide it by ten and
+         * every cold start would show a تومان balance a tenth of the truth until the first refresh.
+         */
+        const val QUOTE_CURRENCY = "TMN"
         const val BASE_CURRENCY = "USDT"
     }
 }

@@ -77,8 +77,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.imageLoader
 import com.mtd.common_ui.R
+import com.mtd.core.utils.BalanceFormatter
 import com.mtd.core.utils.formatWithSeparator
 import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.HomeUiState
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
@@ -452,7 +454,7 @@ private fun AssetDetailTopSection(
     // screen is open, so the rate was read once on entry and then frozen — the reported "the log has
     // the new price but the screen still shows the old one". Collecting keeps it live.
     val irrRateState = homeViewModel?.usdToIrrRate?.collectAsStateWithLifecycle()
-    val irrRate = irrRateState?.value?.rate ?: BigDecimal.ZERO
+    val irrRate = irrRateState?.value
 
     // Ask for a refresh on entry; the result arrives through the flow above, not as a return value.
     LaunchedEffect(homeViewModel) {
@@ -464,10 +466,19 @@ private fun AssetDetailTopSection(
         scrubbedPoint?.second?.let { BigDecimal.valueOf(it.toDouble()) } ?: asset.priceUsdRaw
     }
 
+    // TASK-56 — قیمت تومانی از تنها تابع تبدیل ارز عبور می‌کند.
+    //
+    // This used to be `currentPriceUsd * (rate ?: ZERO)`, so an unknown rate rendered a confident
+    // "0 تومان" — indistinguishable from a genuinely worthless asset. It now shows the shared
+    // placeholder, and the ﷼/تومان unit comes from the rate's own label rather than being assumed.
     val priceIrr = remember(currentPriceUsd, irrRate) {
-        (currentPriceUsd * irrRate)
-            .setScale(0, RoundingMode.HALF_UP)
-            .formatWithSeparator(usePersianSeparator = false, minFractionDigits = 0, maxFractionDigits = 0)
+        BalanceFormatter.formatFiatValue(
+            usdAmount = currentPriceUsd,
+            currency = FiatCurrency.TOMAN,
+            rate = irrRate,
+            usePersianSeparator = false,
+            withSymbol = false
+        )
     }
 
     val priceUsdFormatted = remember(currentPriceUsd) {
@@ -539,7 +550,7 @@ private fun AssetDetailTopSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     AutoResizeBalanceRows(
                         totalBalance = priceUsdFormatted,
-                        displayCurrency = HomeUiState.DisplayCurrency.USDT,
+                        displayCurrency = FiatCurrency.USD,
                         animationDuration = 200,
                         textSize = 25.sp,
                         USDTFontSize = 15.sp
@@ -552,7 +563,7 @@ private fun AssetDetailTopSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     AutoResizeBalanceRows(
                         totalBalance = priceIrr,
-                        displayCurrency = HomeUiState.DisplayCurrency.IRR,
+                        displayCurrency = FiatCurrency.TOMAN,
                         animationDuration = 200,
                         textSize = 25.sp,
                         TMNFontSize = 15.sp
@@ -784,7 +795,7 @@ private fun AssetDetailBottomSection(asset: AssetItem) {
                         AutoResizeBalanceRows(
                             totalBalance = asset.balanceUsdt.replace("$", "").replace("USDT", "")
                                 .trim(),
-                            displayCurrency = HomeUiState.DisplayCurrency.USDT,
+                            displayCurrency = FiatCurrency.USD,
                             animationDuration = 200,
                             USDTFontSize = 12.sp,
                             textSize = 22.sp,
@@ -813,7 +824,7 @@ private fun AssetDetailBottomSection(asset: AssetItem) {
                         Spacer(modifier = Modifier.height(8.dp))
                         AutoResizeBalanceRows(
                             totalBalance = asset.balanceIrr.replace("تومان", "").trim(),
-                            displayCurrency = HomeUiState.DisplayCurrency.IRR,
+                            displayCurrency = FiatCurrency.TOMAN,
                             animationDuration = 200,
                             TMNFontSize = 10.sp,
                             textSize = 22.sp,
@@ -981,7 +992,7 @@ private fun BreakdownListItem(subAsset: AssetItem, percentage: Float) {
 @Composable
 internal fun AutoResizeBalanceRows(
     totalBalance: String,
-    displayCurrency: HomeUiState.DisplayCurrency,
+    displayCurrency: FiatCurrency,
     animationDuration: Int,
     TMNFontSize: TextUnit= WalletScreenConstants.TOMAN_FONT_SIZE,
     USDTFontSize: TextUnit= WalletScreenConstants.CURRENCY_SYMBOL_FONT_SIZE,
@@ -999,8 +1010,8 @@ internal fun AutoResizeBalanceRows(
             modifier = Modifier.wrapContentWidth()
         ) {
             Text(
-                text = if (displayCurrency == HomeUiState.DisplayCurrency.USDT) "$" else "تومان",
-                style = if (displayCurrency == HomeUiState.DisplayCurrency.USDT) {
+                text = if (displayCurrency == FiatCurrency.USD) "$" else "تومان",
+                style = if (displayCurrency == FiatCurrency.USD) {
                     MaterialTheme.typography.headlineSmall.copy(
                         fontSize = USDTFontSize,
                         lineHeight = USDTFontSize,
@@ -1029,9 +1040,9 @@ internal fun AutoResizeBalanceRows(
                     lineHeight = textSize,
                     color = MaterialTheme.colorScheme.tertiary,
                     fontFamily = when (displayCurrency) {
-                        HomeUiState.DisplayCurrency.USDT -> InterRegularMedium
+                        FiatCurrency.USD -> InterRegularMedium
 
-                        HomeUiState.DisplayCurrency.IRR -> IranSansRegularMedium
+                        FiatCurrency.TOMAN -> IranSansRegularMedium
                     },
                     letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
                 ),

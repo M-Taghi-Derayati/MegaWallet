@@ -6,7 +6,9 @@ import com.mtd.core.utils.DateTimeUtils.getDateHeader
 import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.model.BitcoinTransaction
+import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.EvmTransaction
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
@@ -108,17 +110,47 @@ class TransactionDisplayFormatter @Inject constructor(
         return if (symbol.isBlank()) display else "$display $symbol"
     }
 
-    fun transactionFiat(transaction: TransactionRecord): String? {
+    /**
+     * TASK-56 — history-row fiat, in the user's selected currency.
+     *
+     * [currency] and [rate] are parameters rather than injected state on purpose: this class is a pure
+     * formatter with no mutable state, so the caller passes the values it observes and can
+     * `remember(...)` the result off them. `null` [rate] with [FiatCurrency.TOMAN] yields
+     * [com.mtd.core.utils.FiatConversion.UNKNOWN_PLACEHOLDER], never a zero.
+     *
+     * Unlike before, the symbol is included: a bare "1,234" is legible as USD but ambiguous once
+     * تومان is selectable.
+     */
+    fun transactionFiat(
+        transaction: TransactionRecord,
+        currency: FiatCurrency,
+        rate: CurrencyRate?
+    ): String? {
         val value = transaction.fiatValue ?: return null
-        return BalanceFormatter.formatUsdValue(BigDecimal.valueOf(value), false)
+        return BalanceFormatter.formatFiatValue(
+            usdAmount = BigDecimal.valueOf(value),
+            currency = currency,
+            rate = rate
+        )
     }
 
+    /**
+     * Detail-sheet fiat. Returns the **bare** amount — the receipt draws the currency symbol as its own
+     * composable — so [BalanceFormatter.formatFiatValue] is called with `withSymbol = false`.
+     */
     fun transactionFiatDetail(
         transaction: TransactionRecord,
-        usdPrices: Map<String, BigDecimal>
+        usdPrices: Map<String, BigDecimal>,
+        currency: FiatCurrency,
+        rate: CurrencyRate?
     ): String? {
         val amount = transactionFiatValue(transaction, usdPrices) ?: return null
-        return BalanceFormatter.formatUsdValue(amount, false)
+        return BalanceFormatter.formatFiatValue(
+            usdAmount = amount,
+            currency = currency,
+            rate = rate,
+            withSymbol = false
+        )
     }
 
     private fun transactionFiatValue(

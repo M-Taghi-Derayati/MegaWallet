@@ -6,7 +6,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.lifecycle.SavedStateHandle
 import com.mtd.core.manager.ErrorManager
 import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
+import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.usecase.history.ObservePendingHistoryActivityUseCase
 import com.mtd.megawallet.core.BaseViewModel
 import com.mtd.megawallet.ui.compose.screens.main.MainTab
@@ -20,6 +22,7 @@ import javax.inject.Inject
 class MainScreenViewModel @Inject constructor(
     private val observePendingHistoryActivityUseCase: ObservePendingHistoryActivityUseCase,
     private val connectionModeProvider: DefaultBlockchainConnectionModeProvider,
+    private val fiatCurrencyProvider: IFiatCurrencyProvider,
     private val savedStateHandle: SavedStateHandle,
     errorManager: ErrorManager
 ) : BaseViewModel(errorManager) {
@@ -37,6 +40,13 @@ class MainScreenViewModel @Inject constructor(
      */
     private val _connectionMode = MutableStateFlow(connectionModeProvider.currentMode())
     val connectionMode: StateFlow<BlockchainConnectionMode> = _connectionMode.asStateFlow()
+
+    /**
+     * TASK-56 — the fiat currency behind the header's USD ⇄ تومان toggle. This is the provider's own
+     * StateFlow, not a copy: the header, the wallet list, asset detail, send and history all read the
+     * same object, so they cannot show different units at the same instant.
+     */
+    val fiatCurrency: StateFlow<FiatCurrency> = fiatCurrencyProvider.currency
 
     private val _selectedTab = MutableStateFlow(
         savedStateHandle.get<String>(KEY_SELECTED_TAB)
@@ -61,6 +71,8 @@ class MainScreenViewModel @Inject constructor(
             connectionModeProvider.prime()
             _connectionMode.value = connectionModeProvider.currentMode()
         }
+        // Same reasoning as the transport mode: hydrate the persisted currency off the main thread.
+        launchSafe(checkNetwork = false) { fiatCurrencyProvider.ensurePrimed() }
     }
 
     fun onAssetClicked(assetId: String, bounds: Rect) {
@@ -90,6 +102,17 @@ class MainScreenViewModel @Inject constructor(
         launchSafe(checkNetwork = false) {
             connectionModeProvider.setMode(next)
         }
+    }
+
+    /**
+     * TASK-56 — flips USD ⇄ تومان. [IFiatCurrencyProvider.toggle] persists the choice (so it survives
+     * process death) and publishes it, which is what re-renders every fiat surface at once.
+     *
+     * No optimistic local update, unlike [toggleConnectionMode]: the currency is displayed *from* the
+     * provider's flow, so a second source here could only introduce a way for them to disagree.
+     */
+    fun toggleFiatCurrency() {
+        launchSafe(checkNetwork = false) { fiatCurrencyProvider.toggle() }
     }
 
     fun selectTab(tab: MainTab) {

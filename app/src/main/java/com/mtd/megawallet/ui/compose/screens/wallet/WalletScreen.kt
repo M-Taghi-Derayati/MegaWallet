@@ -69,6 +69,7 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import com.mtd.common_ui.R
 import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.NetworkShare
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
@@ -136,8 +137,8 @@ fun WalletScreens(
                             item {
                                 TotalBalanceSection(
                                     totalBalance = when (state.displayCurrency) {
-                                        HomeUiState.DisplayCurrency.USDT -> state.totalBalanceUsdt
-                                        HomeUiState.DisplayCurrency.IRR -> state.totalBalanceIrr
+                                        FiatCurrency.USD -> state.totalBalanceUsdt
+                                        FiatCurrency.TOMAN -> state.totalBalanceIrr
                                     },
                                     displayCurrency = state.displayCurrency,
                                     isUpdating = state.isUpdating,
@@ -274,7 +275,7 @@ fun WalletScreens(
 @Composable
 private fun TotalBalanceSection(
     totalBalance: String,
-    displayCurrency: HomeUiState.DisplayCurrency,
+    displayCurrency: FiatCurrency,
     isUpdating: Boolean,
     isBalanceHidden: Boolean,
     onToggleHidden: () -> Unit
@@ -362,7 +363,7 @@ private fun TotalBalanceSection(
 private fun AssetListItems(
     modifier: Modifier = Modifier,
     asset: AssetItem,
-    displayCurrency: HomeUiState.DisplayCurrency,
+    displayCurrency: FiatCurrency,
     isBalanceHidden: Boolean,
     onClick: () -> Unit = {}
 ) {
@@ -370,8 +371,8 @@ private fun AssetListItems(
     val imageLoader = LocalContext.current.imageLoader
     val displayBalance = remember(displayCurrency, asset.balanceUsdt, asset.balanceIrr) {
         when (displayCurrency) {
-            HomeUiState.DisplayCurrency.USDT -> asset.balanceUsdt
-            HomeUiState.DisplayCurrency.IRR -> asset.balanceIrr
+            FiatCurrency.USD -> asset.balanceUsdt
+            FiatCurrency.TOMAN -> asset.balanceIrr
         }
     }
 
@@ -565,15 +566,15 @@ private fun AssetListItems(
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.tertiary,
                                     fontFamily = when (displayCurrency) {
-                                        HomeUiState.DisplayCurrency.USDT -> InterRegularMedium
+                                        FiatCurrency.USD -> InterRegularMedium
 
-                                        HomeUiState.DisplayCurrency.IRR -> IranSansRegularMedium
+                                        FiatCurrency.TOMAN -> IranSansRegularMedium
                                     }
                                 ),
                                 animationDuration = WalletScreenConstants.ASSET_ANIMATION_DURATION,
                                 styleVariantKey = displayCurrency
                             )
-                            if (displayCurrency == HomeUiState.DisplayCurrency.USDT) {
+                            if (displayCurrency == FiatCurrency.USD) {
                                 Text(
                                     text = "$",
                                     style = MaterialTheme.typography.bodyMedium.copy(
@@ -585,7 +586,7 @@ private fun AssetListItems(
                                     modifier = Modifier.padding(start = WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END)
                                 )
                             }
-                            if (displayCurrency == HomeUiState.DisplayCurrency.IRR) {
+                            if (displayCurrency == FiatCurrency.TOMAN) {
                                 Text(
                                     text = " تومان",
                                     style = MaterialTheme.typography.bodySmall.copy(
@@ -625,7 +626,7 @@ private fun AssetListItems(
 @Composable
 private fun AutoResizeBalanceRow(
     totalBalance: String,
-    displayCurrency: HomeUiState.DisplayCurrency,
+    displayCurrency: FiatCurrency,
     animationDuration: Int,
     minTextSize: TextUnit = 16.sp
 ) {
@@ -652,9 +653,9 @@ private fun AutoResizeBalanceRow(
                     fontSize = textSize,
                     color = MaterialTheme.colorScheme.tertiary,
                     fontFamily = when (displayCurrency) {
-                        HomeUiState.DisplayCurrency.USDT -> InterRegularMedium
+                        FiatCurrency.USD -> InterRegularMedium
 
-                        HomeUiState.DisplayCurrency.IRR -> IranSansRegularMedium
+                        FiatCurrency.TOMAN -> IranSansRegularMedium
                     },
                     letterSpacing = WalletScreenConstants.TOTAL_BALANCE_LETTER_SPACING
                 ),
@@ -662,7 +663,7 @@ private fun AutoResizeBalanceRow(
                 styleVariantKey = displayCurrency,
                 modifier = Modifier.wrapContentWidth()
             )
-            if (displayCurrency == HomeUiState.DisplayCurrency.USDT) {
+            if (displayCurrency == FiatCurrency.USD) {
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = "$",
@@ -676,7 +677,7 @@ private fun AutoResizeBalanceRow(
                 )
 
             }
-            if (displayCurrency == HomeUiState.DisplayCurrency.IRR) {
+            if (displayCurrency == FiatCurrency.TOMAN) {
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = "تومان",
@@ -840,6 +841,6 @@ fun PreviewAssetsDetails() {
 //        AssetDetailHeader(
 //            onBackClick = {},
 //            asset = item
-//        )        AssetListItems(asset = item, isBalanceHidden = false, onClick = {}, displayCurrency = HomeUiState.DisplayCurrency.USDT)    }
+//        )        AssetListItems(asset = item, isBalanceHidden = false, onClick = {}, displayCurrency = FiatCurrency.USD)    }
     }
 }

@@ -1142,7 +1142,105 @@ the investigation already produced an answer (TASK-53) it is recorded here rathe
   **Rollback:** hide the Explore entry. **Regression:** none (additive). **Testing:** MockWebServer search
   fixtures (hit/empty/error), address-validation unit tests.
 
-### TASK-56 — USD ⇄ Toman toggle icon on MainScreen
+### TASK-56 — USD ⇄ Toman toggle icon on MainScreen — ✅ Implemented (needs build + on-device verify)
+- **Review follow-up (2026-07-31):** the wallet switcher was the one fiat surface the toggle could not
+  reach. `ICachedWalletBalanceReader.getCachedTotalBalance()` returned an already-formatted `"$1,234"`
+  built in the **data layer**, so the currency was baked in before any ViewModel saw the number, and
+  `MultiWalletScreen` showed USD regardless of the selection. Renamed to `getCachedTotalUsd()` returning
+  raw `BigDecimal`; `MultiWalletViewModel` keeps the raw total on `WalletUiItem.totalUsd` and re-formats
+  on every change of **currency or rate** (the rate matters too — a تومان total is unrenderable until
+  the first Wallex value lands). Fixed in passing: `WalletBalanceSynchronizerImpl` decided "is this
+  wallet cached?" by comparing the formatted string against `"$0"`/`"0"`, which silently depended on how
+  the formatter renders zero — a sub-cent balance formatted `"$0.00"` matched neither literal and was
+  treated as cached. It is now a numeric `> BigDecimal.ZERO` test.
+- **Deliberately NOT converted:** `CloudWalletBalanceCalculatorImpl` → `CloudBackupWalletListScreen:224`
+  renders `"<amount> تتر"` — it is labelled in **USDT**, not in the fiat display unit, and it appears
+  mid-restore when the rate may well be unknown (a `—` placeholder there would make the backup picker
+  harder to use, not easier). Left as USDT on purpose.
+- **Also closes TASK S §2.2-D's fiat-currency preference.** The pref and the toggle were built as one
+  unit; building the pref twice was the main risk in splitting them.
+- **Done (2026-07-31):**
+  - **`FiatCurrency` (domain) replaces `HomeUiState.DisplayCurrency`.** A `DisplayCurrency {IRR, USDT}`
+    already existed and `MainHeader` already had an `onCurrencyToggle` wired to
+    `HomeViewModel.toggleDisplayCurrency()` — but it lived **inside `HomeUiState.Success`**, so it was
+    invisible to every other screen and died with the process. Rather than add a second enum next to it,
+    it was replaced (USDT→USD, IRR→TOMAN) across the ~7 files that referenced it.
+  - **Persistence + observability, separately.** `getFiatCurrency`/`setFiatCurrency` on
+    `IUserPreferencesRepository` (mirroring `get/setConnectionMode`) is the storage; new
+    `IFiatCurrencyProvider` + `FiatCurrencyProvider` (`@Singleton`, bound in `DataModule`) is the
+    **observable** owner every ViewModel collects — deliberately the same shape as
+    `IUsdToIrrRateProvider`. A suspend getter alone would have reproduced TASK-54's defect: each screen
+    snapshots the value and stops noticing changes. Seeded USD and hydrated by `ensurePrimed()` off the
+    main thread (the TD-19 lesson from `DefaultBlockchainConnectionModeProvider`), and `set` takes the
+    same lock as `ensurePrimed` so a cold-start read cannot revert a tap that lands mid-read.
+  - **The IRR-vs-Toman decision, made once and written down** in `core/utils/FiatConversion`:
+    **the value has always been تومان, and there is no `/10` in the production path.**
+    `MarketDataRepositoryImpl` reads Wallex `result.uSDTTMN` — TMN — into a local literally named
+    `latestPriceToman`, then labelled it `quoteCurrency = "IRR"` with a comment admitting the label was
+    wrong. Adding a divisor would have made every تومان amount **ten times too small**. Instead the two
+    producers now label it `"TMN"`, and `FiatConversion.tomanPerUsd` resolves the unit **from the label**
+    — passing `IRR`/`RIAL` through the one and only `/10` in the codebase, and returning `null`
+    (unknown) for a label it does not recognise rather than guessing. That keeps the relayer's genuine
+    `irr` field adoptable later without touching a single call site.
+  - **Unknown rate ⇒ placeholder (`—`), never `0`.** `BalanceFormatter.formatFiatValue` is the single
+    fiat entry point and returns `FiatConversion.UNKNOWN_PLACEHOLDER` when تومان is selected and the rate
+    is unknown. Four sites that rendered a confident zero were fixed: the asset-detail تومان price
+    (`currentPriceUsd * (rate ?: ZERO)`), the history receipt (`?: "0.00"`), the fee card's تومان line,
+    and the send confirm sheet. **Toman display scale is 0** (whole تومان, Persian `٬` separator).
+  - **Wallet list now re-derives its fiat strings on every pass** (`createAggregatedListWithRates` →
+    `withFiatBalances`, groups **and** singles). Previously only group headers were rebuilt, so a single
+    asset carried whatever string was written when its balance last changed — a currency switch, or a
+    fresh Wallex rate, left it in the old unit until a price refresh happened to run. `HomeViewModel`
+    now also **collects the rate flow**, closing the last gap TASK-54 left: the rate became observable
+    but the list's تومان strings were still baked at fetch time.
+  - **One formatting policy.** `AssetItem.withFiatBalances` (`:core`) is the only place an asset's fiat
+    strings are produced; `HomeViewModel` and `SendViewModel` both call it. `ISendAssetDataSource` lost
+    its `irrRate` parameter and no longer formats at all — it was emitting a *different* shape
+    (`"$12.34"` / `"1,234 تومان "` vs the list's bare numbers) with no idea which currency was selected.
+  - **MAX-send math (money-critical) — three real defects fixed.**
+    1. MAX was expressed only as **text**: the screen wrote the formatted balance into the amount box and
+       the send path parsed it back. Through a 2-decimal USD string that never recovered the exact
+       balance — and it also made the downstream `baseCrypto >= balanceRaw` max-detection fail, so a
+       **native MAX skipped the fee subtraction** and produced an unsendable transaction. With تومان
+       (0 decimals) the round-trip is coarser still. `useMax()` now sets an `isMaxAmount` flag and
+       `getBaseCryptoAmount` returns `balanceRaw` **exactly**; the box keeps the pretty text.
+    2. The fiat→crypto division rounded **HALF_UP**, which can round *up* to more crypto than the user
+       holds. Now **DOWN**. `useMax` likewise rounds its displayed figure DOWN in both currencies.
+    3. `isOverBalance` compared a typed **fiat** amount against `balanceRaw × priceUsdRaw` (i.e. against
+       the balance in **USD**). With تومان selected that compared تومان to dollars and would have
+       flagged nearly every valid amount as over-balance. Both sides are converted first.
+  - `isUsdMode` → `isFiatMode` throughout the send flow, so no call site can keep assuming the fiat side
+    is dollars. The dead `getUsdDisplay`/`getIrrDisplay` pair was removed.
+  - **`AssetDetailViewModel` had a private `MutableStateFlow(USDT)` with a `setDisplayCurrency` setter
+    that nothing ever called** — asset detail was pinned to USD regardless of the user's choice. It now
+    delegates to the shared provider.
+  - **Header control shows the ACTIVE currency** (`$` / `تومان`) rather than the one a tap switches to:
+    it is the only on-screen indicator of what unit the balances are in. Driven by
+    `MainScreenViewModel.toggleFiatCurrency()` (which owns the other header state), with a Persian
+    content description.
+- **Tests:** `FiatFormattingTest` (**:core**, 20 cases) — the ×10 unit normalisation both ways, TMN/IRR
+  producing identical output, unrecognised label ⇒ unknown, تومان rounding half-up to whole units,
+  USD 2-dp and sub-cent 6-dp, `withFiatBalances` populating both currencies, the unknown-rate placeholder
+  and the assertion that **a genuine zero is still `0`, not the placeholder**.
+  `FiatCurrencyProviderTest` (**:data**, 8 cases) — survives-process-death read-back, prime-once,
+  8-way concurrent prime collapsing to one read, toggle both ways persisting each flip, toggle honouring
+  the persisted value, and a late `ensurePrimed` unable to revert a fresh tap.
+  `TransactionDisplayFormatterTest` (:app) gained 5 history-fiat cases.
+  Run: `./gradlew :core:testDebugUnitTest :data:testDebugUnitTest`.
+- **Not built here** (Gradle unavailable) — inspection-verified only. **No claim is made that this
+  compiles or that the tests pass.**
+- **Known remaining (deliberately out of scope, still USD):** `CachedWalletBalanceReaderImpl` (the
+  multi-wallet switcher list) and `CloudWalletBalanceCalculatorImpl` (the cloud-restore list). Both are
+  data-layer producers for lists of *other* wallets and would each need currency+rate threaded through
+  their own interface; neither is one of the four surfaces this task names.
+- **Verify on-device:** tap the header control → wallet total, per-asset rows, asset detail, the send
+  picker, the send amount box + its equivalent line, the confirm sheet, and history rows all flip
+  together; kill and relaunch the app → the choice is still تومان; turn off the network before the first
+  rate arrives → every تومان surface shows `—`, none shows `0`; **send MAX in تومان on a native asset
+  (ETH/BTC/TRX) and confirm it broadcasts** rather than failing for insufficient funds.
+- **Original spec below.**
+
+### TASK-56 — USD ⇄ Toman toggle icon on MainScreen (original spec)
 - **Problem (user, item 7):** no way to see values in Toman; everything is USD.
 - **Current state:** `domain/model/CurrencyRate.kt` already models `baseCurrency`/`quoteCurrency`/`rate` and
   `MarketDataRepositoryImpl` provides rates, and `RelayerPriceDto` already carries an `irr` field — but
@@ -1155,7 +1253,8 @@ the investigation already produced an answer (TASK-53) it is recorded here rathe
 - **Files:** `screens/main/MainHeader.kt`, `viewmodel/MainScreenViewModel.kt`,
   `core/utils/BalanceFormatter.kt`, `data/formatter/TransactionDisplayFormatter.kt`,
   `IUserPreferencesRepository` (+impl). **Modules:** core, data, app, domain.
-  **Deps:** **TASK S §2.2-D** (fiat-currency pref) — do that pref first, this is its second entry point;
+  **Deps:** **TASK S §2.2-D** (fiat-currency pref) — **built here**, in the same change: the pref and the
+  toggle are one unit and building the pref twice was the main risk in splitting them;
   **TASK-54** (one price source) should land first or the toggle will surface the inconsistency.
 - **Difficulty:** Med · **Est:** 1 (0.5 on top of TASK S) · **Risk:** Med (money display) · **Priority:** P2.
 - **Acceptance:** one tap switches **every** fiat display (wallet total, per-asset, detail, send, history) to
@@ -1418,7 +1517,8 @@ the investigation already produced an answer (TASK-53) it is recorded here rathe
 **Suggested order for this batch:** TASK-58 (P0, data loss) → **TASK-59** (P1, needs to ride the next
 release to self-heal) → TASK-51 + TASK-52 (cheap, user-visible) →
 TASK-57 (unblocks clean errors everywhere) → TASK-54 (price truth) → TASK-53 (config wiring, high risk) →
-TASK-56 (needs TASK S pref + TASK-54) → TASK-55 (needs server contract) → TASK-50 (needs Swap/TASK-2).
+~~TASK-56 (needs TASK S pref + TASK-54)~~ ✅ done, with TASK S §2.2-D's fiat pref folded in →
+TASK-55 (needs server contract) → TASK-50 (needs Swap/TASK-2).
 
 ---
 

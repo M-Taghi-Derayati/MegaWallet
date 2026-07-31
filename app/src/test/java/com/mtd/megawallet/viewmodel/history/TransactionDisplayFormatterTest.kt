@@ -1,10 +1,13 @@
 package com.mtd.megawallet.viewmodel.history
 
+import com.mtd.core.utils.FiatConversion
 import com.mtd.data.formatter.TransactionDisplayFormatter
 import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.NetworkInfo
+import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.EvmTransaction
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.TokenTransferDetails
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.domain.model.TronTransaction
@@ -18,6 +21,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.math.BigDecimal
 import java.math.BigInteger
 
 /**
@@ -228,6 +232,53 @@ class TransactionDisplayFormatterTest {
     fun `tron energy used is null for a non-tron transaction`() {
         assertNull(formatter.tronEnergyUsed(evm(), null))
     }
+
+    // ---- TASK-56: history fiat in both currencies ----
+
+    @Test
+    fun `history row fiat renders USD with a symbol`() {
+        val tx = evm().copy(fiatValue = 12.5)
+        assertEquals("$12.50", formatter.transactionFiat(tx, FiatCurrency.USD, null))
+    }
+
+    @Test
+    fun `history row fiat renders Toman when Toman is selected`() {
+        val tx = evm().copy(fiatValue = 2.0)
+        assertEquals("140٬000 تومان", formatter.transactionFiat(tx, FiatCurrency.TOMAN, tomanRate))
+    }
+
+    @Test
+    fun `history row fiat shows the placeholder when the rate is unknown`() {
+        // Never "0" — a zero here reads as a worthless transaction.
+        val tx = evm().copy(fiatValue = 2.0)
+        assertEquals(
+            FiatConversion.UNKNOWN_PLACEHOLDER,
+            formatter.transactionFiat(tx, FiatCurrency.TOMAN, null)
+        )
+    }
+
+    @Test
+    fun `history row fiat is null when the transaction carries no fiat value at all`() {
+        // Distinct from "rate unknown": there is nothing to show, so the row omits the line entirely.
+        assertNull(formatter.transactionFiat(evm(), FiatCurrency.USD, null))
+    }
+
+    @Test
+    fun `detail fiat is bare - the receipt draws its own currency glyph`() {
+        val tx = evm().copy(fiatValue = 2.0)
+        assertEquals("2.00", formatter.transactionFiatDetail(tx, emptyMap(), FiatCurrency.USD, null))
+        assertEquals(
+            "140٬000",
+            formatter.transactionFiatDetail(tx, emptyMap(), FiatCurrency.TOMAN, tomanRate)
+        )
+    }
+
+    private val tomanRate = CurrencyRate(
+        quoteCurrency = "TMN",
+        baseCurrency = "USDT",
+        rate = BigDecimal("70000"),
+        lastUpdated = 1_000L
+    )
 
     // ---- helpers ----
 

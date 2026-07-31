@@ -53,6 +53,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.CloudWalletItem
 import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.ImportData
@@ -103,6 +104,9 @@ fun MainScreen(
     // KAN-9 / KAN-19 — DIRECT/PROXY transport, toggled from the header search icon.
     val connectionMode by mainViewModel.connectionMode.collectAsStateWithLifecycle()
 
+    // TASK-56 — واحد نمایش (دلار/تومان)؛ هدر هم آن را نشان می‌دهد و هم عوض می‌کند.
+    val fiatCurrency by mainViewModel.fiatCurrency.collectAsStateWithLifecycle()
+
     // مدیریت دکمه Back: اگر در صفحه جزئیات هستیم، به لیست برگرد
     BackHandler(enabled = selectedAssetId != null) {
         mainViewModel.onNavigateBack()
@@ -117,11 +121,12 @@ fun MainScreen(
         onMoreOptionsClick = onMoreOptionsClick,
         onHistoryClick = onHistoryClick,
         onExploreClick = onExploreClick,
-        onCurrencyToggle = { homeViewModel.toggleDisplayCurrency() },
+        onCurrencyToggle = { mainViewModel.toggleFiatCurrency() },
         mainViewModel = mainViewModel,
         homeViewModel = homeViewModel,
         selectedAssetId = selectedAssetId,
-        connectionMode = connectionMode
+        connectionMode = connectionMode,
+        fiatCurrency = fiatCurrency
     )
 }
 
@@ -143,6 +148,7 @@ private fun MainDashboardContent(
     onCurrencyToggle: () -> Unit,
     selectedAssetId: String?,
     connectionMode: BlockchainConnectionMode,
+    fiatCurrency: FiatCurrency,
 ) {
     val density = LocalDensity.current
     var fullScreenRect by remember { mutableStateOf(Rect.Zero) }
@@ -372,7 +378,8 @@ private fun MainDashboardContent(
                         onSearchClick = onSearchClick,
                         onMoreOptionsClick = onMoreOptionsClick,
                         onCurrencyToggle = onCurrencyToggle,
-                        connectionMode = connectionMode
+                        connectionMode = connectionMode,
+                        fiatCurrency = fiatCurrency
                     )
                 },
                 bottomBar = {

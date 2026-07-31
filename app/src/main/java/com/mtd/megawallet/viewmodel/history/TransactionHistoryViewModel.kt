@@ -8,9 +8,13 @@ import com.mtd.data.formatter.WalletAddressReference
 import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
+import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.interfaceRepository.INetworkCatalog
+import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.CurrencyRate
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.HISTORY_ALL_NETWORKS_OPTION_ID
 import com.mtd.domain.model.HistoryAddress
 import com.mtd.domain.model.HistoryNetworkOption
@@ -66,6 +70,8 @@ class TransactionHistoryViewModel @Inject constructor(
     private val networkCatalog: INetworkCatalog,
     private val assetCatalog: IAssetCatalog,
     private val displayFormatter: TransactionDisplayFormatter,
+    private val fiatCurrencyProvider: IFiatCurrencyProvider,
+    private val usdToIrrRateProvider: IUsdToIrrRateProvider,
     private val appEventBus: IAppEventBus,
     private val cacheStore: IAppCacheStore,
     private val getTransactionHistoryUseCase: GetTransactionHistoryUseCase,
@@ -145,9 +151,22 @@ class TransactionHistoryViewModel @Inject constructor(
     private var isScreenVisible = false
     private var observedWalletId: String? = null
 
+    /**
+     * TASK-56 — the selected fiat currency and the USD→تومان rate, for the row and receipt fiat lines.
+     * Exposed as the providers' own StateFlows (not copies) so history cannot drift from the wallet
+     * list: both screens read the same two objects.
+     */
+    val fiatCurrency: StateFlow<FiatCurrency> = fiatCurrencyProvider.currency
+    val usdToIrrRate: StateFlow<CurrencyRate?> = usdToIrrRateProvider.rate
+
     init {
         listenToGlobalEvents()
         observeActiveWallet()
+        launchSafe(checkNetwork = false) {
+            fiatCurrencyProvider.ensurePrimed()
+            // Seed-only (no network): the history screen must not wait on Wallex to render a row.
+            usdToIrrRateProvider.ensureSeeded()
+        }
     }
 
     fun refresh(networkNameStr: String?, userAddress: String?) {
@@ -862,11 +881,23 @@ class TransactionHistoryViewModel @Inject constructor(
     fun formatListAmount(transaction: TransactionRecord): String =
         displayFormatter.listAmount(transaction)
 
-    fun formatTransactionFiat(transaction: TransactionRecord): String? =
-        displayFormatter.transactionFiat(transaction)
+    /**
+     * TASK-56 — [currency] and [rate] are passed in by the composable, which collects [fiatCurrency]
+     * and [usdToIrrRate]. Reading them off the ViewModel here instead would leave Compose with nothing
+     * to observe, so a currency switch would not recompose the row — the same "the value changed but
+     * the screen did not" shape TASK-54 fixed for the rate.
+     */
+    fun formatTransactionFiat(
+        transaction: TransactionRecord,
+        currency: FiatCurrency,
+        rate: CurrencyRate?
+    ): String? = displayFormatter.transactionFiat(transaction, currency, rate)
 
-    fun formatTransactionFiatDetail(transaction: TransactionRecord): String? =
-        displayFormatter.transactionFiatDetail(transaction, assetUsdPrices)
+    fun formatTransactionFiatDetail(
+        transaction: TransactionRecord,
+        currency: FiatCurrency,
+        rate: CurrencyRate?
+    ): String? = displayFormatter.transactionFiatDetail(transaction, assetUsdPrices, currency, rate)
 
     fun formatTransactionFee(transaction: TransactionRecord): String =
         displayFormatter.transactionFee(transaction, transactionDetailFor(transaction))

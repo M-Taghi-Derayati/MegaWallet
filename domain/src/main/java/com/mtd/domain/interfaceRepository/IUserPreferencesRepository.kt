@@ -1,6 +1,7 @@
 package com.mtd.domain.interfaceRepository
 
 import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.FiatCurrency
 
 
 interface IUserPreferencesRepository {
@@ -12,6 +13,18 @@ interface IUserPreferencesRepository {
      */
     suspend fun getConnectionMode(): BlockchainConnectionMode
     suspend fun setConnectionMode(mode: BlockchainConnectionMode)
+
+    /**
+     * TASK-56 / TASK S §2.2-D — the fiat unit every money value is displayed in. Persisted so the
+     * choice survives process death; defaults to [FiatCurrency.DEFAULT] (USD).
+     *
+     * These are the **persistence** half only. Do not read the preference through this getter to
+     * render a screen: a suspend getter forces each caller to snapshot the value and stop noticing
+     * changes, which is the exact mechanism that froze the Toman rate before TASK-54. Observe
+     * [IFiatCurrencyProvider.currency] instead.
+     */
+    suspend fun getFiatCurrency(): FiatCurrency
+    suspend fun setFiatCurrency(currency: FiatCurrency)
 
     /**
      * وضعیت فعال بودن قفل اپ.

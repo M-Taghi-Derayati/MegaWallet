@@ -49,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,7 +77,8 @@ import com.mtd.common_ui.R
 import com.mtd.core.utils.AddressUtils.shortenAddress
 import com.mtd.domain.model.BitcoinTransaction
 import com.mtd.domain.model.EvmTransaction
-import com.mtd.domain.model.HomeUiState
+import com.mtd.core.utils.FiatConversion
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.TokenTransferDetails
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
@@ -179,7 +181,12 @@ private fun TransactionDetailsContent(
 ) {
     val imageLoader = LocalContext.current.imageLoader
     val style = transactionVisualStyle(transaction)
-    val fiatAmount = viewModel.formatTransactionFiatDetail(transaction)
+    // TASK-56 — collected so the receipt re-renders on a currency switch / rate update.
+    val fiatCurrency by viewModel.fiatCurrency.collectAsStateWithLifecycle()
+    val usdToIrrRate by viewModel.usdToIrrRate.collectAsStateWithLifecycle()
+    val fiatAmount = remember(transaction, fiatCurrency, usdToIrrRate) {
+        viewModel.formatTransactionFiatDetail(transaction, fiatCurrency, usdToIrrRate)
+    }
     val density = LocalDensity.current
     val scrollState = rememberScrollState()
     var measuredCollapsedHeight by remember(transaction.hash) { mutableStateOf<Dp?>(null) }
@@ -256,6 +263,7 @@ private fun TransactionDetailsContent(
 
                 AmountBlock(
                     fiatAmount = fiatAmount,
+                    fiatCurrency = fiatCurrency,
                     cryptoAmount = viewModel.formatTransactionAmount(transaction),
                     large = expanded,
                     framed = !expanded
@@ -553,6 +561,7 @@ private fun AssetIconWithDirection(
 @Composable
 private fun AmountBlock(
     fiatAmount: String?,
+    fiatCurrency: FiatCurrency,
     cryptoAmount: String,
     large: Boolean,
     framed: Boolean
@@ -582,7 +591,7 @@ private fun AmountBlock(
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 AutoResizeBalanceRows(
                     totalBalance = formatReceiptBalanceValue(fiatAmount),
-                    displayCurrency = HomeUiState.DisplayCurrency.USDT,
+                    displayCurrency = fiatCurrency,
                     animationDuration = 300,
                     TMNFontSize = 15.sp,
                     USDTFontSize = if (large) 30.sp else 24.sp,
@@ -1149,6 +1158,11 @@ private fun transactionTokenTransfer(transaction: TransactionRecord): TokenTrans
     }
 }
 
+/**
+ * TASK-56 — an absent/unknown fiat amount used to fall back to `"0.00"`, which reads as a genuine zero
+ * receipt. It now shows [FiatConversion.UNKNOWN_PLACEHOLDER], the same placeholder every other fiat
+ * surface uses when the تومان rate is not known.
+ */
 private fun formatReceiptBalanceValue(fiatAmount: String?): String {
     return fiatAmount
         ?.removePrefix("+")
@@ -1158,7 +1172,7 @@ private fun formatReceiptBalanceValue(fiatAmount: String?): String {
             if (fiatAmount.startsWith("-$")) "-$value" else value
         }
         ?.takeIf { it.isNotBlank() }
-        ?: "0.00"
+        ?: FiatConversion.UNKNOWN_PLACEHOLDER
 }
 
 

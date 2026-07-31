@@ -13,13 +13,12 @@ sealed class HomeUiState {
         val isUpdating: Boolean,
         val assets: List<AssetItem>,
         val recentActivity: List<ActivityItem>,
-        val displayCurrency: DisplayCurrency = DisplayCurrency.USDT
+        // TASK-56 — was a local `DisplayCurrency {IRR, USDT}` that lived only in this state object, so the
+        // choice was invisible to every other screen and died with the process. It is now the shared
+        // persisted [FiatCurrency]; this field just mirrors it for the wallet-list rendering.
+        val displayCurrency: FiatCurrency = FiatCurrency.DEFAULT
     ) : HomeUiState()
     data class Error(val message: String) : HomeUiState()
-
-    enum class DisplayCurrency {
-         IRR, USDT
-    }
 }
 
 /**

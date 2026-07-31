@@ -4,12 +4,16 @@ import androidx.lifecycle.viewModelScope
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.manager.ErrorSeverity
 import com.mtd.core.utils.BalanceFormatter
+import com.mtd.core.utils.FiatConversion
+import com.mtd.core.utils.withFiatBalances
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IFeatureAvailabilityResolver
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
+import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.model.CurrencyRate
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.EvmSponsorMode
@@ -73,6 +77,7 @@ class SendViewModel @Inject constructor(
     private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
     /** TASK-54 — shared observable Toman rate; replaces the one-shot fetch + hardcoded fallback. */
     private val usdToIrrRateProvider: IUsdToIrrRateProvider,
+    private val fiatCurrencyProvider: IFiatCurrencyProvider,
     private val refreshSelectedAssetBalanceUseCase: RefreshSelectedAssetBalanceUseCase,
     private val estimateSendFeesUseCase: EstimateSendFeesUseCase,
     private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
@@ -123,8 +128,27 @@ class SendViewModel @Inject constructor(
     private val _amountText = MutableStateFlow("0")
     val amountText = _amountText.asStateFlow()
 
-    private val _isUsdMode = MutableStateFlow(false)
-    val isUsdMode = _isUsdMode.asStateFlow()
+    /**
+     * TASK-56 — was `isUsdMode`. The amount box toggles between the asset's own unit and **fiat**;
+     * which fiat is [fiatCurrency], not always USD. Renamed so no call site can keep assuming the
+     * fiat side is dollars.
+     */
+    private val _isFiatMode = MutableStateFlow(false)
+    val isFiatMode = _isFiatMode.asStateFlow()
+
+    /**
+     * TASK-56 — set by [useMax], cleared by any manual edit.
+     *
+     * MAX used to be expressed only as text: the screen wrote the *formatted* balance into the amount
+     * box and the send path parsed it back. In fiat mode that round-trip went through a 2-decimal USD
+     * string, so the recovered crypto amount was never exactly the balance — which also made the
+     * downstream `baseCrypto >= balanceRaw` max-detection fail, so a native MAX skipped the
+     * fee subtraction and produced an unsendable transaction. With تومان (0 decimals) the same
+     * round-trip is coarser still. The flag keeps the *displayed* amount pretty while the amount that
+     * is actually sent stays exact.
+     */
+    private val _isMaxAmount = MutableStateFlow(false)
+    val isMaxAmount = _isMaxAmount.asStateFlow()
 
     private val _selectedAsset = MutableStateFlow<AssetItem?>(null)
     val selectedAsset = _selectedAsset.asStateFlow()
@@ -162,12 +186,20 @@ class SendViewModel @Inject constructor(
      */
     val usdToIrrRate: StateFlow<CurrencyRate?> = usdToIrrRateProvider.rate
 
-    private val currentIrrRate: BigDecimal
-        get() = usdToIrrRateProvider.rate.value?.rate ?: BigDecimal.ZERO
+    private val currentRate: CurrencyRate?
+        get() = usdToIrrRateProvider.rate.value
+
+    /** TASK-56 — the shared selected currency; the amount box and every fiat line here follow it. */
+    val fiatCurrency: StateFlow<FiatCurrency> = fiatCurrencyProvider.currency
 
     init {
         launchSafe(connectivitySurface = ErrorSurface.SILENT) { usdToIrrRateProvider.refresh() }
+        launchSafe(checkNetwork = false) { fiatCurrencyProvider.ensurePrimed() }
     }
+
+    /** TASK-56 — same formatting the wallet list uses, so the two screens cannot show different text. */
+    private fun withFiatStrings(item: AssetItem): AssetItem =
+        item.withFiatBalances(fiatCurrencyProvider.currency.value, currentRate)
 
     fun setSubtractionMode(enabled: Boolean) {
         _isSubtractionMode.value = enabled
@@ -181,10 +213,40 @@ class SendViewModel @Inject constructor(
 
     fun setAmount(amount: String) {
         _amountText.value = amount
+        // Any manual edit means this is no longer "the whole balance".
+        _isMaxAmount.value = false
     }
 
-    fun toggleUsdMode() {
-        _isUsdMode.value = !_isUsdMode.value
+    /**
+     * TASK-56 — MAX in whichever unit the box is currently in.
+     *
+     * The text written here is for the user to read; [getBaseCryptoAmount] ignores it while
+     * [isMaxAmount] holds and returns [AssetItem.balanceRaw] exactly. In تومان with an unknown rate
+     * there is no honest number to show, so the box is left alone rather than filled with a zero.
+     */
+    fun useMax(asset: AssetItem) {
+        val text = if (_isFiatMode.value) {
+            val usd = asset.balanceRaw.multiply(asset.priceUsdRaw)
+            // Rounded DOWN, in both currencies: a half-up MAX can land a hair ABOVE the real balance,
+            // which the amount box would then correctly flag as insufficient funds.
+            when (fiatCurrencyProvider.currency.value) {
+                FiatCurrency.USD -> usd.setScale(2, RoundingMode.DOWN).toPlainString()
+                FiatCurrency.TOMAN -> FiatConversion.usdToToman(usd, currentRate)
+                    ?.setScale(FiatConversion.TOMAN_DISPLAY_SCALE, RoundingMode.DOWN)
+                    ?.toPlainString()
+                    ?: return
+            }
+        } else {
+            BalanceFormatter.formatBalance(asset.balanceRaw, asset.decimals).replace(",", "")
+        }
+        _amountText.value = text
+        _isMaxAmount.value = true
+    }
+
+    fun toggleFiatMode() {
+        _isFiatMode.value = !_isFiatMode.value
+        // The amount box now holds a number in the other unit; MAX no longer describes it.
+        _isMaxAmount.value = false
     }
 
     fun setSelectedAsset(asset: AssetItem?) {
@@ -277,8 +339,10 @@ class SendViewModel @Inject constructor(
         val wallet = getActiveWalletUseCase() ?: return
 
         viewModelScope.launch {
-            when (val result = refreshSelectedAssetBalanceUseCase(wallet, asset, currentIrrRate)) {
-                is ResultResponse.Success -> result.data?.let { _selectedAsset.value = it }
+            when (val result = refreshSelectedAssetBalanceUseCase(wallet, asset)) {
+                // TASK-56 — the data source returns the balance only; the fiat strings are applied here,
+                // by the same rules the wallet list uses, so the two screens cannot drift apart.
+                is ResultResponse.Success -> result.data?.let { _selectedAsset.value = withFiatStrings(it) }
                 // Background balance top-up; the cached figure stays on screen (ErrorSurface.SILENT).
                 is ResultResponse.Error -> reportError(
                     throwable = result.exception,
@@ -294,7 +358,8 @@ class SendViewModel @Inject constructor(
         _recipientAddress.value = ""
         _recipientNetworkType.value = null
         _amountText.value = "0"
-        _isUsdMode.value = false
+        _isFiatMode.value = false
+        _isMaxAmount.value = false
         _isSubtractionMode.value = false
         _selectedAsset.value = null
         _gaslessAvailability.value = GaslessAvailability.Unavailable()
@@ -400,7 +465,7 @@ class SendViewModel @Inject constructor(
             try {
                 _submitState.value = SubmitState.Submitting
 
-                val baseCrypto = getBaseCryptoAmount(asset, _amountText.value, _isUsdMode.value)
+                val baseCrypto = getBaseCryptoAmount(asset, _amountText.value, _isFiatMode.value)
                 val feeCoin = selectedFee?.feeInCoin ?: BigDecimal.ZERO
                 
                 // Safe detection of Max: if UI says so OR if the amount is >= balance
@@ -564,7 +629,7 @@ class SendViewModel @Inject constructor(
         }
 
         val amountSmallest = runCatching {
-            val amount = getBaseCryptoAmount(asset, _amountText.value, _isUsdMode.value)
+            val amount = getBaseCryptoAmount(asset, _amountText.value, _isFiatMode.value)
                 .coerceAtMost(asset.balanceRaw)
             toSmallestUnit(amount, asset.decimals)
         }.getOrDefault(BigInteger.ZERO)
@@ -1118,7 +1183,7 @@ class SendViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val feeEstimateAmount = runCatching {
-                    val amount = getBaseCryptoAmount(asset, _amountText.value, _isUsdMode.value)
+                    val amount = getBaseCryptoAmount(asset, _amountText.value, _isFiatMode.value)
                         .coerceAtMost(asset.balanceRaw)
                     toSmallestUnit(amount, asset.decimals)
                 }.getOrDefault(BigInteger.ONE).takeIf { it > BigInteger.ZERO } ?: BigInteger.ONE
@@ -1141,13 +1206,17 @@ class SendViewModel @Inject constructor(
                         val options = quote.options.map { data ->
                             val coinAmount = data.feeInCoin ?: BigDecimal.ZERO
                             val usdAmount = data.feeInUsd ?: coinAmount.multiply(feeCoinUsdPrice)
-                            val irrAmount = usdAmount.multiply(currentIrrRate)
-
                             FeeOption(
                                 level = data.level,
                                 feeAmountDisplay = "${coinAmount.toPlainString()} ${quote.networkSymbol}",
-                                feeAmountUsdDisplay = "$${BalanceFormatter.formatUsdValue(usdAmount)}",
-                                feeAmountIrrDisplay = "${BalanceFormatter.formatNumberWithSeparator(irrAmount)} تومان",
+                                feeAmountUsdDisplay = BalanceFormatter.formatFiatValue(
+                                    usdAmount, FiatCurrency.USD, null
+                                ),
+                                // TASK-56 — through the shared formatter: an unknown rate now renders the
+                                // placeholder rather than a "0 تومان" fee the user would trust.
+                                feeAmountIrrDisplay = BalanceFormatter.formatFiatValue(
+                                    usdAmount, FiatCurrency.TOMAN, currentRate
+                                ),
                                 estimatedTime = data.estimatedTime,
                                 feeInSmallestUnit = data.feeInSmallestUnit,
                                 feeInCoin = coinAmount,
@@ -1219,10 +1288,10 @@ class SendViewModel @Inject constructor(
         }
     }
 
-    fun getCryptoDisplay(asset: AssetItem, amountText: String, isUsdMode: Boolean): String {
+    fun getCryptoDisplay(asset: AssetItem, amountText: String, isFiatMode: Boolean): String {
         try {
             val bd = BigDecimal(amountText.ifBlank { "0" }.trimEnd('.'))
-            if (isUsdMode) {
+            if (isFiatMode) {
                 val crypto = if (asset.priceUsdRaw > BigDecimal.ZERO)
                     bd.divide(asset.priceUsdRaw, 8, RoundingMode.HALF_UP)
                 else BigDecimal.ZERO
@@ -1233,35 +1302,40 @@ class SendViewModel @Inject constructor(
         } catch (e: Exception) { return "0 ${asset.symbol}" }
     }
 
-    fun getUsdDisplay(asset: AssetItem, amountText: String, isUsdMode: Boolean): String {
-        try {
-            val bd = BigDecimal(amountText.ifBlank { "0" }.trimEnd('.'))
-            if (isUsdMode) {
-                return "$${BalanceFormatter.formatUsdValue(bd, false)}"
-            } else {
-                val usdVal = bd.multiply(asset.priceUsdRaw)
-                return "$${BalanceFormatter.formatUsdValue(usdVal, false)}"
-            }
-        } catch (e: Exception) { return "$0.00" }
+    /**
+     * An amount the user typed **in [currency]**, expressed in USD — the unit prices are quoted in.
+     * `null` when تومان is selected and the rate is unknown: there is no defensible USD value then,
+     * and returning ZERO would silently price the send at nothing.
+     */
+    private fun toUsd(amount: BigDecimal, currency: FiatCurrency): BigDecimal? = when (currency) {
+        FiatCurrency.USD -> amount
+        FiatCurrency.TOMAN -> FiatConversion.tomanToUsd(amount, currentRate)
     }
 
-    fun getIrrDisplay(asset: AssetItem, amountText: String, isUsdMode: Boolean): String {
-        try {
-            val bd = BigDecimal(amountText.ifBlank { "0" }.trimEnd('.'))
-            val usdVal = if (isUsdMode) bd else bd.multiply(asset.priceUsdRaw)
-            val irrVal = usdVal.multiply(currentIrrRate)
-            return "${BalanceFormatter.formatNumberWithSeparator(irrVal)} تومان"
-        } catch (e: Exception) { return "0 تومان" }
-    }
-
-    fun getBaseCryptoAmount(asset: AssetItem, amountText: String, isUsdMode: Boolean): BigDecimal {
+    /**
+     * The crypto amount an entry resolves to. **This is the number that gets sent** — treat changes
+     * here as money changes.
+     *
+     * Two deliberate properties:
+     *  - [isMaxAmount] short-circuits to the exact [AssetItem.balanceRaw]. Re-deriving MAX from the
+     *    rounded text in the box can only be wrong, and wrong in either direction.
+     *  - the fiat→crypto division rounds **DOWN**, not HALF_UP. HALF_UP can round a fiat amount up to
+     *    slightly more crypto than the user has, turning a full-balance send into an
+     *    insufficient-funds failure at broadcast time.
+     */
+    fun getBaseCryptoAmount(
+        asset: AssetItem,
+        amountText: String,
+        isFiatMode: Boolean,
+        currency: FiatCurrency = fiatCurrencyProvider.currency.value
+    ): BigDecimal {
+        if (_isMaxAmount.value) return asset.balanceRaw
         return try {
             val bd = BigDecimal(amountText.ifBlank { "0" }.trimEnd('.'))
-            if (isUsdMode && asset.priceUsdRaw > BigDecimal.ZERO) {
-                bd.divide(asset.priceUsdRaw, asset.decimals, RoundingMode.HALF_UP)
-            } else if (!isUsdMode) {
-                bd
-            } else BigDecimal.ZERO
+            if (!isFiatMode) return bd
+            if (asset.priceUsdRaw <= BigDecimal.ZERO) return BigDecimal.ZERO
+            val usd = toUsd(bd, currency) ?: return BigDecimal.ZERO
+            usd.divide(asset.priceUsdRaw, asset.decimals, RoundingMode.DOWN)
         } catch (e: Exception) { BigDecimal.ZERO }
     }
 
@@ -1271,13 +1345,13 @@ class SendViewModel @Inject constructor(
 
     fun formatUsdFromRaw(asset: AssetItem, amount: BigDecimal): String {
         val usdVal = amount.coerceAtLeast(BigDecimal.ZERO).multiply(asset.priceUsdRaw)
-        return "$${BalanceFormatter.formatUsdValue(usdVal, false)}"
+        return BalanceFormatter.formatFiatValue(usdVal, FiatCurrency.USD, null)
     }
 
+    /** TASK-56 — placeholder, not "0 تومان", when the rate is unknown on the confirm sheet. */
     fun formatIrrFromRaw(asset: AssetItem, amount: BigDecimal): String {
         val usdVal = amount.coerceAtLeast(BigDecimal.ZERO).multiply(asset.priceUsdRaw)
-        val irrVal = usdVal.multiply(currentIrrRate)
-        return "${BalanceFormatter.formatNumberWithSeparator(irrVal)} تومان"
+        return BalanceFormatter.formatFiatValue(usdVal, FiatCurrency.TOMAN, currentRate)
     }
 
 

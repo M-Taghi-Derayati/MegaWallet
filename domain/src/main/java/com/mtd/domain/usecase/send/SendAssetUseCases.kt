@@ -14,10 +14,9 @@ class RefreshSelectedAssetBalanceUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(
         wallet: Wallet,
-        asset: AssetItem,
-        irrRate: BigDecimal
+        asset: AssetItem
     ): ResultResponse<AssetItem?> {
-        return sendAssetDataSource.refreshAssetBalance(wallet, asset, irrRate)
+        return sendAssetDataSource.refreshAssetBalance(wallet, asset)
     }
 }
 

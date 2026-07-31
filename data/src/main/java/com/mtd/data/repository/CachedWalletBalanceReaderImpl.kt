@@ -1,7 +1,6 @@
 package com.mtd.data.repository
 
 import com.mtd.core.registry.AssetRegistry
-import com.mtd.core.utils.BalanceFormatter
 import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.ICachedWalletBalanceReader
 import com.mtd.domain.model.CachedAssetBalance
@@ -13,7 +12,7 @@ class CachedWalletBalanceReaderImpl @Inject constructor(
     private val assetRegistry: AssetRegistry
 ) : ICachedWalletBalanceReader {
 
-    override suspend fun getCachedTotalBalance(walletId: String): String {
+    override suspend fun getCachedTotalUsd(walletId: String): BigDecimal {
         var totalUsdValue = BigDecimal.ZERO
 
         assetRegistry.getAllAssets().forEach { assetConfig ->
@@ -25,11 +24,9 @@ class CachedWalletBalanceReaderImpl @Inject constructor(
             }
         }
 
-        return if (totalUsdValue <= BigDecimal.ZERO) {
-            "$0"
-        } else {
-            "$" + BalanceFormatter.formatUsdValue(totalUsdValue, false)
-        }
+        // TASK-56 — raw USD, unformatted. The caller applies the selected currency and the rate; a
+        // "$…" string built here could never become تومان.
+        return totalUsdValue.max(BigDecimal.ZERO)
     }
 
     private companion object {

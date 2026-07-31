@@ -80,9 +80,12 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
         activeWalletId: String?,
         forceResync: Boolean
     ) {
+        // TASK-56 — the reader now returns raw USD, so "is this wallet already cached?" is a numeric
+        // test. It used to compare the FORMATTED string against "$0"/"0", which quietly depended on
+        // how the formatter renders zero: a sub-cent balance formatted as "$0.00" matches neither
+        // literal and was treated as cached.
         val isActiveWalletCached = if (activeWalletId != null) {
-            val total = cachedWalletBalanceReader.getCachedTotalBalance(activeWalletId)
-            total != "$0" && total != "0"
+            cachedWalletBalanceReader.getCachedTotalUsd(activeWalletId) > BigDecimal.ZERO
         } else {
             false
         }

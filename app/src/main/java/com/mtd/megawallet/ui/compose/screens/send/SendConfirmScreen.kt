@@ -76,7 +76,10 @@ fun SendConfirmScreen(
     val asset by viewModel.selectedAsset.collectAsStateWithLifecycle()
     val recipientAddress by viewModel.recipientAddress.collectAsStateWithLifecycle()
     val amountText by viewModel.amountText.collectAsStateWithLifecycle()
-    val isUsdMode by viewModel.isUsdMode.collectAsStateWithLifecycle()
+    val isFiatMode by viewModel.isFiatMode.collectAsStateWithLifecycle()
+    // TASK-56 — keys the amount derivation below so a currency switch or a new rate re-resolves it.
+    val fiatCurrency by viewModel.fiatCurrency.collectAsStateWithLifecycle()
+    val usdToIrrRate by viewModel.usdToIrrRate.collectAsStateWithLifecycle()
     val networkType by viewModel.recipientNetworkType.collectAsStateWithLifecycle()
     val walletName by viewModel.activeWalletName.collectAsStateWithLifecycle()
     val gaslessAvailability by viewModel.gaslessAvailability.collectAsStateWithLifecycle()
@@ -87,8 +90,8 @@ fun SendConfirmScreen(
 
     if (asset == null) return
 
-    val baseInputCrypto = remember(asset, amountText, isUsdMode) {
-        viewModel.getBaseCryptoAmount(asset!!, amountText, isUsdMode)
+    val baseInputCrypto = remember(asset, amountText, isFiatMode, fiatCurrency, usdToIrrRate) {
+        viewModel.getBaseCryptoAmount(asset!!, amountText, isFiatMode, fiatCurrency)
     }
 
     InternalSendConfirmScreen(

@@ -44,6 +44,8 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import com.mtd.common_ui.R
 import com.mtd.core.utils.BalanceFormatter
+import com.mtd.domain.model.CurrencyRate
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
@@ -65,6 +67,7 @@ import com.mtd.common_ui.theme.MegaWalletTheme
  */
 @Composable
 internal fun TokenList(
+    fiatCurrency: FiatCurrency,
     assets: List<AssetItem>,
     selectedAssetId: String?,
     onTokenClick: (AssetItem) -> Unit
@@ -91,7 +94,7 @@ internal fun TokenList(
                 label = "StaggeredItem"
             ) {
 
-                AssetListItems(modifier = Modifier,asset,onClick = { onTokenClick(asset) })
+                AssetListItems(fiatCurrency = fiatCurrency, modifier = Modifier, asset = asset, onClick = { onTokenClick(asset) })
             }
         }
     }
@@ -101,6 +104,7 @@ internal fun TokenList(
 
 @Composable
 private fun AssetListItems(
+    fiatCurrency: FiatCurrency,
     modifier: Modifier = Modifier,
     asset: AssetItem,
     onClick: () -> Unit = {}
@@ -254,8 +258,11 @@ private fun AssetListItems(
             // انیمیشن تغییر بین مقدار دلار/تومان و ستاره
             Row(verticalAlignment = Alignment.CenterVertically) {
 
+                // TASK-56 — [AssetItem.formattedDisplayBalance] already holds the value in the
+                // selected currency (HomeViewModel keeps both strings and picks one), so the send
+                // picker cannot show dollars while the wallet list behind it shows تومان.
                 AnimatedCounter(
-                    text = asset.balanceUsdt.trim(),
+                    text = asset.formattedDisplayBalance.trim(),
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.tertiary,
@@ -264,7 +271,7 @@ private fun AssetListItems(
                     animationDuration = WalletScreenConstants.ASSET_ANIMATION_DURATION
                 )
                 Text(
-                    text = "$",
+                    text = BalanceFormatter.fiatSymbol(fiatCurrency),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = WalletScreenConstants.ASSET_PRICE_SYMBOL_FONT_SIZE,
@@ -287,6 +294,8 @@ private fun AssetListItems(
  * تجمیع می‌شوند و بر اساس ارزش دلاری مرتب می‌گردند.
  */
 internal fun buildSendableAssetList(
+    fiatCurrency: FiatCurrency,
+    usdToIrrRate: CurrencyRate?,
     source: List<AssetItem>,
     networkType: NetworkType,
     networkTypeResolver: (String) -> NetworkType?
@@ -315,7 +324,12 @@ internal fun buildSendableAssetList(
                         networkName = "",
                         networkFaName = null,
                         balance = BalanceFormatter.formatBalance(totalRaw, first.decimals),
-                        balanceUsdt = "${BalanceFormatter.formatUsdValue(totalUsd, false)} ",
+                        // A merged group is a new item, so its display strings are rebuilt here in
+                        // both currencies, the same way HomeViewModel does for the wallet list.
+                        balanceUsdt = "${BalanceFormatter.formatFiatValue(totalUsd, FiatCurrency.USD, null, withSymbol = false)} ",
+                        balanceIrr = "${BalanceFormatter.formatFiatValue(totalUsd, FiatCurrency.TOMAN, usdToIrrRate, withSymbol = false)} ",
+                        formattedDisplayBalance =
+                            "${BalanceFormatter.formatFiatValue(totalUsd, fiatCurrency, usdToIrrRate, withSymbol = false)} ",
                         balanceRaw = totalRaw,
                         priceUsdRaw = avgPrice,
                         isGroupHeader = true,
@@ -345,6 +359,7 @@ private fun TokenListLightPreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             Box(modifier = Modifier.padding(16.dp)) {
                 TokenList(
+                    fiatCurrency = FiatCurrency.USD,
                     assets = listOf(
                         sampleConfirmAsset,
                         sampleConfirmAsset.copy(id = "USDT", symbol = "USDT", faName = "تتر", balance = "500 USDT", balanceUsdt = "$500.00")

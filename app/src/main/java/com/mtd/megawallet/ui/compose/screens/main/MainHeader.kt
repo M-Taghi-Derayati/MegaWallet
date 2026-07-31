@@ -23,13 +23,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
 import com.mtd.common_ui.theme.IranSansBoldBold
 import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 
 /**
@@ -45,7 +49,8 @@ internal fun MainHeader(
     onSearchClick: () -> Unit,
     onMoreOptionsClick: () -> Unit,
     onCurrencyToggle: () -> Unit,
-    connectionMode: BlockchainConnectionMode
+    connectionMode: BlockchainConnectionMode,
+    fiatCurrency: FiatCurrency
 ) {
     Surface(
         modifier = Modifier
@@ -130,16 +135,34 @@ internal fun MainHeader(
                         modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
                     )
                 }
-                // آیکون تغییر واحد ارز (یا اسکن)
+                // TASK-56 — تغییر واحد نمایش بین دلار و تومان.
+                //
+                // The control shows the currency that is ACTIVE, not the one a tap would switch to: the
+                // header is the only indicator of which unit the balances on screen are in, so it has to
+                // answer "what am I looking at?" before "what does this button do?".
+                val currencyLabel = when (fiatCurrency) {
+                    FiatCurrency.USD -> "$"
+                    FiatCurrency.TOMAN -> "تومان"
+                }
+                val currencyDescription = when (fiatCurrency) {
+                    FiatCurrency.USD -> "واحد نمایش: دلار — برای تغییر به تومان بزنید"
+                    FiatCurrency.TOMAN -> "واحد نمایش: تومان — برای تغییر به دلار بزنید"
+                }
                 IconButton(
                     onClick = onCurrencyToggle,
-                    modifier = Modifier.size(MainScreenConstants.HEADER_ICON_SIZE)
+                    modifier = Modifier
+                        .size(MainScreenConstants.HEADER_ICON_SIZE)
+                        .semantics { contentDescription = currencyDescription }
                 ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_scan),
-                        contentDescription = "Currency Toggle",
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
+                    Text(
+                        text = currencyLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        // تومان در فارسی؛ «$» با فونت لاتین بهتر می‌نشیند
+                        fontFamily = if (fiatCurrency == FiatCurrency.TOMAN) IranSansBoldBold else null,
+                        fontSize = if (fiatCurrency == FiatCurrency.TOMAN) 12.sp else 18.sp,
+                        maxLines = 1
                     )
                 }
 
@@ -169,7 +192,8 @@ private fun MainHeaderLightPreview() {
             onSearchClick = {},
             onMoreOptionsClick = {},
             onCurrencyToggle = {},
-            connectionMode = BlockchainConnectionMode.DIRECT
+            connectionMode = BlockchainConnectionMode.DIRECT,
+            fiatCurrency = FiatCurrency.USD
         )
     }
 }
@@ -186,7 +210,8 @@ private fun MainHeaderDarkPreview() {
             onSearchClick = {},
             onMoreOptionsClick = {},
             onCurrencyToggle = {},
-            connectionMode = BlockchainConnectionMode.PROXY
+            connectionMode = BlockchainConnectionMode.PROXY,
+            fiatCurrency = FiatCurrency.TOMAN
         )
     }
 }

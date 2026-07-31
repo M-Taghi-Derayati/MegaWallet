@@ -3,11 +3,14 @@ package com.mtd.megawallet.viewmodel
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.manager.ErrorSeverity
 import com.mtd.core.utils.BalanceFormatter
+import com.mtd.core.utils.FiatConversion
+import com.mtd.core.utils.withFiatBalances
 import com.mtd.core.utils.formatWithSeparator
 import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.IAppCacheStore.Companion.ASSETS_TTL
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
+import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.model.CurrencyRate
@@ -15,7 +18,7 @@ import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.CachedAssetBalance
 import com.mtd.domain.model.HomeUiState
-import com.mtd.domain.model.HomeUiState.DisplayCurrency
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.NetworkShare
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.assets.AssetConfig
@@ -53,6 +56,8 @@ class HomeViewModel @Inject constructor(
     private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
     /** TASK-54 — shared observable Toman rate; replaces this VM's private cache. */
     private val usdToIrrRateProvider: IUsdToIrrRateProvider,
+    /** TASK-56 — shared observable fiat currency; the header toggle and every screen read this one. */
+    private val fiatCurrencyProvider: IFiatCurrencyProvider,
     private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
     private val getActiveWalletUseCase: GetActiveWalletUseCase,
     private val loadExistingWalletUseCase: LoadExistingWalletUseCase,
@@ -83,9 +88,31 @@ class HomeViewModel @Inject constructor(
      */
     val usdToIrrRate: StateFlow<CurrencyRate?> = usdToIrrRateProvider.rate
 
-    /** Latest known rate, or ZERO when it is not known yet. For non-reactive internal math only. */
-    private val currentIrrRate: BigDecimal
-        get() = usdToIrrRateProvider.rate.value?.rate ?: BigDecimal.ZERO
+    /**
+     * TASK-56 — the user's selected fiat currency, observable. The wallet list mirrors it into
+     * [HomeUiState.Success.displayCurrency]; other screens collect this directly.
+     */
+    val fiatCurrency: StateFlow<FiatCurrency> = fiatCurrencyProvider.currency
+
+    /**
+     * Latest known rate, or `null` when it is not known yet. Handed to [BalanceFormatter.formatFiatValue]
+     * as-is — the `null` case is what produces a placeholder instead of a zero, so it must NOT be
+     * defaulted to ZERO here. For non-reactive internal formatting only; the UI observes the flows.
+     */
+    private val currentRate: CurrencyRate?
+        get() = usdToIrrRateProvider.rate.value
+
+    /**
+     * TASK-56 — display strings are derived from `balanceRaw × priceUsdRaw` on every pass rather than
+     * carried forward, which is what lets a currency switch or a fresh Wallex rate re-render the list
+     * with no network round-trip. The formatting itself lives in [withFiatBalances] so the send screen
+     * produces byte-identical strings.
+     */
+    private fun withFiatStrings(item: AssetItem, currency: FiatCurrency): AssetItem =
+        item.withFiatBalances(currency, currentRate)
+
+    private fun withFiatStrings(item: AssetItem): AssetItem =
+        withFiatStrings(item, fiatCurrencyProvider.currency.value)
 
     // زمان‌بندی‌های مجزا برای رفرش دیتای خودکار
     private val RR_PRICE_REFRESH_INTERVAL = 5 * 60 * 1000L // 2 دقیقه برای قیمت‌ها
@@ -114,6 +141,7 @@ class HomeViewModel @Inject constructor(
         loadWalletIfNeeded()
         observeActiveWallet()
         listenToGlobalEvents()
+        observeFiatDisplayInputs()
 
         // Start the UI update consumer
         launchSafe(checkNetwork = false) {
@@ -256,15 +284,15 @@ class HomeViewModel @Inject constructor(
         // stays as fast as the direct cache read it replaces. The network refresh happens in
         // refreshPrices() and reaches the UI through the observable rate.
         usdToIrrRateProvider.ensureSeeded()
-        val irrRate = currentIrrRate
-        val usdtRate = BigDecimal.ONE
+        // TASK-56 — same shape: read the persisted currency without a network hop, so the first frame
+        // already renders in the unit the user chose last time instead of flashing USD.
+        fiatCurrencyProvider.ensurePrimed()
+        val currency = fiatCurrencyProvider.currency.value
 
         // محاسبه اولیه برای نمایش سریع کش
-        val initialAggregated = createAggregatedListWithRates(localAssets, usdtRate, irrRate)
+        val initialAggregated = createAggregatedListWithRates(localAssets, currency)
 
         val totalUsd = localAssets.sumOf { it.balanceRaw * it.priceUsdRaw }
-        val totalUsdt = if (usdtRate > BigDecimal.ZERO) totalUsd / usdtRate else BigDecimal.ZERO
-        val totalIrr = totalUsd * irrRate
 
         // ۳. تصمیم‌گیری برای آپدیت خودکار بر اساس زمان آخرین همگام‌سازی
         val currentTime = System.currentTimeMillis()
@@ -278,13 +306,13 @@ class HomeViewModel @Inject constructor(
         val shouldUpdateOnline = forceUpdate || !hasAnyCache || isPriceStale || isBalanceStale
 
         _uiState.value = HomeUiState.Success(
-            totalBalanceUsdt = if (totalUsdt > BigDecimal.ZERO) BalanceFormatter.formatUsdValue(totalUsdt, false) else "...",
-            totalBalanceIrr = if (totalIrr > BigDecimal.ZERO) totalIrr.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true) else "...",
-            tetherPriceIrr = irrRate.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true),
+            totalBalanceUsdt = if (totalUsd > BigDecimal.ZERO) formatTotal(totalUsd, FiatCurrency.USD) else "...",
+            totalBalanceIrr = if (totalUsd > BigDecimal.ZERO) formatTotal(totalUsd, FiatCurrency.TOMAN) else "...",
+            tetherPriceIrr = tetherPriceInToman(),
             isUpdating = shouldUpdateOnline,
             assets = initialAggregated,
             recentActivity = emptyList(),
-            displayCurrency = (uiState.value as? HomeUiState.Success)?.displayCurrency ?: DisplayCurrency.USDT
+            displayCurrency = currency
         )
 
         // ۴. اجرای مستقل آپدیت‌ها
@@ -305,8 +333,6 @@ class HomeViewModel @Inject constructor(
             // TASK-54 — the provider owns the TTL, the persistence and the shared state; refreshing it
             // is what makes every observing screen update, which the old private field could not do.
             usdToIrrRateProvider.refresh()
-            val usdtRate = BigDecimal.ONE
-            val irrRate = currentIrrRate
 
             val allAssets = assetCatalog.getAllAssetConfigs()
             val symbols = allAssets.map { it.symbol }.distinct()
@@ -325,17 +351,12 @@ class HomeViewModel @Inject constructor(
 
                         if (priceInfo != null) {
                             val currentPrice = priceInfo.priceUsd
-                            val usdValue = assetItem.balanceRaw * currentPrice
-                            val irrValue = usdValue * irrRate
 
-                            val updatedItem = assetItem.copy(
-                                priceUsdRaw = currentPrice,
-                                priceChange24h = priceInfo.priceChanges24h.toDouble(),
-                                balanceUsdt = "${BalanceFormatter.formatUsdValue(usdValue)} ",
-                                balanceIrr = "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} ",
-                                formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR)
-                                    "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else
-                                    "${BalanceFormatter.formatUsdValue(usdValue)} "
+                            val updatedItem = withFiatStrings(
+                                assetItem.copy(
+                                    priceUsdRaw = currentPrice,
+                                    priceChange24h = priceInfo.priceChanges24h.toDouble()
+                                )
                             )
                             fullRawAssets[index] = updatedItem
 
@@ -365,10 +386,6 @@ class HomeViewModel @Inject constructor(
         launchSafe {
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
 
-            // ابتدا از همان نرخ IRR کش شده استفاده می‌کنیم
-            val irrRate = currentIrrRate
-            val usdtRate = BigDecimal.ONE
-
             val jobs = networkCatalog.getAllNetworkInfos().map { network ->
                 launchSafe {
                     val result = getBalancesForMultipleWalletsUseCase(network.name, listOf(wallet.id))
@@ -383,7 +400,7 @@ class HomeViewModel @Inject constructor(
                             }
                             if (config != null) {
                                 // به‌روزرسانی با استفاده از قیمت‌های فعلی (موجود در حافظه)
-                                updateAssetItemAndTotal(wallet.id, config, asset.balance, emptyMap(), usdtRate, irrRate)
+                                updateAssetItemAndTotal(wallet.id, config, asset.balance, emptyMap())
                             }
                         }
                     }
@@ -423,9 +440,6 @@ class HomeViewModel @Inject constructor(
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
 
             try {
-                val irrRate = currentIrrRate
-                val usdtRate = BigDecimal.ONE
-
                 when (val result = getBalancesForMultipleWalletsUseCase(network.name, listOf(wallet.id))) {
                     is ResultResponse.Success -> {
                         val walletAssets = result.data[wallet.id].orEmpty()
@@ -440,8 +454,6 @@ class HomeViewModel @Inject constructor(
                                 assetConfig = config,
                                 balance = refreshed?.balance ?: BigDecimal.ZERO,
                                 pricesMap = emptyMap(),
-                                usdtRate = usdtRate,
-                                irrRate = irrRate
                             )
                         }
                     }
@@ -466,8 +478,6 @@ class HomeViewModel @Inject constructor(
         assetConfig: AssetConfig,
         balance: BigDecimal,
         pricesMap: Map<String, AssetPriceDto>,
-        usdtRate: BigDecimal,
-        irrRate: BigDecimal
     ) {
         // امن‌سازی: فقط اگر والت فعلی هنوز همان است که درخواست داده بودیم، ادامه بده
         if (walletId != currentWalletId) return
@@ -494,21 +504,15 @@ class HomeViewModel @Inject constructor(
 
             val currentChange = priceInfo?.priceChanges24h?.toDouble() ?: existingAsset?.priceChange24h ?: 0.0
 
-            val usdValue = balance * currentPrice
-            val irrValue = usdValue * irrRate
-
             if (index != -1) {
                 val oldAsset = fullRawAssets[index]
-                val updatedAsset = oldAsset.copy(
-                    balance = BalanceFormatter.formatBalance(balance, assetConfig.decimals),
-                    balanceUsdt = "${BalanceFormatter.formatUsdValue(usdValue)} ",
-                    balanceIrr = "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} ",
-                    formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR)
-                        "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else
-                        "${BalanceFormatter.formatUsdValue(usdValue)} ",
-                    balanceRaw = balance,
-                    priceUsdRaw = currentPrice,
-                    priceChange24h = currentChange
+                val updatedAsset = withFiatStrings(
+                    oldAsset.copy(
+                        balance = BalanceFormatter.formatBalance(balance, assetConfig.decimals),
+                        balanceRaw = balance,
+                        priceUsdRaw = currentPrice,
+                        priceChange24h = currentChange
+                    )
                 )
                 fullRawAssets[index] = updatedAsset
 
@@ -523,7 +527,7 @@ class HomeViewModel @Inject constructor(
                 }
             } else {
                 val network = networkCatalog.getNetworkInfoById(assetConfig.networkId)
-                val newAsset = AssetItem(
+                val newAsset = withFiatStrings(AssetItem(
                     id = assetConfig.id,
                     name = assetConfig.name,
                     faName = assetConfig.faName,
@@ -533,18 +537,13 @@ class HomeViewModel @Inject constructor(
                     networkId = assetConfig.networkId,
                     iconUrl = assetConfig.iconUrl,
                     balance = BalanceFormatter.formatBalance(balance, assetConfig.decimals),
-                    balanceUsdt = "${BalanceFormatter.formatUsdValue(usdValue)} ",
-                    balanceIrr = "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} ",
-                    formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR)
-                        "${irrValue.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else
-                        "${BalanceFormatter.formatUsdValue(usdValue)} ",
                     balanceRaw = balance,
                     priceUsdRaw = currentPrice,
                     priceChange24h = currentChange,
                     decimals = assetConfig.decimals,
                     contractAddress = assetConfig.contractAddress,
                     isNativeToken = assetConfig.contractAddress == null
-                )
+                ))
                 fullRawAssets.add(newAsset)
             }
         }
@@ -559,8 +558,7 @@ class HomeViewModel @Inject constructor(
      * توسط Channel فراخوانی می‌شود تا بار پردازشی کاهش یابد.
      */
     private fun processUiUpdate() {
-        val irrRate = currentIrrRate
-        val usdtRate = BigDecimal.ONE
+        val currency = fiatCurrencyProvider.currency.value
 
         _uiState.update { currentState ->
             if (currentState is HomeUiState.Success) {
@@ -568,7 +566,7 @@ class HomeViewModel @Inject constructor(
                 val currentRawAssets = synchronized(assetsLock) { fullRawAssets.toList() }
 
                 // محاسبات سنگین تجمیع و گروه‌بندی
-                val reAggregated = createAggregatedListWithRates(currentRawAssets, usdtRate, irrRate)
+                val reAggregated = createAggregatedListWithRates(currentRawAssets, currency)
 
                 val expansionState = currentState.assets.filter { it.isGroupHeader }.associate { it.symbol to it.isExpanded }
                 val finalAssets = reAggregated.map {
@@ -581,28 +579,32 @@ class HomeViewModel @Inject constructor(
                     totalUsd = totalUsd.add(it.balanceRaw.multiply(it.priceUsdRaw))
                 }
 
-                val totalIrr = totalUsd.multiply(irrRate)
-
                 currentState.copy(
                     assets = finalAssets,
-                    totalBalanceUsdt = BalanceFormatter.formatUsdValue(totalUsd, false),
-                    totalBalanceIrr = totalIrr.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)
+                    totalBalanceUsdt = formatTotal(totalUsd, FiatCurrency.USD),
+                    totalBalanceIrr = formatTotal(totalUsd, FiatCurrency.TOMAN),
+                    tetherPriceIrr = tetherPriceInToman(),
+                    displayCurrency = currency
                 )
             } else currentState
         }
     }
 
-    private fun createAggregatedListWithRates(rawList: List<AssetItem>, usdtRate: BigDecimal, irrRate: BigDecimal): List<AssetItem> {
+    /**
+     * TASK-56 — every item that leaves here goes through [withFiatStrings], groups **and** singles.
+     *
+     * Previously only group headers had their fiat strings rebuilt; a plain asset carried whatever
+     * string was written when its balance last changed. So flipping the currency (or receiving a new
+     * Wallex rate) left single-network assets showing the old unit until a price refresh happened to
+     * run - values on one screen disagreeing with another, which is the defect this task removes.
+     */
+    private fun createAggregatedListWithRates(rawList: List<AssetItem>, currency: FiatCurrency): List<AssetItem> {
         val mustShow = setOf("BTC", "ETH", "USDT")
         return rawList.groupBy { it.symbol.uppercase() }.mapNotNull { (symbol, assets) ->
             val totalBal = assets.sumOf { it.balanceRaw }
             if (totalBal > BigDecimal.ZERO || mustShow.contains(symbol)) {
                 if (assets.size > 1) {
                     val first = assets.first()
-                    val totalUsd = totalBal * first.priceUsdRaw
-                    val totalUsdt = if (usdtRate > BigDecimal.ZERO) totalUsd / usdtRate else BigDecimal.ZERO
-                    val totalIrr = totalUsd * irrRate
-
                     val activeAssets = assets.filter { it.balanceRaw > BigDecimal.ZERO }
                     val finalNetworkId: String
                     val finalNetworkName: String
@@ -637,17 +639,12 @@ class HomeViewModel @Inject constructor(
                         id = "GROUP_$symbol", networkId = finalNetworkId, name = first.name, faName = first.faName,
                         symbol = symbol, networkName = finalNetworkName, iconUrl = first.iconUrl,
                         balance = BalanceFormatter.formatBalance(totalBal, first.decimals),
-                        balanceUsdt = "${BalanceFormatter.formatUsdValue(totalUsdt, false)} ",
-                        balanceIrr = "${totalIrr.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} ",
-                        formattedDisplayBalance = if ((uiState.value as? HomeUiState.Success)?.displayCurrency == DisplayCurrency.IRR)
-                            "${totalIrr.setScale(0, RoundingMode.HALF_UP).formatWithSeparator(true)} " else
-                            "${BalanceFormatter.formatUsdValue(totalUsdt, false)} ",
                         balanceRaw = totalBal, priceUsdRaw = first.priceUsdRaw, priceChange24h = first.priceChange24h,
                         decimals = first.decimals, isNativeToken = first.isNativeToken, isGroupHeader = true, groupAssets = assets, networkDistribution = dist
                     )
                 } else assets.first()
             } else null
-        }
+        }.map { withFiatStrings(it, currency) }
     }
 
     fun toggleGroupExpansion(groupId: String) {
@@ -658,15 +655,56 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun toggleDisplayCurrency() {
-        _uiState.update { state ->
-            if (state is HomeUiState.Success) {
-                val next = if (state.displayCurrency == DisplayCurrency.USDT) DisplayCurrency.IRR else DisplayCurrency.USDT
-                state.copy(displayCurrency = next, assets = state.assets.map {
-                    it.copy(formattedDisplayBalance = if (next == DisplayCurrency.USDT) it.balanceUsdt else it.balanceIrr)
-                })
-            } else state
+    /**
+     * TASK-56 — formats a wallet **total**. Bare (no symbol): the wallet screen draws `$` / تومان as its
+     * own composable next to the odometer.
+     */
+    private fun formatTotal(totalUsd: BigDecimal, currency: FiatCurrency): String =
+        BalanceFormatter.formatFiatValue(
+            usdAmount = totalUsd,
+            currency = currency,
+            rate = currentRate,
+            withSymbol = false
+        )
+
+    /**
+     * The "تتر: N تومان" strip — the price of one USDT, i.e. the rate itself, so it goes through
+     * [FiatConversion.tomanPerUsd] rather than being read off [CurrencyRate.rate] raw (that field's unit
+     * depends on its label). Unknown renders as the shared placeholder, not `0`.
+     */
+    private fun tetherPriceInToman(): String {
+        val perUsd = FiatConversion.tomanPerUsd(currentRate) ?: return FiatConversion.UNKNOWN_PLACEHOLDER
+        return perUsd.setScale(FiatConversion.TOMAN_DISPLAY_SCALE, RoundingMode.HALF_UP)
+            .formatWithSeparator(usePersianSeparator = true)
+    }
+
+    /**
+     * TASK-56 — a currency switch and a new Wallex rate are the same kind of event here: both change
+     * what every fiat string on the wallet list should read, and neither involves new balance data.
+     * Both therefore just re-run [processUiUpdate], which rebuilds the list from the raw values.
+     *
+     * Observing the rate is what closes the last gap TASK-54 left: the rate became observable, but the
+     * wallet list's تومان strings were still baked at fetch time, so a fresh rate updated asset detail
+     * and not the list behind it.
+     */
+    private fun observeFiatDisplayInputs() {
+        launchSafe(checkNetwork = false) {
+            fiatCurrencyProvider.ensurePrimed()
+            fiatCurrencyProvider.currency.collect { uiUpdateChannel.trySend(Unit) }
         }
+        launchSafe(checkNetwork = false) {
+            usdToIrrRateProvider.rate.collect { uiUpdateChannel.trySend(Unit) }
+        }
+    }
+
+    /**
+     * TASK-56 — flips USD ⇄ تومان **through the persisted preference**, so the choice survives process
+     * death and every other screen sees it. The UI is not updated here: [observeFiatDisplayInputs]
+     * picks the change up from the provider, which keeps this screen on the same path as the others
+     * instead of giving the wallet list a private shortcut that can drift.
+     */
+    fun toggleDisplayCurrency() {
+        launchSafe(checkNetwork = false) { fiatCurrencyProvider.toggle() }
     }
 
     /**

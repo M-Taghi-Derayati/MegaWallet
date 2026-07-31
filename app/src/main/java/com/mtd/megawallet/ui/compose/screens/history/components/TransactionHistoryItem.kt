@@ -22,7 +22,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,7 +61,14 @@ fun TransactionHistoryItem(
     val primaryLabel = remember(transaction) { viewModel.getHistoryPrimaryLabel(transaction) }
     val counterpartyLabel = remember(transaction) { viewModel.getHistoryCounterpartyLabel(transaction) }
     val amountText = remember(transaction) { viewModel.formatListAmount(transaction) }
-    val fiatText = viewModel.formatTransactionFiat(transaction)
+
+    // TASK-56 — collected, not read off the ViewModel: this is what makes the row recompose when the
+    // user flips USD ⇄ تومان (and when a fresh Wallex rate lands) instead of keeping its first render.
+    val fiatCurrency by viewModel.fiatCurrency.collectAsStateWithLifecycle()
+    val usdToIrrRate by viewModel.usdToIrrRate.collectAsStateWithLifecycle()
+    val fiatText = remember(transaction, fiatCurrency, usdToIrrRate) {
+        viewModel.formatTransactionFiat(transaction, fiatCurrency, usdToIrrRate)
+    }
 
     TransactionHistoryItemContent(
         isOutgoing = transaction.isOutgoing,

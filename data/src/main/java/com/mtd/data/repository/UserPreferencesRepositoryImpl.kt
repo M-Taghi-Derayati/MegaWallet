@@ -3,6 +3,7 @@ package com.mtd.data.repository
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,6 +23,7 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         const val KEY_FAILED_UNLOCK_ATTEMPTS = "failed_unlock_attempts"
         const val KEY_LOCKOUT_UNTIL = "lockout_until"
         const val KEY_CONNECTION_MODE = "blockchain_connection_mode"
+        const val KEY_FIAT_CURRENCY = "fiat_currency"
         const val KEY_MONITORING_SUBSCRIBED_WALLET_IDS = "monitoring_subscribed_wallet_ids"
         const val KEY_REGISTERED_FCM_TOKEN = "registered_fcm_token"
         const val DEFAULT_LOCK_TIMEOUT_SECONDS = 30
@@ -35,6 +37,13 @@ class UserPreferencesRepositoryImpl @Inject constructor(
 
     override suspend fun setConnectionMode(mode: BlockchainConnectionMode) {
         prefs.edit { putString(KEY_CONNECTION_MODE, mode.name) }
+    }
+
+    override suspend fun getFiatCurrency(): FiatCurrency =
+        FiatCurrency.fromNameOrDefault(prefs.getString(KEY_FIAT_CURRENCY, null))
+
+    override suspend fun setFiatCurrency(currency: FiatCurrency) {
+        prefs.edit { putString(KEY_FIAT_CURRENCY, currency.name) }
     }
 
     override suspend fun isAppLockEnabled(): Boolean {
