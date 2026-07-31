@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.blankj.utilcode.util.ClipboardUtils
 import com.mtd.core.manager.ErrorManager
+import com.mtd.core.manager.ErrorSeverity
 import com.mtd.domain.model.CloudWalletItem
 import com.mtd.domain.model.DriveBackupState
 import com.mtd.domain.model.GoogleSignInEvent
@@ -14,6 +15,7 @@ import com.mtd.domain.model.ImportData
 import com.mtd.domain.model.ImportScreenState
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.Bip39Words
+import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.domain.usecase.wallet.importwallet.CalculateCloudWalletBalancesUseCase
 import com.mtd.domain.usecase.wallet.importwallet.ConnectCloudBackupUseCase
 import com.mtd.domain.usecase.wallet.importwallet.GetCloudSignInIntentUseCase
@@ -25,7 +27,6 @@ import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
-import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -229,7 +230,15 @@ class WalletImportViewModel @Inject constructor(
                     }
                 }
                 is ResultResponse.Error -> {
+                    // The UI already reflects "not connected" and the user can retry the button,
+                    // so this logs rather than stacking a snackbar on top of a visible state.
                     driveBackupState = DriveBackupState.NotConnected
+                    reportError(
+                        throwable = result.exception,
+                        userAction = "connectCloudBackup",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.LOW
+                    )
                 }
             }
         }
@@ -247,14 +256,21 @@ class WalletImportViewModel @Inject constructor(
                         calculateAllBalances()
                     }
                     is ResultResponse.Error -> {
-                        showErrorSnackbar(
-                            shortMessage = "رمز عبور اشتباه است یا خطایی در دریافت فایل رخ داد",
-                            detailedMessage = result.exception.message.orEmpty()
+                        reportError(
+                            throwable = result.exception,
+                            userAction = "restoreCloudWallets",
+                            surface = ErrorSurface.SNACKBAR,
+                            fallbackMessage = "رمز عبور اشتباه است یا خطایی در دریافت فایل رخ داد"
                         )
                     }
                 }
             } catch (e: Exception) {
-                showErrorSnackbar("خطای غیرمنتظره در پردازش فایل: ${e.message}")
+                reportError(
+                    throwable = e,
+                    userAction = "onRestorePasswordConfirm",
+                    surface = ErrorSurface.SNACKBAR,
+                    fallbackMessage = "خطای غیرمنتظره در پردازش فایل پشتیبان"
+                )
             } finally {
                 isDownloadingBackup = false
             }
@@ -270,7 +286,14 @@ class WalletImportViewModel @Inject constructor(
                     kotlinx.coroutines.delay(50)
                 }
             } catch (e: Exception) {
-                Timber.tag("WalletImportVM").e(e, "Error calculating balances")
+                // Balances are decoration on the wallet-picker list; the user can still choose
+                // which wallets to restore without them (ErrorSurface.SILENT).
+                reportError(
+                    throwable = e,
+                    userAction = "calculateCloudWalletBalances",
+                    surface = ErrorSurface.SILENT,
+                    severity = ErrorSeverity.LOW
+                )
             } finally {
                 isCalculatingBalances = false
             }
@@ -293,7 +316,15 @@ class WalletImportViewModel @Inject constructor(
                 }
                 restoreWalletEvent = first
             } catch (e: Exception) {
-                showErrorSnackbar("خطا در ایمپورت ولت‌ها: ${e.message}")
+                // Some wallets may or may not have landed — the user must acknowledge before the
+                // flow moves on and hides the ambiguity.
+                reportError(
+                    throwable = e,
+                    userAction = "importCloudWallets",
+                    surface = ErrorSurface.BLOCKING,
+                    severity = ErrorSeverity.HIGH,
+                    fallbackMessage = "خطا در بازیابی کیف پول‌ها"
+                )
             }
         }
     }
