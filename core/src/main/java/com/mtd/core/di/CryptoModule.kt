@@ -6,6 +6,7 @@ import com.mtd.core.keymanager.KeyManager
 import com.mtd.core.keymanager.WalletSecretValidator
 import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
+import com.mtd.domain.interfaceRepository.ITestnetVisibilityProvider
 import com.mtd.domain.interfaceRepository.IWalletSecretValidator
 import dagger.Module
 import dagger.Provides
@@ -26,8 +27,12 @@ object CryptoModule {
 
     @Provides
     @Singleton
-    fun provideBlockchainRegistry(@ApplicationContext context: Context): BlockchainRegistry {
-        return BlockchainRegistry().apply {
+    fun provideBlockchainRegistry(
+        @ApplicationContext context: Context,
+        // TASK-53 — فقط روی فهرست‌های UI اثر دارد؛ ثبتِ شبکه‌ها همیشه کامل است.
+        testnetVisibility: ITestnetVisibilityProvider
+    ): BlockchainRegistry {
+        return BlockchainRegistry(testnetVisibility).apply {
             loadNetworksFromAssets(context)
         }
     }

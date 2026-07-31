@@ -13,6 +13,7 @@ import coil.util.DebugLogger
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.mtd.data.config.ConfigManager
 import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
+import com.mtd.data.datasource.DefaultTestnetVisibilityProvider
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,9 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
 
 
     @Inject lateinit var connectionModeProvider: DefaultBlockchainConnectionModeProvider
+
+    // TASK-53 — ترجیحِ نمایشِ شبکه‌های تست؛ مثل حالتِ اتصال، خارج از ترد اصلی hydrate می‌شود.
+    @Inject lateinit var testnetVisibilityProvider: DefaultTestnetVisibilityProvider
 
 
     private val crashHandler = CoroutineExceptionHandler { _, throwable ->
@@ -71,6 +75,8 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
         applicationScope.launch {
             runCatching { connectionModeProvider.prime() }
                 .onFailure { Timber.w(it, "Connection-mode prime failed; defaulting to DIRECT") }
+            runCatching { testnetVisibilityProvider.prime() }
+                .onFailure { Timber.w(it, "Testnet-visibility prime failed; using the build default") }
             runCatching { configManager.getValidatedConfig() }
                 .onSuccess { Timber.i("Dynamic config ready (version=${it.version})") }
                 .onFailure { Timber.w(it, "Dynamic config warm-up failed; using local fallback") }

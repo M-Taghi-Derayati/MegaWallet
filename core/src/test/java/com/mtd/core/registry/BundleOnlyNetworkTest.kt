@@ -91,7 +91,7 @@ class BundleOnlyNetworkTest {
 
     @Test
     fun `registry indexes a bundle-only network by id and chainId`() {
-        val registry = BlockchainRegistry()
+        val registry = BlockchainRegistry { true }
         registry.registerNetwork(GenericEvmNetwork(bundleEvmConfig()))
 
         assertNotNull(registry.getNetworkById("newchain_mainnet"))
@@ -105,7 +105,7 @@ class BundleOnlyNetworkTest {
 
     @Test
     fun `a null alias never collides with another aliasless network`() {
-        val registry = BlockchainRegistry()
+        val registry = BlockchainRegistry { true }
         registry.registerNetwork(GenericEvmNetwork(bundleEvmConfig()))
         registry.registerNetwork(
             GenericEvmNetwork(bundleEvmConfig(id = "othchain_mainnet", name = "OTHCHAIN", chainId = 888_888L))
@@ -121,7 +121,7 @@ class BundleOnlyNetworkTest {
 
     @Test
     fun `lookup by a known alias still works alongside aliasless networks`() {
-        val registry = BlockchainRegistry()
+        val registry = BlockchainRegistry { true }
         registry.registerNetwork(GenericEvmNetwork(bundleEvmConfig()))
         registry.registerNetwork(
             GenericEvmNetwork(bundleEvmConfig(id = "sepolia", name = "SEPOLIA", chainId = 11155111L))
@@ -133,7 +133,7 @@ class BundleOnlyNetworkTest {
 
     @Test
     fun `address validation works for a bundle-only network via its config regex`() {
-        val registry = BlockchainRegistry()
+        val registry = BlockchainRegistry { true }
         registry.registerNetwork(GenericEvmNetwork(bundleEvmConfig()))
 
         // regex ایندکس نشده (indexAddressRegex فقط در مسیر بارگذاری اجرا می‌شود)، پس اعتبارسنجی

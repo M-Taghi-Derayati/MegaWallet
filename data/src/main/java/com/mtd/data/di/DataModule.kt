@@ -7,6 +7,7 @@ import com.mtd.data.auth.GoogleAuthManager
 import com.mtd.data.config.ConfigSignatureVerifier
 import com.mtd.data.config.Secp256k1ConfigSignatureVerifier
 import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
+import com.mtd.data.datasource.DefaultTestnetVisibilityProvider
 import com.mtd.data.datasource.GoogleDriveDataSource
 import com.mtd.data.datasource.ICloudDataSource
 import com.mtd.data.repository.BackupRepositoryImpl
@@ -43,6 +44,7 @@ import com.mtd.domain.interfaceRepository.IRealtimeConnectionGateway
 import com.mtd.domain.interfaceRepository.IBackupRepository
 import com.mtd.domain.interfaceRepository.IDeviceIdProvider
 import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
+import com.mtd.domain.interfaceRepository.ITestnetVisibilityProvider
 import com.mtd.domain.interfaceRepository.ICachedWalletBalanceReader
 import com.mtd.domain.interfaceRepository.ICloudBackupDataSource
 import com.mtd.domain.interfaceRepository.ICloudWalletBackupCodec
@@ -153,6 +155,13 @@ abstract class DataModule {
     abstract fun bindBlockchainConnectionModeProvider(
         impl: DefaultBlockchainConnectionModeProvider
     ): IBlockchainConnectionModeProvider
+
+    // TASK-53 — نمایش شبکه‌های تست؛ همان الگوی بالا.
+    @Binds
+    @Singleton
+    abstract fun bindTestnetVisibilityProvider(
+        impl: DefaultTestnetVisibilityProvider
+    ): ITestnetVisibilityProvider
 
     @Binds
     abstract fun bindUserPreferencesRepository(

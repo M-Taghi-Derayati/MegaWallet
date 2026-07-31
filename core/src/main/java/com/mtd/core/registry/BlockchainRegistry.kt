@@ -9,6 +9,7 @@ import com.mtd.core.network.tron.TronNetwork
 import com.mtd.core.utils.AddressRegexUtils
 import com.mtd.core.utils.loadNetworkConfigs
 import com.mtd.domain.interfaceRepository.INetworkCatalog
+import com.mtd.domain.interfaceRepository.ITestnetVisibilityProvider
 import com.mtd.domain.interfaceRepository.NetworkInfo
 import com.mtd.domain.model.core.NetworkConfig
 import com.mtd.domain.model.core.NetworkName
@@ -16,6 +17,7 @@ import com.mtd.domain.model.core.NetworkType
 import fr.acinq.bitcoin.Base58
 import org.bitcoinj.base.Address
 import org.web3j.crypto.WalletUtils
+import timber.log.Timber
 import javax.inject.Inject
 
 
@@ -88,7 +90,9 @@ class TronNetworkFactory : NetworkFactory {
 }
 
 
-class BlockchainRegistry @Inject constructor() : INetworkCatalog {
+class BlockchainRegistry @Inject constructor(
+    private val testnetVisibility: ITestnetVisibilityProvider
+) : INetworkCatalog {
 
 
     private val networks = mutableMapOf<NetworkType, MutableMap<Long, BlockchainNetwork>>()
@@ -117,9 +121,24 @@ class BlockchainRegistry @Inject constructor() : INetworkCatalog {
 
         val chainId = network.chainId
         if (chainId != null) {
-            // Register in the nested map and chainId map for Ethereum-like networks
-            networks.getOrPut(network.networkType) { mutableMapOf() }[chainId] = network
-            networksByChainId[chainId] = network
+            // TASK-53 — تصادفِ chainId را بی‌صدا بازنویسی نکن.
+            //
+            // `getNetworkByChainId` مسیرِ مسیریابیِ ارسال است (ChainDataSourceFactory.create(chainId))،
+            // پس بازنویسیِ خاموش یعنی امضای تراکنش با پارامترهای زنجیرهٔ اشتباه. تا وقتی فیلترِ
+            // «فقط تست‌نت» فعال بود این تصادف پنهان می‌ماند؛ حالا که همهٔ شبکه‌ها ثبت می‌شوند
+            // باید صریح باشد. اولین ثبت برنده است تا نتیجه قطعی و مستقل از ترتیبِ اجرا بماند.
+            val existing = networksByChainId[chainId]
+            if (existing != null && existing.id != network.id) {
+                Timber.e(
+                    "chainId collision: '%s' and '%s' both declare chainId=%d. Keeping '%s' for " +
+                        "chainId-keyed lookups; both remain resolvable by networkId. Fix the " +
+                        "catalog — chainId-routed sends for these networks are ambiguous.",
+                    existing.id, network.id, chainId, existing.id
+                )
+            } else {
+                networks.getOrPut(network.networkType) { mutableMapOf() }[chainId] = network
+                networksByChainId[chainId] = network
+            }
         }
 
         // Register as default for type
@@ -143,12 +162,33 @@ class BlockchainRegistry @Inject constructor() : INetworkCatalog {
     }
 
 
+    /**
+     * TASK-53 — **هر شبکهٔ ثبت‌شده، بدون فیلتر.**
+     *
+     * این API هویتی است، نه نمایشی: [com.mtd.core.keymanager.KeyManager] از روی آن کلیدِ همهٔ
+     * شبکه‌ها را می‌سازد و [AssetRegistry] با آن دارایی‌های مجاز را تعیین می‌کند. اگر خروجیِ
+     * این متد به ترجیحِ «نمایش تست‌نت» گره بخورد، خاموش‌کردنِ آن کلیدهای آن شبکه‌ها را از کیف‌پول
+     * حذف می‌کند — یعنی کاربر دسترسی به آدرس‌ها و موجودی‌اش را از دست می‌دهد. هرگز فیلتر نکنید.
+     *
+     * برای فهرست‌های UI از [getAllNetworkInfos] استفاده کنید.
+     */
     fun getAllNetworks(): List<BlockchainNetwork> {
         return networksById.values.toList()
     }
 
+    /**
+     * TASK-53 — **فهرستِ نمایشی**: شبکه‌های تست بر اساس ترجیحِ کاربر حذف می‌شوند.
+     *
+     * چون فیلتر این‌جا (زمانِ خواندن) اعمال می‌شود نه زمانِ ثبت، تغییرِ ترجیح بلافاصله اثر
+     * می‌کند: نه ری‌استارت لازم است و نه networks.json دوباره پارس می‌شود.
+     * جست‌وجوهای هویتی ([getNetworkById]، [getNetworkByChainId]، [getNetworkInfoById]) هرگز
+     * فیلتر نمی‌شوند، پس شبکهٔ پنهان همچنان کاملاً قابلِ resolve است.
+     */
     override fun getAllNetworkInfos(): List<NetworkInfo> {
-        return getAllNetworks().map { it.toNetworkInfo() }
+        val showTestnets = testnetVisibility.showTestnets()
+        return getAllNetworks()
+            .filter { showTestnets || !it.isTestnet }
+            .map { it.toNetworkInfo() }
     }
 
     override fun getNetworkInfoByName(name: NetworkName): NetworkInfo? {
@@ -299,9 +339,10 @@ class BlockchainRegistry @Inject constructor() : INetworkCatalog {
         val configs = loadNetworkConfigs(context, fileName)
         indexAddressRegex(configs)
 
-        configs
-            .filter { config -> config.isTestnet == true }
-            .forEach { config -> registerFromConfig(config) }
+        // TASK-53 — هیچ فیلتری در زمانِ ثبت. قبلاً این‌جا `filter { it.isTestnet == true }` بود،
+        // یعنی هر شبکهٔ mainnet حتی از فایل محلی هم حذف می‌شد. جست‌وجوی هویتی باید همیشه جواب
+        // بدهد؛ انتخابِ «نمایش تست‌نت» فقط در [getAllNetworkInfos] اعمال می‌شود.
+        configs.forEach { config -> registerFromConfig(config) }
     }
 
     /**

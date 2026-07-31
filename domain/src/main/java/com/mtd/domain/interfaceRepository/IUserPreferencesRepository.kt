@@ -15,6 +15,17 @@ interface IUserPreferencesRepository {
     suspend fun setConnectionMode(mode: BlockchainConnectionMode)
 
     /**
+     * TASK-53 — آیا شبکه‌های تست در فهرست‌های UI دیده شوند؟ ذخیره می‌شود تا انتخاب پس از مرگِ
+     * پروسه هم بماند. پیش‌فرض به نوعِ بیلد بستگی دارد و در لایهٔ `data` تعیین می‌شود
+     * (debug: روشن، release: خاموش)، چون `domain` به BuildConfig دسترسی ندارد.
+     *
+     * این‌ها فقط نیمهٔ **ذخیره‌سازی** هستند؛ برای خواندن همگام از
+     * [ITestnetVisibilityProvider.showTestnets] استفاده کنید.
+     */
+    suspend fun getShowTestnets(): Boolean
+    suspend fun setShowTestnets(show: Boolean)
+
+    /**
      * TASK-56 / TASK S §2.2-D — the fiat unit every money value is displayed in. Persisted so the
      * choice survives process death; defaults to [FiatCurrency.DEFAULT] (USD).
      *

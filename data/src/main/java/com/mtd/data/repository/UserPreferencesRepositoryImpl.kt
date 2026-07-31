@@ -2,6 +2,7 @@ package com.mtd.data.repository
 
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.mtd.data.BuildConfig
 import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
@@ -23,6 +24,7 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         const val KEY_FAILED_UNLOCK_ATTEMPTS = "failed_unlock_attempts"
         const val KEY_LOCKOUT_UNTIL = "lockout_until"
         const val KEY_CONNECTION_MODE = "blockchain_connection_mode"
+        const val KEY_SHOW_TESTNETS = "show_testnets"
         const val KEY_FIAT_CURRENCY = "fiat_currency"
         const val KEY_MONITORING_SUBSCRIBED_WALLET_IDS = "monitoring_subscribed_wallet_ids"
         const val KEY_REGISTERED_FCM_TOKEN = "registered_fcm_token"
@@ -33,6 +35,17 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         val stored = prefs.getString(KEY_CONNECTION_MODE, null)
         return runCatching { BlockchainConnectionMode.valueOf(stored ?: "") }
             .getOrDefault(BlockchainConnectionMode.DIRECT)
+    }
+
+    /**
+     * TASK-53 — پیش‌فرض به نوعِ بیلد بسته است: در بیلدهای دیباگ شبکه‌های تست دیده می‌شوند،
+     * در ریلیز نه. این‌جا تعیین می‌شود چون BuildConfig در لایهٔ `data` است، نه `domain`.
+     */
+    override suspend fun getShowTestnets(): Boolean =
+        prefs.getBoolean(KEY_SHOW_TESTNETS, BuildConfig.DEBUG)
+
+    override suspend fun setShowTestnets(show: Boolean) {
+        prefs.edit { putBoolean(KEY_SHOW_TESTNETS, show) }
     }
 
     override suspend fun setConnectionMode(mode: BlockchainConnectionMode) {
