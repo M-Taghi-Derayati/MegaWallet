@@ -292,9 +292,6 @@ private fun AssetDetailHeader(
     val localIconResId = remember(asset?.symbol) {
         asset?.symbol?.let { getLocalIconResId(it) } ?: 0
     }
-    val localIconNetworkResId = remember(asset?.networkId) {
-        asset?.networkId?.let { getNetworkIconResId(it) } ?: 0
-    }
     val placeholderResId = remember { getPlaceholderIconResId() }
 
     Row(
@@ -380,14 +377,12 @@ private fun AssetDetailHeader(
                                 tint = if (isDark) Color.Black else Color.White
                             )
 
-                            Image(
-                                painter = painterResource(id = localIconNetworkResId),
+                            NetworkIcon(
+                                iconUrl = asset.networkIconUrl,
                                 contentDescription = "${asset.networkName} network icon",
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING),
-                                contentScale = ContentScale.Fit,
-                                colorFilter = null
+                                    .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING)
                             )
                         }
                     }
@@ -942,7 +937,6 @@ private fun AssetDetailBreakdownSection(asset: AssetItem) {
 
 @Composable
 private fun BreakdownListItem(subAsset: AssetItem, percentage: Float) {
-    val localNetworkIcon = getNetworkIconResId(subAsset.networkId)
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -955,8 +949,8 @@ private fun BreakdownListItem(subAsset: AssetItem, percentage: Float) {
                     .size(32.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = localNetworkIcon),
+                NetworkIcon(
+                    iconUrl = subAsset.networkIconUrl,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp)
                 )

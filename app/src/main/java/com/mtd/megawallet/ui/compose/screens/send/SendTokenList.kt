@@ -51,7 +51,7 @@ import com.mtd.domain.model.core.NetworkType
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
 import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
+import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
 import com.mtd.megawallet.ui.compose.screens.wallet.getPlaceholderIconResId
 import kotlinx.coroutines.delay
 import java.math.BigDecimal
@@ -116,9 +116,6 @@ private fun AssetListItems(
     // تلاش برای پیدا کردن آیکون لوکال با فرمت ic_symbol (مثلا ic_btc)
     val localIconResId = remember(asset.symbol) {
         getLocalIconResId(asset.symbol)
-    }
-    val localIconNetworkResId = remember(asset.networkId) {
-        getNetworkIconResId(asset.networkId)
     }
 
     // جداسازی مقدار و نماد برای انیمیشن
@@ -188,14 +185,12 @@ private fun AssetListItems(
                         tint = if (isDark) Color.Black else Color.White
                     )
 
-                    Image(
-                        painter = painterResource(id = localIconNetworkResId),
+                    NetworkIcon(
+                        iconUrl = asset.networkIconUrl,
                         contentDescription = "${asset.networkName} network icon",
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING),
-                        contentScale = ContentScale.Fit,
-                        colorFilter = null
+                            .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING)
                     )
                 }
             }

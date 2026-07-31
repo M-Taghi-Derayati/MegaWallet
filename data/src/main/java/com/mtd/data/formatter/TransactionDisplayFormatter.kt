@@ -343,6 +343,13 @@ class TransactionDisplayFormatter @Inject constructor(
         }
     }
 
+    /**
+     * TASK-53 — آیکونِ شبکهٔ یک تراکنش، از کانفیگ. `null` یعنی شبکه ناشناخته است یا آیکون
+     * اعلام نکرده؛ UI در آن حالت placeholder می‌گذارد، نه یک آیکونِ per-network هاردکد.
+     */
+    fun networkIconUrl(transaction: TransactionRecord): String? =
+        networkOf(transaction)?.iconUrl
+
     fun networkId(transaction: TransactionRecord): String {
         return networkOf(transaction)?.id ?: transaction.networkId.orEmpty()
     }

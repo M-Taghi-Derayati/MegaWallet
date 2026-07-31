@@ -72,7 +72,7 @@ import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetai
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryEmptyState
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryItem
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryShimmer
-import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
+import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.megawallet.viewmodel.HomeViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -555,12 +555,6 @@ private fun HistoryNetworkIcon(
     option: HistoryNetworkOption,
     size: Int
 ) {
-    // C1 (KAN-NEW-05): use the app-wide singleton ImageLoader instead of a per-row instance.
-    val imageLoader = LocalContext.current.imageLoader
-    val localIcon = remember(option.networkId, option.isAllNetworks) {
-        if (option.isAllNetworks) R.drawable.ic_wallet else getNetworkIconResId(option.networkId)
-    }
-
     Box(
         modifier = Modifier
             .size(size.dp)
@@ -568,9 +562,11 @@ private fun HistoryNetworkIcon(
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
         contentAlignment = Alignment.Center
     ) {
-        if (localIcon != 0 && (option.isAllNetworks || localIcon != R.drawable.ic_wallet)) {
+        // TASK-53 — «همهٔ شبکه‌ها» یک گزینهٔ ترکیبی است و شبکهٔ واقعی نیست، پس تنها جایی است که
+        // یک drawable ثابت درست است. بقیه از iconUrl کانفیگ می‌آیند.
+        if (option.isAllNetworks) {
             Image(
-                painter = painterResource(id = localIcon),
+                painter = painterResource(id = R.drawable.ic_wallet),
                 contentDescription = null,
                 modifier = Modifier
                     .size(size.dp)
@@ -578,14 +574,12 @@ private fun HistoryNetworkIcon(
                 contentScale = ContentScale.Fit
             )
         } else {
-            AsyncImage(
-                model = option.iconUrl,
+            NetworkIcon(
+                iconUrl = option.iconUrl,
                 contentDescription = null,
                 modifier = Modifier
                     .size((size - 4).dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Fit,
-                imageLoader = imageLoader
+                    .clip(CircleShape)
             )
         }
     }

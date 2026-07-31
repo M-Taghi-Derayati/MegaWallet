@@ -380,9 +380,6 @@ private fun AssetListItems(
     val localIconResId = remember(asset.symbol) {
         getLocalIconResId(asset.symbol)
     }
-    val localIconNetworkResId = remember(asset.networkId) {
-        getNetworkIconResId(asset.networkId)
-    }
 
     // جداسازی مقدار و نماد برای انیمیشن
     val balanceAmount = remember(asset.balance, asset.symbol) {
@@ -457,14 +454,12 @@ private fun AssetListItems(
                             tint = if (isDark) Color.Black else Color.White
                         )
 
-                        Image(
-                            painter = painterResource(id = localIconNetworkResId),
+                        NetworkIcon(
+                            iconUrl = asset.networkIconUrl,
                             contentDescription = "${asset.networkName} network icon",
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING),
-                            contentScale = ContentScale.Fit,
-                            colorFilter = null
+                                .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING)
                         )
                     }
                 }
@@ -716,20 +711,30 @@ fun getLocalIconResId(symbol: String): Int {
 }
 
 /**
- * تبدیل ID شبکه به resource ID آیکون لوکال شبکه
+ * TASK-53 — آیکونِ شبکه، از روی داده.
+ *
+ * جایگزینِ `getNetworkIconResId(networkId)` که یک `when` روی فهرستِ هاردکدِ networkIdها بود و
+ * شاخهٔ `else` آن یعنی هر زنجیره‌ای که سرور اضافه می‌کرد آیکونِ عمومیِ کیف‌پول می‌گرفت. حالا
+ * `NetworkInfo.iconUrl` (که از networks.json / باندلِ امضاشده می‌آید) رندر می‌شود و drawableِ
+ * عمومی **فقط** placeholderِ حالتِ لودنشدن/نبودِ آیکون است، نه یک شاخهٔ per-network.
  */
-fun getNetworkIconResId(networkId: String): Int {
-    return when (networkId.lowercase()) {
-        "bitcoin_mainnet", "bitcoin_testnet" -> R.drawable.ic_btc
-        "sepolia", "ethereum_mainnet" -> R.drawable.ic_eth
-        "bsc_testnet", "bsc_mainnet" -> R.drawable.ic_bnb
-        "polygon_testnet", "polygon_mainnet" -> R.drawable.ic_pol
-        "tron_mainnet", "shasta_testnet" -> R.drawable.ic_trx
-        "doge_testnet", "doge_mainnet" -> R.drawable.ic_doge
-        "base_sepolia", "base_mainnet" -> R.drawable.ic_base
-        "arb_sepolia", "arb_mainnet" -> R.drawable.ic_arb
-        else -> R.drawable.ic_wallet // پیش‌فرض
-    }
+@Composable
+fun NetworkIcon(
+    iconUrl: String?,
+    contentDescription: String?,
+    modifier: Modifier = Modifier
+) {
+    val placeholder = painterResource(id = getPlaceholderIconResId())
+    AsyncImage(
+        model = iconUrl,
+        contentDescription = contentDescription,
+        modifier = modifier,
+        contentScale = ContentScale.Fit,
+        placeholder = placeholder,
+        error = placeholder,
+        fallback = placeholder,
+        imageLoader = LocalContext.current.imageLoader
+    )
 }
 
 /**

@@ -37,6 +37,13 @@ data class AssetItem(
     val networkName: String, // "on Sepolia"
     val networkFaName: String? = null, // نام فارسی شبکه
     val iconUrl: String?,
+    /**
+     * TASK-53 — آیکونِ **شبکه** از کانفیگ (`NetworkInfo.iconUrl`).
+     * قبلاً UI با یک `when (networkId)` به drawableهای لوکال نگاشت می‌شد، پس هر زنجیرهٔ جدیدی که
+     * سرور اضافه می‌کرد آیکونِ عمومیِ کیف‌پول می‌گرفت. `null` یعنی «شبکه آیکون اعلام نکرده» و UI
+     * placeholder نشان می‌دهد.
+     */
+    val networkIconUrl: String? = null,
 
     // --- اطلاعات موجودی (نمایشی) ---
     val balance: String, // "10.0 ETH"

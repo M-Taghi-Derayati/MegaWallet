@@ -47,7 +47,7 @@ import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.domain.model.AssetItem
 import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
+import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
 
 /**
  * آواتار گیرنده در صفحهٔ تأیید تراکنش (آیکون ارز + نشانِ تأیید).
@@ -183,8 +183,7 @@ internal fun TransactionDetailCard(
                 label = "شبکه",
                 valueLeft = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        val netIcon = getNetworkIconResId(asset.networkId)
-                        Image(painterResource(netIcon), null, modifier = Modifier.size(20.dp))
+                        NetworkIcon(asset.networkIconUrl, null, Modifier.size(20.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(
                             text = asset.networkFaName ?: "نامشخص",

@@ -39,7 +39,7 @@ import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
+import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
 import com.mtd.common_ui.theme.Green
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.common_ui.theme.InterMedium
@@ -55,7 +55,8 @@ fun TransactionHistoryItem(
     onClick: () -> Unit
 ) {
     val iconUrl = remember(transaction) { getLocalIconResId(viewModel.getHistoryAssetIconUrl(transaction) ?: "") }
-    val localIconNetworkResId = remember(transaction) { getNetworkIconResId(viewModel.networkId(transaction)) }
+    // TASK-53 — آیکون شبکه از کانفیگ می‌آید، نه از نگاشتِ هاردکدِ networkId→drawable.
+    val networkIconUrl = remember(transaction) { viewModel.networkIconUrl(transaction) }
 
     val assetTitle = remember(transaction) { viewModel.getHistoryAssetTitle(transaction) }
     val primaryLabel = remember(transaction) { viewModel.getHistoryPrimaryLabel(transaction) }
@@ -74,7 +75,7 @@ fun TransactionHistoryItem(
         isOutgoing = transaction.isOutgoing,
         status = transaction.status,
         iconUrl = iconUrl,
-        iconNetworkUrl = localIconNetworkResId,
+        iconNetworkUrl = networkIconUrl,
         assetTitle = assetTitle,
         primaryLabel = primaryLabel,
         counterpartyLabel = counterpartyLabel,
@@ -89,7 +90,7 @@ fun TransactionHistoryItemContent(
     isOutgoing: Boolean,
     status: TransactionStatus,
     iconUrl: Int,
-    iconNetworkUrl: Int,
+    iconNetworkUrl: String?,
     assetTitle: String,
     primaryLabel: String,
     counterpartyLabel: String,
@@ -185,14 +186,12 @@ fun TransactionHistoryItemContent(
                         tint = if (isSystemInDarkTheme()) Color.Black else Color.White
                     )
 
-                    Image(
-                        painter = painterResource(id = iconNetworkUrl),
+                    NetworkIcon(
+                        iconUrl = iconNetworkUrl,
                         contentDescription = "network icon",
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING),
-                        contentScale = ContentScale.Fit,
-                        colorFilter = null
+                            .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING)
                     )
                 }
             }

@@ -88,7 +88,7 @@ import com.mtd.megawallet.ui.compose.components.AnimatedBottomSheetCard
 import com.mtd.megawallet.ui.compose.components.rememberClipboardCopier
 import com.mtd.megawallet.ui.compose.screens.wallet.AutoResizeBalanceRows
 import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
+import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -125,8 +125,9 @@ fun TransactionDetailsBottomSheet(
             viewModel.getHistoryAssetIconUrl(currentTx) ?: ""
         )
     }
-    val localIconNetworkResId =
-        remember(transaction) { getNetworkIconResId(viewModel.networkId(currentTx)) }
+    // TASK-53 — آیکون شبکه از کانفیگ؛ دیگر resource id نیست.
+    val networkIconUrl =
+        remember(transaction) { viewModel.networkIconUrl(currentTx) }
 
 
     LaunchedEffect(visible, currentTx.hash) {
@@ -161,7 +162,7 @@ fun TransactionDetailsBottomSheet(
             transaction = currentTx,
             viewModel = viewModel,
             iconUrl = iconUrl,
-            localIconNetworkResId,
+            networkIconUrl,
             expanded = expanded,
             onExpand = { expanded = true },
             onDone = { expanded = false }
@@ -174,7 +175,7 @@ private fun TransactionDetailsContent(
     transaction: TransactionRecord,
     viewModel: TransactionHistoryViewModel,
     iconUrl: Int,
-    networkIconUrl: Int,
+    networkIconUrl: String?,
     expanded: Boolean,
     onExpand: () -> Unit,
     onDone: () -> Unit
@@ -352,7 +353,7 @@ private fun TransactionHeader(
     transaction: TransactionRecord,
     viewModel: TransactionHistoryViewModel,
     iconUrl: Int,
-    networkIconUrl: Int,
+    networkIconUrl: String?,
     style: TransactionVisualStyle
 ) {
     val uriHandler = LocalUriHandler.current
@@ -472,7 +473,7 @@ private fun TransactionHeader(
 @Composable
 private fun AssetIconWithDirection(
     iconUrl: Int,
-    networkIconUrl: Int,
+    networkIconUrl: String?,
     style: TransactionVisualStyle,
     isOutgoing: Boolean
 ) {
@@ -545,14 +546,12 @@ private fun AssetIconWithDirection(
                 tint = if (isSystemInDarkTheme()) Color.Black else Color.White
             )
 
-            Image(
-                painter = painterResource(id = networkIconUrl),
+            NetworkIcon(
+                iconUrl = networkIconUrl,
                 contentDescription = "network icon",
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING),
-                contentScale = ContentScale.Fit,
-                colorFilter = null
+                    .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING)
             )
         }
     }

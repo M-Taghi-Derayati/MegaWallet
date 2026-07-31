@@ -1001,4 +1001,8 @@ class TransactionHistoryViewModel @Inject constructor(
 
     fun networkId(transaction: TransactionRecord): String =
         displayFormatter.networkId(transaction)
+
+    /** TASK-53 — آیکونِ شبکه از کانفیگ؛ جایگزینِ نگاشتِ هاردکدِ networkId→drawable در UI. */
+    fun networkIconUrl(transaction: TransactionRecord): String? =
+        displayFormatter.networkIconUrl(transaction)
 }

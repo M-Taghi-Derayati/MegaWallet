@@ -48,7 +48,7 @@ import androidx.compose.ui.zIndex
 import com.mtd.domain.model.AssetItem
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.getNetworkIconResId
+import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
 import java.math.BigDecimal
 import com.mtd.common_ui.theme.InterRegular
 import com.mtd.common_ui.theme.IranSansBold
@@ -168,7 +168,6 @@ private fun ChooseBalanceRow(
     asset: AssetItem,
     onClick: () -> Unit
 ) {
-    val networkIcon = getNetworkIconResId(asset.networkId)
     val tokenIcon = getLocalIconResId(asset.symbol)
 
     Surface(
@@ -192,11 +191,10 @@ private fun ChooseBalanceRow(
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        painter = painterResource(id = networkIcon),
+                    NetworkIcon(
+                        iconUrl = asset.networkIconUrl,
                         contentDescription = null,
-                        modifier = Modifier.size(36.dp),
-                        contentScale = ContentScale.Fit
+                        modifier = Modifier.size(36.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))

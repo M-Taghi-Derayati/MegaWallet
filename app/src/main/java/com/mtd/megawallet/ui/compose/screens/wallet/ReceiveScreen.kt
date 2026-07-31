@@ -169,12 +169,10 @@ fun NetworkChip(
                 fontFamily = IranSansRegular
             )
 
-            val localIcon = remember(item.symbol, item.id) {
-                val symbolIcon = item.symbol?.let { getLocalIconResId(it) } ?: 0
-                if (symbolIcon != 0) symbolIcon else getNetworkIconResId(item.id)
-            }
+            // TASK-53 — drawable لوکالِ نماد یک مسیرِ سریع است؛ در نبودش آیکونِ خودِ آیتم از کانفیگ.
+            val localIcon = remember(item.symbol) { item.symbol?.let { getLocalIconResId(it) } ?: 0 }
 
-            if (localIcon != 0 && localIcon != R.drawable.ic_wallet) {
+            if (localIcon != 0) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Image(
                     painter = painterResource(id = localIcon),
@@ -346,37 +344,23 @@ internal fun SupportedNetworksRow(networkIds: List<String>, iconUrls: List<Strin
         val displayCount = 5
         val items = networkIds.zip(iconUrls.padWithNulls(networkIds.size)).take(displayCount)
         
-        items.forEach { (id, url) ->
-            val localIcon = getNetworkIconResId(id)
+        items.forEach { (_, url) ->
             Box(
                 modifier = Modifier
                     .size(34.dp)
             ) {
-                if (localIcon != 0 && localIcon != R.drawable.ic_wallet) {
-
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_pls),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        tint = tintIcon
-                    )
-
-                    Image(
-                        painter = painterResource(id = localIcon),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize().padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING),
-                        contentScale = ContentScale.Fit,
-                        colorFilter = null
-                    )
-                } else if (url != null) {
-                    AsyncImage(
-                        model = url,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit,
-                        imageLoader = imageLoader
-                    )
-                }
+                // TASK-53 — آیکون شبکه فقط از کانفیگ می‌آید؛ هیچ شاخهٔ per-network باقی نمانده.
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_pls),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    tint = tintIcon
+                )
+                NetworkIcon(
+                    iconUrl = url,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING)
+                )
             }
         }
         if (networkIds.size > displayCount) {
