@@ -895,7 +895,39 @@ the investigation already produced an answer (TASK-53) it is recorded here rathe
   **Testing:** extend `TransactionDisplayFormatterTest` (:app) with a swap fixture + a MockWebServer
   `/history` swap item.
 
-### TASK-51 — Explorer link per network is built but never opened
+### TASK-51 — Explorer link per network is built but never opened — ✅ Implemented (needs on-device verify)
+- **Done (2026-07-30):**
+  - **Wired the existing three-dot control.** The owner pointed out that `TransactionHeader` already had
+    a `MoreHoriz` affordance reserved for this — it was a plain, non-interactive `Icon` with
+    `contentDescription = null`. It is now an `IconButton` opening a `DropdownMenu` with **مشاهده در
+    اکسپلورر** (hidden when no URL can be built, so there's never a dead entry) and **کپی هش تراکنش**.
+    Opens via `LocalUriHandler`, wrapped in `runCatching` so a device with no browser can't crash the sheet.
+  - **Found the actual per-network defect.** `explorers` in `networks.json` holds the explorer **API**
+    base URLs (consumed by `BitcoinDataSource`/`EvmDataSource`/`TronDataSource`), and `buildExplorerUrl`
+    was guessing the *web* page URL by substring-matching those API hosts. Measured against the real
+    config: **BSC (both), TRON, Shasta and DOGE (both) produced no link at all** — their API hosts are
+    nodereal/trongrid/blockcypher, which match no branch — and **Solana devnet produced a malformed URL**
+    (`https://solscan.io/?cluster=devnet` + `/tx/…`, a path appended after a query string).
+  - **Fix:** new `explorerTxUrl` template field (`{hash}` placeholder) on `NetworkConfig` → threaded
+    through `BlockchainNetwork` (default `null` getter), `GenericEvmNetwork`/`TronNetwork`/
+    `AbstractUtxoNetwork`, `BlockchainRegistry.toNetworkInfo()`, and `NetworkInfo`. Populated for **21 of
+    22** networks in `networks.json` (purely additive: 21 insertions, 0 deletions). This keeps chains
+    data-driven per the CLAUDE.md rule rather than hardcoding hosts in Kotlin.
+  - `doge_testnet` deliberately has **no** template — there's no explorer we can point at with
+    confidence, and it correctly falls through to producing no link rather than a dead one.
+  - The old guess-from-API-base path is kept as the fallback for networks without a template (and for
+    anything arriving via the server config bundle), but now iterates **all** `explorers` instead of only
+    the first, so one unrecognised entry no longer costs the link.
+  - **Tests:** four new cases in `TransactionDisplayFormatterTest` — template wins over the guess, the
+    TRON api-host regression (null without a template, real URL with one), fall-through to a later
+    explorer, and null when there's no usable explorer.
+- **Not built here** (Gradle unavailable) — inspection-verified.
+- **Verify on-device:** open a transaction on EVM / TRON / BTC and tap the three-dot → the correct
+  explorer page opens for each. **Please sanity-check these templates against a real tx**, since a few
+  were not verifiable from here: `shasta.tronscan.org`, `testnet.xrpscan.com`, `testnet.tonscan.org`, and
+  `blockchair.com/litecoin/testnet` (the last three follow the hosts already in `explorers`).
+- **Original spec below.**
+
 - **Problem (user, item 2):** the user can't open a transaction on its block explorer from history.
 - **Root cause:** the URL builder **exists and is exposed but has zero UI call sites.**
   `TransactionDisplayFormatter.buildExplorerUrl` (`data/formatter/TransactionDisplayFormatter.kt:265`)
@@ -922,7 +954,31 @@ the investigation already produced an answer (TASK-53) it is recorded here rathe
   layout. **Testing:** extend `TransactionDisplayFormatterTest` per family + a config-driven template case;
   on-device tap per network.
 
-### TASK-52 — Copy addresses (and hash) from the transaction detail
+### TASK-52 — Copy addresses (and hash) from the transaction detail — ✅ Implemented (needs on-device verify)
+- **Done (2026-07-30):**
+  - New shared `rememberClipboardCopier()` (`ui/compose/components/ClipboardCopy.kt`) — one copy path, so
+    a third variant doesn't appear next to the existing two. Uses `setPrimaryClip` rather than the
+    deprecated `ClipboardManager.text` setter, and ignores blank input so a not-yet-loaded value can't
+    silently wipe the user's clipboard.
+  - `DetailItem`/`DetailRow` gained `copyValue` — the **full** text, kept separate from the shortened
+    `value` that's displayed, so copying doesn't hand back a truncated (useless) address. A copyable row
+    is clickable (clickable applied before padding, so the padding is part of the touch target) and shows
+    a small `ic_copy` glyph with a `کپی <label>` content description.
+  - Copyable now: tx hash, contract address (EVM + TRON), and the token-transfer to/from.
+  - **Native transfers had no address rendered at all** — `TokenTransfersCard` only exists for token
+    transfers, so for a plain send/receive there was literally nothing to copy. Added ارسال از / ارسال به
+    rows to `buildGeneralRows`, gated on `transactionTokenTransfer(transaction) == null` so token
+    transfers don't show the same two rows twice.
+  - `ic_copy.xml` was unused and sat in `:app` while its siblings (`ic_hash`, `ic_wallet`, `ic_gas`) live
+    in `:common_ui`; moved it there so this file keeps a single `R` import. No references to update.
+  - **Confirmation:** Android 13+ draws its own copy confirmation, so the toast only fires below API 33.
+    A styled in-app success snackbar would be better, but the only snackbar the app has today is
+    error-styled (red, `colorError`) — building a success variant belongs to **TASK-57**.
+- **Not built here** (Gradle unavailable) — inspection-verified.
+- **Verify on-device:** tap each address row and the hash → paste gives the **full** value; check a native
+  transfer (new rows) and a token transfer (no duplicate rows); confirm a single confirmation on A13+.
+- **Original spec below.**
+
 - **Problem (user, item 3):** addresses in a transaction can't be copied.
 - **Root cause:** `TransactionDetailsBottomSheet` renders `DetailRow`/`SummaryRow` as plain `Text` — no
   clipboard action anywhere in `screens/history/**` (grep: 0 clipboard hits). The pattern already exists
@@ -1200,6 +1256,59 @@ the investigation already produced an answer (TASK-53) it is recorded here rathe
 - **Testing:** on-device matrix — app closed / background / foreground × deposit, on a device with the
   broken channel and on a clean install; verify `getNotificationChannel(...)` reports a non-null `sound`
   and `IMPORTANCE_HIGH`; verify the raw resource survives a **release** build.
+
+### TASK-59a — Foreground deposit is silent & the alert text drops amount/token — ✅ Implemented (needs on-device verify)
+- **Problem (user, 2026-07-30, after TASK-59 shipped):** with the app **open**, a deposit produced no
+  sound and no vibration — only a mute status-bar entry — and the text didn't show the amount or token
+  symbol even though "the socket data is complete."
+- **Root cause 1 — the foreground path silenced itself by construction.**
+  `NotificationSocketManager.handleNotification` posted `showTransactionNotification(..., silent = true)`,
+  and `NotificationCompat.setSilent(true)` suppresses **vibration and heads-up as well as sound**. So an
+  in-app deposit could *never* buzz, by design. The only intended alert was `TransactionSoundPlayer`, a
+  hand-rolled `MediaPlayer` — when that produced nothing, the result was total silence. The comment
+  justified this as "OEMs suppress channel sound in the foreground", which isn't how channels behave.
+- **Root cause 2 — the display hint was read too rigidly.**
+  - `parseTxDescriptor` (both WS and FCM) read a fixed set of **root-level** keys only. A hint nested
+    under a container, or using a synonym, parsed as all-null.
+  - `TransactionNotificationText.forTx` then returned **null** unless `direction` was exactly
+    `in`/`out`/`self`, and dropped the amount entirely whenever `tokenDecimal` was absent (which is
+    always the case for a **native** transfer). Either miss collapsed the whole alert to the generic
+    "یک تراکنش جدید روی آدرس شما ثبت شد."
+- **Root cause 3 — the notification was below wallet standard.** `NotificationService.show()` set **no
+  `contentIntent`** at all, so tapping a notification did nothing; no `BigTextStyle` (long bodies
+  truncated), no network context, no lock-screen privacy handling.
+- **Fix:**
+  - Foreground now alerts **through the channel** exactly like FCM (`silent = false`) → custom sound +
+    vibration + heads-up. `TransactionSoundPlayer` is demoted to a **fallback for when POST_NOTIFICATIONS
+    is denied** (sound needs no permission), so the two can't double up.
+  - New shared `TxDescriptorParser` (data/socket) searches the payload **root and nested containers**
+    (`display`/`descriptor`/`tx`/`transaction`/`meta`) and accepts key synonyms, for both JSON (WS) and
+    the flat FCM map (incl. dotted `display.direction` keys). Deliberately permissive on *reading*: a
+    wrong guess costs nothing, a right one restores the detail. `type` is excluded from the direction
+    aliases — at the payload root that's the event name and would shadow a real nested direction.
+  - `TransactionNotificationText` moved out of the socket god-file into its own file and now degrades
+    **one field at a time**: unknown direction still shows the amount ("تراکنش 1.5 USDT ثبت شد.");
+    a native transfer falls back to the **network's** symbol and decimals; title carries the symbol
+    ("دریافت USDT"); the network's Persian name goes in the notification `subText`.
+  - `NotificationService`: added `contentIntent` (launcher resolved via `PackageManager` so `:core`
+    still doesn't depend on `:app`), `BigTextStyle`, `CATEGORY_EVENT`, `subText`, and
+    `VISIBILITY_PRIVATE` + a redacted `publicVersion` so **balance amounts don't appear on the lock
+    screen** — standard for a wallet.
+  - A `Timber.w` now logs the raw descriptor whenever a `tx.new` still falls back to the generic text,
+    so the next occurrence is diagnosable from logcat instead of guesswork.
+  - **Tests:** new `TxDescriptorParserTest` (root/nested/synonyms/numeric-amount/type-shadowing/FCM map)
+    and a rewritten `TransactionNotificationTextTest` (native fallback, direction synonyms, unknown
+    direction still reporting the amount).
+- **⚠️ Open — needs the real frame.** The exact server field names for the hint could not be confirmed
+  here: the contract lives in the server repo (`realtime-event-contract.md` §2) and the captured logcat
+  (`megawallet-logcat-20260729.txt`) contains only `pong` + `connection.ready`, no `tx.new`. The parser
+  is tolerant enough to cover the plausible shapes, but **if the alert is still generic, grab the frame**
+  — `NotificationSocketManager` logs every one as `[NotificationSocket] ⬇ {…}` — and add the real key
+  names to `TxDescriptorParser`.
+- **Not built here** (Gradle unavailable) — inspection-verified.
+- **Verify on-device:** deposit with the app **open** → custom sound + vibration + heads-up, text shows
+  amount and symbol; app **closed** → same; tapping opens the app; the lock screen shows the redacted
+  line; with notifications **denied** → still audible in-app, exactly once.
 
 **Suggested order for this batch:** TASK-58 (P0, data loss) → **TASK-59** (P1, needs to ride the next
 release to self-heal) → TASK-51 + TASK-52 (cheap, user-visible) →
