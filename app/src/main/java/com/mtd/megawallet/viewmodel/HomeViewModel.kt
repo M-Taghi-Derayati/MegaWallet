@@ -1,6 +1,7 @@
 package com.mtd.megawallet.viewmodel
 
 import com.mtd.core.manager.ErrorManager
+import com.mtd.core.manager.ErrorSeverity
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.core.utils.formatWithSeparator
 import com.mtd.domain.interfaceRepository.IAppCacheStore
@@ -19,6 +20,7 @@ import com.mtd.domain.model.assets.AssetConfig
 import com.mtd.domain.model.assets.AssetPriceDto
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.Wallet
+import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.domain.usecase.asset.GetLatestAssetPricesUseCase
 import com.mtd.domain.usecase.asset.GetUsdToIrrRateUseCase
 import com.mtd.domain.usecase.network.GetNetworkTypeByIdUseCase
@@ -140,8 +142,14 @@ class HomeViewModel @Inject constructor(
                 }
                 is ResultResponse.Error -> {
                     _uiState.value = HomeUiState.Error("خطا در لود کیف پول")
-                    errorManager.showSnackbar("خطا در لود کیف پول")
-
+                    // Nothing is on screen without a wallet — the user must be told.
+                    reportError(
+                        throwable = result.exception,
+                        userAction = "loadWalletIfNeeded",
+                        surface = ErrorSurface.SNACKBAR,
+                        severity = ErrorSeverity.HIGH,
+                        fallbackMessage = "خطا در لود کیف پول"
+                    )
                 }
             }
         }
@@ -162,7 +170,7 @@ class HomeViewModel @Inject constructor(
                 } else {
                     if (!hasWalletUseCase()) {
                         _uiState.value = HomeUiState.Error("کیف پولی یافت نشد.")
-                        errorManager.showSnackbar("کیف پولی یافت نشد.")
+                        showErrorSnackbar("کیف پولی یافت نشد.")
                     }
                 }
             }
@@ -395,7 +403,9 @@ class HomeViewModel @Inject constructor(
 
         if (targetConfigs.isEmpty()) return
 
-        launchSafe {
+        // Background (realtime-triggered) refresh — an offline device must not produce a snackbar
+        // on every invalidation event.
+        launchSafe(connectivitySurface = ErrorSurface.SILENT) {
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
 
             try {
@@ -424,9 +434,13 @@ class HomeViewModel @Inject constructor(
                         }
                     }
 
-                    is ResultResponse.Error -> Timber.w(
-                        result.exception,
-                        "Targeted balance refresh failed for ${event.networkId}/${event.assetId}"
+                    // Realtime-driven background refresh: the previous figure stays on screen and
+                    // the next event retries, so this logs and stops (ErrorSurface.SILENT).
+                    is ResultResponse.Error -> reportError(
+                        throwable = result.exception,
+                        userAction = "targetedBalanceRefresh(${event.networkId}/${event.assetId})",
+                        surface = ErrorSurface.SILENT,
+                        severity = ErrorSeverity.LOW
                     )
                 }
             } finally {
