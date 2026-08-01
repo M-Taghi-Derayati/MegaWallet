@@ -169,7 +169,7 @@ fun MorphingFabMenu(
                             iconBgColor = MainScreenConstants.FAB_SWAP_COLOR,
                             title = "تبدیل",
                             description = "ارز های خود را بدون نیاز به خروج از کیف پول، تبدیل کنید",
-                            onClick = { onToggle() }
+                            onClick = onSwapClick
                         )
                         FabMenuItem(
                             painter = painterResource(id = R.drawable.ic_download),

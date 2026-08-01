@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
      */
     object ZLayer {
         const val ASSET_DETAIL = 1000f          // morphing asset-detail screen
+        const val SWAP = 1700f                  // swap flow
         const val SEND = 1800f                  // send flow
         const val HISTORY_DETAIL_SHEET = 1900f  // transaction-details bottom sheet (history tab)
         const val RECEIVE = 2000f               // receive flow

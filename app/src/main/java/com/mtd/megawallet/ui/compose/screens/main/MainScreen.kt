@@ -65,6 +65,7 @@ import com.mtd.megawallet.ui.compose.screens.explore.ExploreScreen
 import com.mtd.megawallet.ui.compose.screens.history.TransactionHistoryScreen
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetailsBottomSheet
 import com.mtd.megawallet.ui.compose.screens.send.SendScreen
+import com.mtd.megawallet.ui.compose.screens.swap.SwapFlowScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.AssetDetailScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.MultiWalletScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.ReceiveScreen
@@ -204,6 +205,7 @@ private fun MainDashboardContent(
     var showSendScreen by rememberSaveable { mutableStateOf(false) }
     var sendInitialAssetId by rememberSaveable { mutableStateOf<String?>(null) }
     var showReceiveScreen by rememberSaveable { mutableStateOf(false) }
+    var showSwapScreen by rememberSaveable { mutableStateOf(false) }
     var showMultiWalletScreen by rememberSaveable { mutableStateOf(false) }
 
     // Item 6 — اورلیِ اسکنرِ QR (transient، پس remember ساده کافی است).
@@ -233,6 +235,7 @@ private fun MainDashboardContent(
         selectedAssetId == null &&
         !showSendScreen &&
         !showReceiveScreen &&
+        !showSwapScreen &&
         !showMultiWalletScreen &&
         !showCreateWalletScreen &&
         !showImportWalletScreen
@@ -244,9 +247,12 @@ private fun MainDashboardContent(
     }
 
     // مدیریت دکمه Back برای بستن لایه‌های مختلف
-    BackHandler(enabled = showSendScreen || showMultiWalletScreen || showReceiveScreen || showCreateWalletScreen || showImportWalletScreen || selectedAssetId != null) {
+    BackHandler(enabled = showSendScreen || showSwapScreen || showMultiWalletScreen || showReceiveScreen || showCreateWalletScreen || showImportWalletScreen || selectedAssetId != null) {
         when {
             showSendScreen -> showSendScreen = false
+            // پشتیبان: تا وقتی فلوی تبدیل کامپوز است، BackHandlerِ خودش (که بین فازها عقب می‌رود)
+            // اولویت دارد؛ این شاخه فقط برای بازهٔ انیمیشنِ خروج است.
+            showSwapScreen -> showSwapScreen = false
             showCreateWalletScreen -> {
                 // اگر دیتای ایمپورت داشتیم و کنسل کردیم، به صفحه ایمپورت برگرد
                 if (pendingImportData != null) {
@@ -413,6 +419,10 @@ private fun MainDashboardContent(
                             onReceiveClick = {
                                 showReceiveScreen = true
                                 isFabExpanded = false
+                            },
+                            onSwapClick = {
+                                showSwapScreen = true
+                                isFabExpanded = false
                             }
                         )
                     }
@@ -542,6 +552,20 @@ private fun MainDashboardContent(
                 },
                 onScanClick = { showScanner = true },
                 sendViewModel = sendViewModel
+            )
+        }
+
+        // --- لایه ۲.۵: Swap Screen Overlay ---
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showSwapScreen,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier.zIndex(MainScreenConstants.ZLayer.SWAP)
+        ) {
+            SwapFlowScreen(
+                homeViewModel = homeViewModel,
+                walletName = walletName,
+                onDismiss = { showSwapScreen = false }
             )
         }
 

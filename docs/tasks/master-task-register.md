@@ -879,6 +879,80 @@ TASK-21 (Sprint 6) now covers only PBKDF2 iterations (TD-39) + reuse cleanup. No
 Nine items handed over by the owner. Each was grounded against the code before being written up; where
 the investigation already produced an answer (TASK-53) it is recorded here rather than left open.
 
+### TASK-2 — Swap, end to end (domain → ViewModel → UI → execution) — ✅ Implemented (needs build + on-device verify)
+- **Problem:** the swap contract was fully wired to the network edge — `SwapModels.kt`, `ISwapRepository`,
+  `SwapApiService`, `SwapApiDto`, `SwapRepositoryImpl`, bound in `DataModule` — and **nothing consumed it**.
+  There were no use cases, no ViewModel, no screen, and `MorphingFabMenu.onSwapClick` was declared but never
+  passed by `MainScreen` (the swap menu item just closed the FAB).
+- **Root cause:** Phase 4 landed the transport and stopped there.
+- **Done (2026-08-01):**
+  - **Domain.** `domain/usecase/swap/` — `GetSwapProvidersUseCase`, `GetSwapQuoteUseCase`, `PrepareSwapUseCase`
+    (thin over `ISwapRepository`) and **`ExecuteSwapBundleUseCase`**, which owns the ordered
+    sign→submit→**await** loop over the existing `IUnifiedTransferCoordinator.sendPreparedTransaction`.
+    No new send path: the swap/approve calldata rides `TransactionParams.Evm.data`, which DIRECT and PROXY
+    both already honour, and signing stays local.
+  - **Ordering is a correctness constraint, not a nicety.** The approve leg is awaited to a terminal status
+    via `ITransactionStatusRepository.observeStatus` before the swap leg is submitted; firing both would run
+    the swap against a zero allowance and revert. Poll exhaustion maps to a distinct
+    `SwapExecutionOutcome.Stalled` (tx is on-chain, may yet confirm) rather than `Failed`, so the user is
+    never told a live transaction failed and never re-sends it.
+  - **TTL is enforced, not decorative.** A quote is dead after `SwapQuote.ttlMs` (default 15s). The
+    ViewModel schedules a silent re-quote on expiry, and `confirm()` **re-checks the deadline against
+    `SystemClock.elapsedRealtime()` at tap time** — the state flag alone loses the race on the boundary.
+    The countdown itself lives in a `produceState` ticker in the UI, deliberately **not** in `SwapUiState`:
+    a per-second field would re-emit the whole state and recompose every section.
+  - **Money.** `BigInteger` raw base units end to end (`SwapUiState.amountRaw`, `SwapExecutionLeg.value`,
+    `toAmount.min`). `Double`/`BigDecimal` appear only at the display edge (`SwapFormat`) and for the
+    `slippage` field the server contract already types as `Double`. `SwapTx.value` is a **hex quantity**;
+    `parseHexQuantityOrNull` returns `null` rather than 0 on a bad parse and the whole bundle is refused —
+    silently zeroing a native-in swap would produce an on-chain revert.
+  - **Cross-network is refused, visibly.** `SwapQuoteRequest` carries `fromNetwork`/`toNetwork` separately
+    but the execution rail (`TransactionParams.Evm`) has one `networkId`. Tokens on other networks stay
+    **in** the receive list (dimmed, labelled "شبکهٔ دیگر"); selecting one blocks the quote and prints the
+    reason on the receive card. Hiding them would have read as "this coin doesn't exist".
+  - **Errors.** 422 ⇒ `SimulationReverted`/`SwapNoRoutes`, which already have curated Persian copy in
+    `ApiErrorMessageMapper`; the reason is written into `SwapQuoteState.Failed`/`SwapPrepareState.Failed`
+    and rendered inline. Per TASK-57 nothing that is already visible in state also raises a snackbar, so
+    every swap branch reports `ErrorSurface.SILENT` with the severity matching the stake.
+  - **UI.** `screens/swap/` — one scrolling column whose `SwapMorphSection`s expand/collapse between phases
+    (pay-token → amount → confirm → executing → result) while each token icon is a **single shared element**
+    that FLIP-flies between slots (`SwapMorphIcon`/`flyTo`, measured via `onGloballyPositioned`), with
+    `segment()`-windowed staggering off one intro value per phase. Slippage, `platformFeeBps` and
+    **`toAmount.min` (the guaranteed number)** are all on screen before confirm.
+  - **Motion** is centralized in `SwapMotion` and spring-based/interruptible; `ANIMATOR_DURATION_SCALE = 0`
+    degrades every spec to `snap()` and the FLIP flight to an instant move, so the flow is fully usable with
+    animations off (no content is gated behind an animation completing).
+  - **Conventions.** Icons come from config `iconUrl` via Coil (no drawable map, no `when (networkId)`);
+    fiat goes through `FiatConversion`/`BalanceFormatter` so the USD⇄تومان toggle applies; UI is Persian/RTL;
+    hosted as an `AnimatedVisibility` overlay in `MainScreen` at `ZLayer.SWAP` with `MorphingFabMenu.onSwapClick`
+    finally wired. Use cases are plain `@Inject` classes — no new Hilt module needed.
+- **Server-contract ambiguities (flagged, single-constant so they are cheap to correct):**
+  1. **Native-token identifier** for `fromToken`/`toToken` is unspecified. Uses the de-facto aggregator
+     sentinel `0xEeee…EEeE` via `SWAP_NATIVE_TOKEN_SENTINEL` — the only place it is written.
+  2. **`slippage` unit** is unspecified (`Double`). Sent as **percent** (50 bps ⇒ `0.5`).
+  3. **No `gasLimit` in the contract.** `estimatedGas.native` is a *cost*, not a limit; the limit is
+     reconstructed as `native / gasPrice × 1.2` with a 250k floor (500k when the route says nothing) and a
+     120k floor for approve. `gasPrice` comes from the existing `EstimateSendFeesUseCase`.
+  4. **No swap-capable token list endpoint** — the receive list is the app's data-driven asset catalog
+     filtered to EVM.
+  5. **Which chain a cross-network `prepare` bundle executes on** is unstated; hence the refusal above.
+- **Scope:** EVM only (the `prepare` bundle is EVM-shaped: `to`/`data`/`value`), and pay tokens are the
+  user's real balances with a non-zero amount.
+- **Files:** new — `domain/model/swap/SwapFlowModels.kt`, `domain/usecase/swap/{SwapUseCases,
+  ExecuteSwapBundleUseCase}.kt`, `app/viewmodel/swap/{SwapUiState,SwapViewModel}.kt`,
+  `app/ui/compose/screens/swap/{SwapMotion,SwapComponents,SwapFormat,SwapPaySection,SwapAmountSections,
+  SwapReceiveTokenSheet,SwapConfirmSection,SwapExecutionSection,SwapFlowScreen}.kt`; changed —
+  `screens/main/MainScreen.kt` (host + FAB wiring + back chain), `screens/main/MorphingFabMenu.kt`
+  (one `onClick`), `animations/constants/MainScreenConstants.kt` (`ZLayer.SWAP`), `.gitignore` (`/swap_test`).
+  **Modules:** domain, app. **Deps:** pairs with **TASK-50** (swap rows in history).
+- **Difficulty:** High · **Est:** 4 · **Risk:** Med (new money path; execution reuses the audited send rail) ·
+  **Priority:** P1.
+- **Not built here** (Gradle unavailable) — inspection-verified only.
+- **Verify on-device:** ERC20→ERC20 needing approve (two legs, approve awaited before swap); native→ERC20
+  (non-zero `tx.value`); let a quote expire on the confirm screen (confirm blocked + auto re-quote); a
+  no-route pair (real Persian reason, not a generic toast); cross-network selection (explicit refusal);
+  USD⇄تومان toggle across the flow; developer-options **animation scale 0** (flow fully usable).
+
 ### TASK-50 — Swap/convert transactions as a row type in history
 - **Problem (user, item 1):** the history feed has no representation for a **swap/convert** transaction.
   A swap shows up (at best) as one or two unrelated transfer rows, so the user can't see "X → Y".
