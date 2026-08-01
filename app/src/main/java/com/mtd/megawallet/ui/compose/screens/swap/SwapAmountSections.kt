@@ -1,0 +1,429 @@
+package com.mtd.megawallet.ui.compose.screens.swap
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.InterBoldBold
+import com.mtd.common_ui.theme.InterMedium
+import com.mtd.common_ui.theme.IranSansBoldMedium
+import com.mtd.common_ui.theme.IranSansLightLight
+import com.mtd.domain.model.FiatCurrency
+import com.mtd.megawallet.viewmodel.swap.SwapQuoteState
+import com.mtd.megawallet.viewmodel.swap.SwapUiState
+
+/**
+ * کارتِ پرداخت: توکنِ انتخاب‌شده، «همه»، و مبلغی که کاربر تایپ می‌کند.
+ *
+ * [intro] پیشرفتِ ۰..۱ ورودِ فاز است؛ اجزا با [segment] روی همین یک مقدار پلکانی می‌آیند تا چند
+ * انیمیشنِ مستقل لازم نباشد هم‌زمان نگه داشته شوند.
+ */
+@Composable
+fun SwapPayCardSection(
+    state: SwapUiState,
+    intro: Float,
+    onUseMax: () -> Unit,
+    onToggleFiat: () -> Unit,
+    tokenSlot: @Composable () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val token = state.payToken ?: return
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            tokenSlot()
+
+            Spacer(Modifier.width(10.dp))
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .graphicsLayer { alpha = segment(intro, 0.1f, 0.35f) }
+            ) {
+                Text(
+                    text = token.option.symbol,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 15.sp,
+                    fontFamily = InterMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "${token.balanceDisplay} ${token.option.symbol}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontFamily = InterMedium
+                )
+            }
+
+            SwapPillButton(
+                text = "همه",
+                onClick = onUseMax,
+                modifier = Modifier.graphicsLayer { alpha = segment(intro, 0.15f, 0.4f) }
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
+
+        val prefix = if (state.isFiatInput && state.fiatCurrency == FiatCurrency.USD) "$" else ""
+        Text(
+            text = "$prefix${state.amountInput}",
+            color = if (state.exceedsBalance) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onBackground
+            },
+            fontSize = 46.sp,
+            fontFamily = InterBoldBold,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    val a = segment(intro, 0.05f, 0.5f)
+                    alpha = a
+                    scaleX = 0.88f + 0.12f * a
+                    scaleY = 0.88f + 0.12f * a
+                }
+        )
+
+        Spacer(Modifier.height(6.dp))
+
+        SwapAmountEquivalent(
+            state = state,
+            onToggle = onToggleFiat,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .graphicsLayer { alpha = segment(intro, 0.3f, 0.65f) }
+        )
+
+        if (state.exceedsBalance) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "بیشتر از موجودی شماست.",
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp,
+                fontFamily = IranSansLightLight,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+        }
+    }
+}
+
+/** معادلِ مبلغ در واحدِ دیگر + کلیدِ تعویضِ واحدِ ورودی. */
+@Composable
+private fun SwapAmountEquivalent(
+    state: SwapUiState,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val token = state.payToken ?: return
+    val equivalent = if (state.isFiatInput) {
+        SwapFormat.amountWithSymbol(state.amountRaw, token.option.decimals, token.option.symbol)
+    } else {
+        SwapFormat.fiat(
+            raw = state.amountRaw,
+            decimals = token.option.decimals,
+            priceUsd = token.priceUsd,
+            currency = state.fiatCurrency,
+            rate = state.usdToTomanRate
+        )
+    }
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onToggle() }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = equivalent,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 14.sp,
+            fontFamily = InterMedium
+        )
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            painter = painterResource(id = R.drawable.ic_swap),
+            contentDescription = "تعویض واحد",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
+/**
+ * کارتِ دریافت. سه حالت دارد و هر سه صریح‌اند: توکن انتخاب نشده، جفتِ بین‌شبکه‌ای (رد می‌شود)،
+ * و مقدارِ استعلام‌شده.
+ */
+@Composable
+fun SwapReceiveCardSection(
+    state: SwapUiState,
+    intro: Float,
+    onOpenSheet: () -> Unit,
+    leading: @Composable () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onOpenSheet() }
+                .padding(14.dp)
+                .graphicsLayer { alpha = segment(intro, 0.35f, 0.75f) },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            leading()
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = state.receiveToken?.let { it.faName ?: it.name } ?: "دریافت",
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 15.sp,
+                    fontFamily = IranSansBoldMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = state.receiveToken?.let { "دریافت ${it.symbol} روی ${it.networkName}" }
+                        ?: "یک ارز انتخاب کنید",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontFamily = IranSansLightLight
+                )
+            }
+
+            SwapReceiveAmountText(state)
+        }
+
+        SwapQuoteStatusLine(
+            state = state,
+            modifier = Modifier
+                .padding(top = 10.dp)
+                .graphicsLayer { alpha = segment(intro, 0.45f, 0.85f) }
+        )
+    }
+}
+
+@Composable
+private fun SwapReceiveAmountText(state: SwapUiState) {
+    val receive = state.receiveToken
+    val net = state.readyRoute?.toAmount?.net
+
+    val text = when {
+        receive == null -> "0"
+        state.isCrossNetwork -> "—"
+        state.quoteState is SwapQuoteState.Loading -> "…"
+        net != null -> SwapFormat.amount(net, receive.decimals)
+        else -> "0"
+    }
+
+    Text(
+        text = text,
+        color = MaterialTheme.colorScheme.onBackground,
+        fontSize = 16.sp,
+        fontFamily = InterMedium
+    )
+}
+
+/**
+ * وضعیتِ استعلام، همیشه با دلیلِ واقعی.
+ *
+ * «حداقل دریافتی» مقدارِ تضمین‌شده است و باید قبل از تأیید دیده شود — نه مقدارِ خوش‌بینانه.
+ */
+@Composable
+fun SwapQuoteStatusLine(
+    state: SwapUiState,
+    modifier: Modifier = Modifier
+) {
+    val receive = state.receiveToken
+
+    if (state.isCrossNetwork) {
+        SwapNotice(
+            text = "تبدیل بین دو شبکهٔ متفاوت در این نسخه پشتیبانی نمی‌شود. " +
+                "ارزی روی «${state.payToken?.option?.networkName ?: ""}» انتخاب کنید.",
+            isError = true,
+            modifier = modifier
+        )
+        return
+    }
+
+    when (val quote = state.quoteState) {
+        is SwapQuoteState.Failed -> SwapNotice(
+            text = quote.message,
+            isError = true,
+            modifier = modifier
+        )
+
+        is SwapQuoteState.Ready -> if (receive != null) {
+            val min = quote.route.toAmount.min
+            SwapNotice(
+                text = "حداقل دریافتی: ${SwapFormat.amountWithSymbol(min, receive.decimals, receive.symbol)}",
+                isError = false,
+                modifier = modifier
+            )
+        }
+
+        SwapQuoteState.Idle, SwapQuoteState.Loading -> Spacer(modifier.height(0.dp))
+    }
+}
+
+@Composable
+fun SwapNotice(
+    text: String,
+    isError: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        text = text,
+        color = color,
+        fontSize = 12.sp,
+        fontFamily = IranSansLightLight,
+        modifier = modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+fun SwapPillButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.background)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = 12.sp,
+            fontFamily = IranSansBoldMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+/** جای خالیِ آیکونِ دریافت، تا وقتی ارزی انتخاب نشده. */
+@Composable
+fun SwapReceivePlaceholder(size: Dp = 38.dp) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Add,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(size * 0.5f)
+        )
+    }
+}
+
+/** ردیفِ انتخابِ لغزش. مقدارها bps هستند؛ درصد فقط نمایش است. */
+@Composable
+fun SwapSlippageRow(
+    selectedBps: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "لغزش مجاز",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp,
+            fontFamily = IranSansLightLight,
+            modifier = Modifier.weight(1f)
+        )
+        SwapUiState.SLIPPAGE_CHOICES.forEach { bps ->
+            val selected = bps == selectedBps
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        }
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onSelect(bps) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = SwapFormat.percentFromBps(bps),
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    fontSize = 12.sp,
+                    fontFamily = InterMedium
+                )
+            }
+        }
+    }
+}
