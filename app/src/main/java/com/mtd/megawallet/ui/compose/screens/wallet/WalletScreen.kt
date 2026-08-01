@@ -497,8 +497,13 @@ private fun AssetListItems(
                         label = "AssetBalanceAmountVisibility"
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // نمایش Circle Chart برای گروه‌ها (داخل انیمیشن)
-                            if (asset.isGroupHeader && asset.networkDistribution.isNotEmpty()) {
+                            // نمایش Circle Chart برای گروه‌ها (داخل انیمیشن).
+                            // چارت فقط وقتی معنا دارد که موجودی واقعاً بین بیش از یک شبکه پخش شده
+                            // باشد؛ با یک سهم، حلقه یک دایرهٔ تک‌رنگِ ۱۰۰٪ است که هیچ اطلاعاتی
+                            // نمی‌دهد. تا پیش از TASK-53 این حالت خودبه‌خود رخ نمی‌داد چون فقط
+                            // تست‌نت‌ها ثبت می‌شدند و بیشتر ارزها اصلاً گروه نمی‌شدند؛ حالا که همهٔ
+                            // زنجیره‌ها ثبت می‌شوند، گروهی با تنها یک شبکهٔ دارای موجودی عادی است.
+                            if (asset.isGroupHeader && asset.networkDistribution.size > 1) {
                                 NetworkDistributionChart(
                                     distribution = asset.networkDistribution,
                                     size = WalletScreenConstants.ASSET_NETWORK_CHART_SIZE
