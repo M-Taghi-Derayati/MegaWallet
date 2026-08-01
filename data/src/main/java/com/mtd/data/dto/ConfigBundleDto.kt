@@ -29,9 +29,12 @@ data class ConfigBundleDto(
  * حیاتی (id/type/derivationPath) کنار گذاشته می‌شود.
  */
 data class ConfigNetworkDto(
-    @SerializedName("networkId") val networkId: String? = null,
+    // The relayer emits `id`/`networkType`, the bundled asset files use `networkId`/`type`. Gson
+    // matches the primary name first and falls back to the alternates, so both shapes decode.
+    // Without this every server entry decoded with a null id and was dropped by the mapper.
+    @SerializedName(value = "networkId", alternate = ["id"]) val networkId: String? = null,
     @SerializedName("name") val name: String? = null,
-    @SerializedName("type") val type: String? = null,
+    @SerializedName(value = "type", alternate = ["networkType"]) val type: String? = null,
     @SerializedName("chainId") val chainId: Long? = null,
     @SerializedName("isTestnet") val isTestnet: Boolean? = null,
 
@@ -52,7 +55,7 @@ data class ConfigNetworkDto(
 )
 
 data class ConfigAssetDto(
-    @SerializedName("assetId") val assetId: String? = null,
+    @SerializedName(value = "assetId", alternate = ["id"]) val assetId: String? = null,
     @SerializedName("networkId") val networkId: String? = null,
     @SerializedName("symbol") val symbol: String? = null,
     @SerializedName("name") val name: String? = null,

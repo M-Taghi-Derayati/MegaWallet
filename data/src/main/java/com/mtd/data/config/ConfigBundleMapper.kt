@@ -61,7 +61,11 @@ object ConfigBundleMapper {
     }
 
     private fun ConfigAssetDto.toAssetConfigOrNull(): AssetConfig? {
-        val id = assetId?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val id = assetId?.trim()?.takeIf { it.isNotBlank() } ?: run {
+            // Silent until now: a whole bundle of assets could vanish with nothing in the log.
+            Timber.w("Bundle asset dropped: missing assetId")
+            return null
+        }
         val network = networkId?.trim()?.takeIf { it.isNotBlank() } ?: run {
             Timber.w("Bundle asset '%s' dropped: missing networkId", id)
             return null
