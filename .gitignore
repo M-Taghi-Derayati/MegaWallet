@@ -23,3 +23,6 @@ local.properties
 # Ad-hoc debug captures.
 /megawallet-logcat*.txt
 /tron_crash.txt
+
+# Standalone design prototype (io.familywallet.swapclone) — reference only, never imported.
+/swap_test
