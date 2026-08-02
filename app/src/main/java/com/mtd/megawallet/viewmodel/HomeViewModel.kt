@@ -130,6 +130,12 @@ class HomeViewModel @Inject constructor(
     private var currentWalletId: String? = null
     private var dataFetchJob: kotlinx.coroutines.Job? = null
 
+    /** کیف پولی که [fullRawAssets] به آن تعلق دارد — مبنای «ادغام» در برابر «بازسازی از صفر». */
+    private var rawAssetsWalletId: String? = null
+
+    /** یک تلاش برای بازیابی به ازای هر بازهٔ «کیف پول فعال ندارد» — نه حلقهٔ تلاش. */
+    private var activeWalletRecoveryAttempted = false
+
 
     // Lock object for synchronizing access to fullRawAssets
     private val assetsLock = Any()
@@ -138,7 +144,6 @@ class HomeViewModel @Inject constructor(
     private val uiUpdateChannel = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
 
     init {
-        loadWalletIfNeeded()
         observeActiveWallet()
         listenToGlobalEvents()
         observeFiatDisplayInputs()
@@ -172,28 +177,6 @@ class HomeViewModel @Inject constructor(
         return getNetworkTypeByIdUseCase(networkId)
     }
 
-    private fun loadWalletIfNeeded() {
-        launchSafe {
-            if (getActiveWalletUseCase() != null) return@launchSafe
-            when (val result = loadExistingWalletUseCase()) {
-                is ResultResponse.Success -> {
-                    result.data?.let { Timber.i("Wallet loaded: ${it.name}") }
-                }
-                is ResultResponse.Error -> {
-                    _uiState.value = HomeUiState.Error("خطا در لود کیف پول")
-                    // Nothing is on screen without a wallet — the user must be told.
-                    reportError(
-                        throwable = result.exception,
-                        userAction = "loadWalletIfNeeded",
-                        surface = ErrorSurface.SNACKBAR,
-                        severity = ErrorSeverity.HIGH,
-                        fallbackMessage = "خطا در لود کیف پول"
-                    )
-                }
-            }
-        }
-    }
-
     private fun observeActiveWallet() {
         launchSafe {
             observeActiveWalletUseCase().collect { wallet ->
@@ -202,6 +185,7 @@ class HomeViewModel @Inject constructor(
 
                 if (wallet != null) {
                     currentWalletId = wallet.id
+                    activeWalletRecoveryAttempted = false
                     dataFetchJob = launchSafe {
                         // در لحظه سوئیچ فقط کش را نشان بده و آپدیت خودکار نکن
                         loadHomePageData(wallet, forceUpdate = false)
@@ -210,8 +194,50 @@ class HomeViewModel @Inject constructor(
                     if (!hasWalletUseCase()) {
                         _uiState.value = HomeUiState.Error("کیف پولی یافت نشد.")
                         showErrorSnackbar("کیف پولی یافت نشد.")
+                        return@collect
+                    }
+
+                    // یک کیف پول هست ولی هیچ‌کدام فعال نیست. این شاخه قبلاً هیچ کاری نمی‌کرد، پس
+                    // استیت روی Loading می‌ماند و صفحه تا ابد shimmer نشان می‌داد — بدون هیچ لاگ
+                    // یا خطایی. یک بار تلاش برای بازیابی، و اگر نشد خطای صریح.
+                    if (!activeWalletRecoveryAttempted) {
+                        activeWalletRecoveryAttempted = true
+                        recoverActiveWallet()
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * وقتی کیف پول ذخیره شده هست ولی هیچ‌کدام فعال نیست — که در کولداستارت هم حالتِ اولیه است،
+     * چون [ObserveActiveWalletUseCase] یک `StateFlow` است و بلافاصله `null` را می‌دهد.
+     *
+     * تنها مالکِ این بازیابی. قبلاً یک `loadWalletIfNeeded()` در `init` هم دقیقاً همین کار را
+     * می‌کرد، پس هر کولداستارت دو بار هم‌زمان کیف پول را لود می‌کرد.
+     *
+     * موفقیت یعنی جریان دوباره با یک کیف پول emit می‌کند و مسیر عادی ادامه پیدا می‌کند؛ شکست باید
+     * دیده شود، نه اینکه صفحه بی‌صدا روی shimmer بماند.
+     */
+    private suspend fun recoverActiveWallet() {
+        when (val result = loadExistingWalletUseCase()) {
+            is ResultResponse.Success -> {
+                result.data?.let { Timber.i("Wallet loaded: ${it.name}") }
+                if (result.data == null) {
+                    _uiState.value = HomeUiState.Error("کیف پول فعالی در دسترس نیست.")
+                    showErrorSnackbar("کیف پول فعالی در دسترس نیست.")
+                }
+            }
+
+            is ResultResponse.Error -> {
+                _uiState.value = HomeUiState.Error("خطا در لود کیف پول")
+                reportError(
+                    throwable = result.exception,
+                    userAction = "recoverActiveWallet",
+                    surface = ErrorSurface.SNACKBAR,
+                    severity = ErrorSeverity.HIGH,
+                    fallbackMessage = "خطا در لود کیف پول"
+                )
             }
         }
     }
@@ -277,9 +303,25 @@ class HomeViewModel @Inject constructor(
             }
         }.toMutableList()
 
+        // برای همان کیف پول، نسخهٔ حافظه هیچ‌وقت از کش قدیمی‌تر نیست: خودش از کش seed می‌شود و بعد
+        // فقط شبکه رویش می‌نویسد. جایگزینیِ کامل با کش، موجودی‌هایی را که همین حالا از شبکه رسیده
+        // بودند پاک می‌کرد — و چون LAST_BALANCE_SYNC_TIME_KEY تازه مهر خورده بود، `isBalanceStale`
+        // هم false می‌شد و دیگر رفرشی اجرا نمی‌شد. نتیجه: موجودی کل تا یک رفرشِ دستی روی عددِ کش
+        // می‌ماند. این اتفاق واقعی است چون [refreshPrices]/[refreshBalances] فرزندِ [dataFetchJob]
+        // نیستند (هر دو مستقیم روی viewModelScope اجرا می‌شوند)، پس `cancel` متوقفشان نمی‌کند و
+        // می‌توانند هم‌زمان با یک لودِ دوبارهٔ همین صفحه در حال نوشتن باشند.
+        // کیف پولِ متفاوت ⇒ بازسازی کامل، وگرنه موجودیِ کیف پول قبلی نشت می‌کند.
         synchronized(assetsLock) {
-            fullRawAssets = localAssets
+            val inMemory = if (rawAssetsWalletId == activeWallet.id) {
+                fullRawAssets.associateBy { it.id }
+            } else {
+                emptyMap()
+            }
+            fullRawAssets = localAssets.map { fromCache -> inMemory[fromCache.id] ?: fromCache }
+                .toMutableList()
+            rawAssetsWalletId = activeWallet.id
         }
+        val effectiveAssets = synchronized(assetsLock) { fullRawAssets.toList() }
 
         //  عدم بلاک کردن UI برای دریافت نرخ ارز
         // TASK-54 — seed-only: reads the persisted last-known rate, never the network, so this path
@@ -291,10 +333,10 @@ class HomeViewModel @Inject constructor(
         fiatCurrencyProvider.ensurePrimed()
         val currency = fiatCurrencyProvider.currency.value
 
-        // محاسبه اولیه برای نمایش سریع کش
-        val initialAggregated = createAggregatedListWithRates(localAssets, currency)
+        // محاسبه اولیه برای نمایش سریع کش — از لیستِ ادغام‌شده، نه از `localAssets`ِ خامِ کش.
+        val initialAggregated = createAggregatedListWithRates(effectiveAssets, currency)
 
-        val totalUsd = localAssets.sumOf { it.balanceRaw * it.priceUsdRaw }
+        val totalUsd = effectiveAssets.sumOf { it.balanceRaw * it.priceUsdRaw }
 
         // ۳. تصمیم‌گیری برای آپدیت خودکار بر اساس زمان آخرین همگام‌سازی
         val currentTime = System.currentTimeMillis()
@@ -306,6 +348,13 @@ class HomeViewModel @Inject constructor(
         val isBalanceStale = currentTime - lastBalanceSync > RR_BALANCE_REFRESH_INTERVAL
 
         val shouldUpdateOnline = forceUpdate || !hasAnyCache || isPriceStale || isBalanceStale
+
+        // اولین فریم از کش می‌آید، نه از شبکه. اگر کاربر معطل می‌ماند یعنی یکی از این سه عدد صفر
+        // است: کاتالوگ خالی، کشِ خالی، یا لیستی که بعد از تجمیع چیزی باقی نمی‌گذارد.
+        Timber.i(
+            "Home first paint: %d configs, %d cached, %d rows (online refresh=%b)",
+            allSupportedAssets.size, cachedAssetsMap.size, initialAggregated.size, shouldUpdateOnline
+        )
 
         _uiState.value = HomeUiState.Success(
             totalBalanceUsdt = if (totalUsd > BigDecimal.ZERO) formatTotal(totalUsd, FiatCurrency.USD) else "...",
@@ -396,13 +445,24 @@ class HomeViewModel @Inject constructor(
                         val assetsInNetwork = assetCatalog.getAssetConfigsForNetwork(network.id)
 
                         walletAssets.forEach { asset ->
+                            // `isNullOrBlank` و نه `== null`: منبعِ داده برای کوینِ اصلی ممکن است
+                            // رشتهٔ خالی بدهد، نه null. [refreshSingleAssetBalance] از قبل همین
+                            // شکل را داشت و این‌جا فرق می‌کرد — دو مسیرِ تطبیقِ ناهمگون در یک فایل.
                             val config = assetsInNetwork.find {
                                 it.symbol.equals(asset.symbol, ignoreCase = true) &&
-                                (it.contractAddress?.equals(asset.contractAddress, true) ?: (asset.contractAddress == null))
+                                    (it.contractAddress?.equals(asset.contractAddress, true)
+                                        ?: asset.contractAddress.isNullOrBlank())
                             }
                             if (config != null) {
                                 // به‌روزرسانی با استفاده از قیمت‌های فعلی (موجود در حافظه)
                                 updateAssetItemAndTotal(wallet.id, config, asset.balance, emptyMap())
+                            } else {
+                                // موجودی آمده ولی به هیچ دارایی‌ای در کاتالوگ نمی‌خورد، پس هیچ‌وقت
+                                // نمایش داده نمی‌شود. قبلاً بی‌صدا دور ریخته می‌شد.
+                                Timber.w(
+                                    "Balance for %s/%s (contract=%s) matched no asset config; %d configs on this network",
+                                    network.id, asset.symbol, asset.contractAddress, assetsInNetwork.size
+                                )
                             }
                         }
                     }
@@ -564,33 +624,51 @@ class HomeViewModel @Inject constructor(
     private fun processUiUpdate() {
         val currency = fiatCurrencyProvider.currency.value
 
-        _uiState.update { currentState ->
-            if (currentState is HomeUiState.Success) {
-                // کپی امن از لیست برای محاسبات
-                val currentRawAssets = synchronized(assetsLock) { fullRawAssets.toList() }
+        // کپی امن از لیست برای محاسبات — بیرون از update، چون لامبدای update ممکن است چند بار
+        // اجرا شود.
+        val currentRawAssets = synchronized(assetsLock) { fullRawAssets.toList() }
 
-                // محاسبات سنگین تجمیع و گروه‌بندی
-                val reAggregated = createAggregatedListWithRates(currentRawAssets, currency)
+        _uiState.update { state ->
+            val currentState = when {
+                state is HomeUiState.Success -> state
 
-                val expansionState = currentState.assets.filter { it.isGroupHeader }.associate { it.symbol to it.isExpanded }
-                val finalAssets = reAggregated.map {
-                    if (it.isGroupHeader && expansionState[it.symbol] == true) it.copy(isExpanded = true) else it
-                }
-
-                // محاسبه مجموع کل به صورت صریح و امن
-                var totalUsd = BigDecimal.ZERO
-                currentRawAssets.forEach {
-                    totalUsd = totalUsd.add(it.balanceRaw.multiply(it.priceUsdRaw))
-                }
-
-                currentState.copy(
-                    assets = finalAssets,
-                    totalBalanceUsdt = formatTotal(totalUsd, FiatCurrency.USD),
-                    totalBalanceIrr = formatTotal(totalUsd, FiatCurrency.TOMAN),
-                    tetherPriceIrr = tetherPriceInToman(),
+                // موجودی/قیمت رسیده ولی صفحه هنوز روی Loading است. قبلاً این شاخه کلاً دور ریخته
+                // می‌شد: دیتا می‌آمد، در `fullRawAssets` می‌نشست، و کاربر همچنان shimmer می‌دید.
+                // از Error بالا نمی‌آییم — آن‌جا پیامِ خطا حقیقتِ فعلی است.
+                state is HomeUiState.Loading && currentRawAssets.isNotEmpty() -> HomeUiState.Success(
+                    totalBalanceUsdt = "...",
+                    totalBalanceIrr = "...",
+                    tetherPriceIrr = "...",
+                    isUpdating = false,
+                    assets = emptyList(),
+                    recentActivity = emptyList(),
                     displayCurrency = currency
                 )
-            } else currentState
+
+                else -> return@update state
+            }
+
+            // محاسبات سنگین تجمیع و گروه‌بندی
+            val reAggregated = createAggregatedListWithRates(currentRawAssets, currency)
+
+            val expansionState = currentState.assets.filter { it.isGroupHeader }.associate { it.symbol to it.isExpanded }
+            val finalAssets = reAggregated.map {
+                if (it.isGroupHeader && expansionState[it.symbol] == true) it.copy(isExpanded = true) else it
+            }
+
+            // محاسبه مجموع کل به صورت صریح و امن
+            var totalUsd = BigDecimal.ZERO
+            currentRawAssets.forEach {
+                totalUsd = totalUsd.add(it.balanceRaw.multiply(it.priceUsdRaw))
+            }
+
+            currentState.copy(
+                assets = finalAssets,
+                totalBalanceUsdt = formatTotal(totalUsd, FiatCurrency.USD),
+                totalBalanceIrr = formatTotal(totalUsd, FiatCurrency.TOMAN),
+                tetherPriceIrr = tetherPriceInToman(),
+                displayCurrency = currency
+            )
         }
     }
 
@@ -646,11 +724,22 @@ class HomeViewModel @Inject constructor(
                         balance = BalanceFormatter.formatBalance(totalBal, first.decimals),
                         balanceRaw = totalBal, priceUsdRaw = first.priceUsdRaw, priceChange24h = first.priceChange24h,
                         balanceUsdt = first.balanceUsdt,
-                        decimals = first.decimals, isNativeToken = first.isNativeToken, isGroupHeader = true, groupAssets = assets, networkDistribution = dist
+                        decimals = first.decimals, isNativeToken = first.isNativeToken, isGroupHeader = true,
+                        // زیرمجموعه‌های گروه هم وقتی باز می‌شوند باید همان ترتیبِ ارزش را داشته باشند.
+                        groupAssets = assets.sortedByDescending { it.balanceRaw * it.priceUsdRaw },
+                        networkDistribution = dist
                     )
                 } else assets.first()
             } else null
         }.map { withFiatStrings(it, currency) }
+            // ترتیب بر اساس ارزشِ دلاری، نه ترتیبِ کاتالوگ. مقایسه روی مقادیر خام است نه رشته‌های
+            // نمایشی، پس تعویضِ واحد پول ترتیب را به‌هم نمی‌ریزد. هم‌ارزش‌ها — از جمله آن سه ارزِ
+            // همیشه‌نمایش با موجودی صفر — با موجودی و بعد نماد مرتب می‌شوند تا ترتیب پایدار بماند.
+            .sortedWith(
+                compareByDescending<AssetItem> { it.balanceRaw * it.priceUsdRaw }
+                    .thenByDescending { it.balanceRaw }
+                    .thenBy { it.symbol }
+            )
     }
 
     fun toggleGroupExpansion(groupId: String) {
@@ -723,19 +812,20 @@ class HomeViewModel @Inject constructor(
      */
     suspend fun refreshUsdToIrrRate(force: Boolean = false) = usdToIrrRateProvider.refresh(force)
 
-    // Item 4 (revised) — unlike the history screen, the wallet screen is the SINGLE writer of the shared
-    // per-asset balance cache (asset_balance_*) that EVERY other screen reads on open (asset detail,
-    // multi-wallet, …). Deferring its data refresh while the wallet tab is hidden would leave that cache
-    // holding the pre-transaction balance, so freshly-opened screens would show a stale value — exactly the
-    // "balance came correct but every screen still shows the old amount" bug. We therefore ALWAYS process
-    // balance signals here — keeping the shared cache fresh — regardless of which tab is visible. Item 4's
-    // intent ("see the update after entering the screen") is still met for the wallet UI itself: it reflects
-    // the latest via its StateFlow on re-entry, no deferral needed.
     private fun listenToGlobalEvents() {
         launchSafe(checkNetwork = false) {
             appEventBus.events.collect { event ->
                 when (event) {
                     is AppEvent.WalletNeedsRefresh -> refreshData()
+
+                    // کاتالوگ عوض شده، نه دیتای زنجیره. لیست با کاتالوگ تازه بازساخته می‌شود ولی
+                    // گیتِ TTL محترم است (`forceUpdate = false`)، پس اگر کش هنوز تازه باشد این مسیر
+                    // هیچ درخواستی به شبکه نمی‌زند — و همین رفتارِ درست است.
+                    is AppEvent.CatalogChanged -> getActiveWalletUseCase()?.let { wallet ->
+                        dataFetchJob?.cancel()
+                        dataFetchJob = launchSafe { loadHomePageData(wallet, forceUpdate = false) }
+                    }
+
                     is AppEvent.WalletAssetNeedsRefresh -> refreshSingleAssetBalance(event)
                     else -> Unit
                 }
@@ -753,6 +843,25 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
-}
 
+    /**
+     * خروج از [HomeUiState.Error]. برخلاف [refreshData] به کیف پول فعال نیاز ندارد — چون شایع‌ترین
+     * علتِ خطا دقیقاً نبودِ همان است.
+     */
+    fun retry() {
+        dataFetchJob?.cancel()
+        _uiState.value = HomeUiState.Loading
+        activeWalletRecoveryAttempted = false
+
+        dataFetchJob = launchSafe {
+            val wallet = getActiveWalletUseCase()
+            if (wallet != null) {
+                loadHomePageData(wallet, forceUpdate = true)
+            } else {
+                activeWalletRecoveryAttempted = true
+                recoverActiveWallet()
+            }
+        }
+    }
+}
 

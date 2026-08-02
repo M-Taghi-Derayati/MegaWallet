@@ -110,8 +110,11 @@ class ConfigCatalogBootstrapper @Inject constructor(
         )
 
         if (after != before) {
-            // شبکه‌ها عوض شده‌اند؛ صفحه‌ها باید دوباره بخوانند (کلیدها هم از رویِ کاتالوگِ تازه).
-            runCatching { appEventBus.postEvent(AppEvent.WalletNeedsRefresh) }
+            // شبکه‌ها عوض شده‌اند؛ صفحه‌ها باید لیست‌هایشان را با کاتالوگ تازه بازبسازند. این
+            // «کاتالوگ عوض شد» است نه «دیتای زنجیره عوض شد»: قبلاً WalletNeedsRefresh منتشر می‌شد و
+            // چون جایگزینیِ seed محلی با باندلِ سرور در *هر* اجرای سرد مجموعهٔ شبکه‌ها را عوض می‌کند،
+            // هر بار باز کردن اپ یک رفرشِ کاملِ بی‌قید‌و‌شرط راه می‌انداخت و TTLِ همهٔ کش‌ها را دور می‌زد.
+            runCatching { appEventBus.postEvent(AppEvent.CatalogChanged) }
         }
         return true
     }
