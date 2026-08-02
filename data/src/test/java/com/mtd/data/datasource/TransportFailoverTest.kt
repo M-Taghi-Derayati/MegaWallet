@@ -27,10 +27,21 @@ class TransportFailoverTest {
         assertTrue(TransportErrorClassifier.isFailoverWorthy(ApiException(ApiError.InternalError)))
         assertTrue(TransportErrorClassifier.isFailoverWorthy(ApiException(ApiError.ServiceUnavailable)))
         assertTrue(TransportErrorClassifier.isFailoverWorthy(ApiException(ApiError.RateLimited(null))))
-        assertTrue(TransportErrorClassifier.isFailoverWorthy(ApiException(ApiError.UnsupportedOperation)))
+        assertTrue(TransportErrorClassifier.isFailoverWorthy(ApiException(ApiError.NetworkFamilyUnsupported)))
         assertTrue(TransportErrorClassifier.isFailoverWorthy(IOException("timeout")))
         // cause chain is walked
         assertTrue(TransportErrorClassifier.isFailoverWorthy(RuntimeException(IOException("reset"))))
+    }
+
+    /**
+     * A transport declaring an operation outside its remit must not be rerouted. DIRECT answers this
+     * for unified history and PROXY for per-network history; failing over both sent the user's
+     * addresses to the proxy while DIRECT was selected, and hid the signal
+     * `TransactionHistoryViewModel` branches on to use its DIRECT path.
+     */
+    @Test
+    fun `an unsupported operation is not rerouted to the other transport`() {
+        assertFalse(TransportErrorClassifier.isFailoverWorthy(ApiException(ApiError.UnsupportedOperation)))
     }
 
     @Test

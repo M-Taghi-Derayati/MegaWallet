@@ -52,12 +52,18 @@ internal object TransportErrorClassifier {
         ApiError.UpstreamUnavailable,
         ApiError.InternalError,
         ApiError.ServiceUnavailable,
-        // Capability mismatch: one transport can't do it (e.g. PROXY unified-history is Phase-2 on
-        // DIRECT; DIRECT batch/history is PROXY-only) → route to the one that can.
-        ApiError.NetworkFamilyUnsupported,
-        ApiError.UnsupportedOperation -> true
+        // Chain-family routing: this transport cannot serve this network at all → the other may.
+        ApiError.NetworkFamilyUnsupported -> true
         is ApiError.RateLimited -> true
         is ApiError.Unknown -> true
+
+        // NOT failover-worthy, despite being a capability signal. UnsupportedOperation is how a
+        // transport says "this operation is not part of what I do" — DIRECT for unified history,
+        // PROXY for per-network history. Failing over silently sent every address to the proxy while
+        // the user had explicitly selected DIRECT, and it also swallowed the signal the caller needs:
+        // TransactionHistoryViewModel branches on exactly this error to fall back to the per-network
+        // DIRECT path, and that branch could never be reached.
+        ApiError.UnsupportedOperation -> false
         // Business/final: validation, bad address/signed-tx, not-found, revert, gas-credit, race,
         // requote, idempotency, broadcast-rejected, mystery-box/device/swap → never fail over.
         else -> false
