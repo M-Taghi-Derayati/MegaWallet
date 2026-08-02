@@ -7,6 +7,13 @@ interface IAppCacheStore {
 
     companion object {
         const val DEFAULT_TTL = 5 * 60 * 1000L // 5 minutes
+
+        /**
+         * Transaction history. Explicit rather than riding [DEFAULT_TTL]: this is the window in which
+         * reopening the app must cost **no** service call, so it is a product decision, not a fallback.
+         * Pull-to-refresh bypasses it.
+         */
+        const val HISTORY_TTL = 30 * 60 * 1000L // 30 minutes
         // TASK-20: was `* 1000000L`, which made the "5 days" TTL ≈13,700 years (assets never expired).
         // Milliseconds = days * 24 * 3600 * 1000.
         const val ASSETS_TTL = 5L * 24 * 3600 * 1000 // 5 days

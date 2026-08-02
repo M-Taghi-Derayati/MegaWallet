@@ -6,6 +6,7 @@ import com.mtd.core.manager.ErrorSeverity
 import com.mtd.data.formatter.TransactionDisplayFormatter
 import com.mtd.data.formatter.WalletAddressReference
 import com.mtd.domain.interfaceRepository.IAppCacheStore
+import com.mtd.domain.interfaceRepository.IAppCacheStore.Companion.HISTORY_TTL
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
@@ -98,7 +99,12 @@ class TransactionHistoryViewModel @Inject constructor(
     private val pendingLocalTtlSeconds = 30L * 60 // 30 min safety cap for an un-indexed pending
 
     val transactions: StateFlow<List<TransactionRecord>> =
-        combine(_transactions, _localPending) { loaded, pending -> mergeLocalPending(loaded, pending) }
+        combine(_transactions, _localPending) { loaded, pending ->
+            // Retire before merging: a hash the backend has returned is settled, and the optimistic
+            // copy must not outlive it in `_localPending` where the next list-clear would revive it.
+            retireSupersededPendings(loaded)
+            mergeLocalPending(loaded, pending)
+        }
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _networkOptions = MutableStateFlow<List<HistoryNetworkOption>>(emptyList())
@@ -266,11 +272,26 @@ class TransactionHistoryViewModel @Inject constructor(
                 val walletId = getActiveWalletIdUseCase() ?: "unknown"
                 val cacheKey = getHistoryCacheKey(walletId, normalizedNetwork, normalizedAddress)
 
-                // Page-1 cache only (cursor pages are never cached).
+                // Page-1 cache only (cursor pages are never cached). A live cache entry is
+                // authoritative: [IAppCacheStore.get] already drops it once its TTL expires, so
+                // reaching this branch means "still fresh" and we deliberately make **no** service
+                // call. Reopening the app inside that window costs nothing; the user can always
+                // force a round-trip with pull-to-refresh (`forceRefresh`).
                 if (!forceRefresh) {
                     val cached = cacheStore.get(cacheKey, Array<TransactionRecord>::class.java)
                     if (cached != null && cached.isNotEmpty()) {
                         _transactions.value = normalizeTransactionHistoryUseCase(cached.toList(), normalizedAddress)
+                        // Pagination state is restored with the page. Without it `unifiedActive`,
+                        // `nextCursor` and `_hasMore` stayed at their reset values and `loadMore()`
+                        // returned immediately for the whole life of a cache-served list — hitting
+                        // the bottom fetched nothing. Now the *next* page is the first service call,
+                        // made when the user actually scrolls for it.
+                        val cursor = cacheStore.get(historyCursorKey(cacheKey), String::class.java)
+                            ?.takeIf { it.isNotBlank() }
+                        unifiedActive =
+                            cacheStore.get(historyUnifiedKey(cacheKey), Boolean::class.javaObjectType) == true
+                        nextCursor = cursor
+                        _hasMore.value = unifiedActive && cursor != null
                         markNetworksUpdated(refreshingIds)
                         return@launchSafe
                     }
@@ -288,7 +309,12 @@ class TransactionHistoryViewModel @Inject constructor(
                         unifiedActive = true
                         applyUnifiedPage(unified.data, normalizedAddress, append = false)
                         markNetworksUpdated(refreshingIds)
-                        cacheStore.put(cacheKey, _transactions.value.toTypedArray())
+                        cacheStore.put(cacheKey, _transactions.value.toTypedArray(), ttl = HISTORY_TTL)
+                        cacheHistoryPagination(
+                            cacheKey,
+                            cursor = nextCursor.takeIf { _hasMore.value },
+                            unified = true
+                        )
                     }
 
                     is ResultResponse.Error -> {
@@ -373,6 +399,41 @@ class TransactionHistoryViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Pagination state stored beside the cached page-1 body. Serving page 1 from cache without it left
+     * `unifiedActive`/`nextCursor`/`_hasMore` at their reset values, so [loadMore] short-circuited for
+     * the whole life of a cached list and scrolling to the bottom fetched nothing.
+     *
+     * Kept as two primitives rather than a data class on purpose: a custom type would have to survive
+     * R8 to deserialize, and the store is already used this way for the sync-time stamps. A cursor
+     * implies there is a further page, so `hasMore` is derived rather than stored.
+     */
+    private fun historyCursorKey(cacheKey: String) = "${cacheKey}_cursor"
+    private fun historyUnifiedKey(cacheKey: String) = "${cacheKey}_unified"
+
+    private suspend fun cacheHistoryPagination(cacheKey: String, cursor: String?, unified: Boolean) {
+        // Same TTL as the page body, so page and pagination state expire together.
+        cacheStore.put(historyCursorKey(cacheKey), cursor.orEmpty(), ttl = HISTORY_TTL)
+        cacheStore.put(historyUnifiedKey(cacheKey), unified, ttl = HISTORY_TTL)
+    }
+
+    /**
+     * Retires local pendings that the backend has now returned. [mergeLocalPending] only *hides* them
+     * at display time, so the optimistic row survived in [_localPending] indefinitely — and because
+     * [loadHistory] opens by clearing [_transactions], the next refresh found an empty loaded set,
+     * failed to match the hash, and re-showed an already-confirmed transaction as "in progress" until
+     * the new page arrived. Pruning here makes the reconciliation permanent: once real chain data has
+     * carried the hash even once, clearing the list can no longer resurrect the optimistic copy.
+     */
+    private fun retireSupersededPendings(loaded: List<TransactionRecord>) {
+        if (loaded.isEmpty()) return
+        val current = _localPending.value
+        if (current.isEmpty()) return
+        val loadedHashes = loaded.mapTo(HashSet()) { it.hash.lowercase(Locale.US) }
+        val remaining = current.filter { it.hash.lowercase(Locale.US) !in loadedHashes }
+        if (remaining.size != current.size) _localPending.value = remaining
+    }
+
     private fun buildSinglePair(networkId: String?, address: String?): List<HistoryAddress> {
         if (networkId.isNullOrBlank() || address.isNullOrBlank()) return emptyList()
         // TASK-53 — شناسه مستقیماً networkId است؛ دیگر از enum عبور نمی‌کند.
@@ -428,7 +489,10 @@ class TransactionHistoryViewModel @Inject constructor(
             val finalHistory = normalizeTransactionHistoryUseCase(aggregatedResults)
             _transactions.value = finalHistory
             markNetworksUpdated(refreshingIds)
-            cacheStore.put(cacheKey, finalHistory.toTypedArray())
+            cacheStore.put(cacheKey, finalHistory.toTypedArray(), ttl = HISTORY_TTL)
+            // Legacy aggregation has no cursor. Written explicitly so a later cache hit cannot
+            // inherit pagination state left over from an earlier unified load.
+            cacheHistoryPagination(cacheKey, cursor = null, unified = false)
         } else {
             // TASK-53 — normalizedNetwork همان networkId است.
             val networkId = normalizedNetwork?.takeIf { networkCatalog.getNetworkInfoById(it) != null }
@@ -442,7 +506,10 @@ class TransactionHistoryViewModel @Inject constructor(
                     val history = normalizeTransactionHistoryUseCase(result.data, normalizedAddress)
                     _transactions.value = history
                     markNetworksUpdated(refreshingIds)
-                    cacheStore.put(cacheKey, history.toTypedArray())
+                    cacheStore.put(cacheKey, history.toTypedArray(), ttl = HISTORY_TTL)
+                    // Single-network legacy load has no cursor either — record it so a later cache
+                    // hit cannot inherit pagination state from an earlier unified load.
+                    cacheHistoryPagination(cacheKey, cursor = null, unified = false)
                 }
 
                 is ResultResponse.Error -> {
