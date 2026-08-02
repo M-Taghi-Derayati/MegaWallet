@@ -143,13 +143,20 @@ class WalletBalanceSynchronizerImpl @Inject constructor(
         asset: Asset,
         networkId: String
     ) {
+        // `isNullOrBlank` و نه `== null`: منبعِ داده برای کوینِ اصلی ممکن است رشتهٔ خالی بدهد.
         val assetConfig = assetCatalog.getAssetConfigsForNetwork(networkId).find {
             if (it.contractAddress == null) {
-                asset.contractAddress == null && it.symbol.equals(asset.symbol, true)
+                asset.contractAddress.isNullOrBlank() && it.symbol.equals(asset.symbol, true)
             } else {
                 it.contractAddress.equals(asset.contractAddress, true)
             }
-        } ?: return
+        } ?: run {
+            Timber.w(
+                "Cached balance for %s/%s (contract=%s) matched no asset config; dropping",
+                networkId, asset.symbol, asset.contractAddress
+            )
+            return
+        }
 
         val cacheKey = "$CACHE_KEY_PREFIX${walletId}_${assetConfig.id}"
         val oldCache = cacheStore.get(cacheKey, CachedAssetBalance::class.java)

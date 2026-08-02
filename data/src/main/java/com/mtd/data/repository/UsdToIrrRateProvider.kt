@@ -41,12 +41,21 @@ class UsdToIrrRateProvider @Inject constructor(
 
     private val refreshMutex = Mutex()
 
+    /**
+     * Deliberately NOT [refreshMutex]. That one is held across the Wallex round-trip, so sharing it
+     * made [ensureSeeded] — a local disk read on the path that renders the wallet — wait out the
+     * whole network call whenever a refresh happened to be in flight. `HomeViewModel` awaits it
+     * before publishing its first `Success`, so a slow relayer left the screen on its loading
+     * shimmer for the duration.
+     */
+    private val seedMutex = Mutex()
+
     @Volatile
     private var seeded = false
 
     override suspend fun ensureSeeded() {
         if (seeded) return
-        refreshMutex.withLock {
+        seedMutex.withLock {
             if (seeded) return
             seedFromCache()
             seeded = true
