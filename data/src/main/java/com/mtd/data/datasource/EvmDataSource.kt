@@ -97,6 +97,9 @@ class EvmDataSource(
     }
 
     override suspend fun getTransactionHistory(address: String): ResultResponse<List<TransactionRecord>> {
+        // علتِ واقعی باید تا بالا برسد. «All explorers failed» هر خطایی را دور می‌ریخت و لایهٔ ریپازیتوری
+        // هم رویش یک Exception عمومی می‌گذاشت، پس تنها ردِ باقی‌مانده یک Timber.w بود.
+        var lastError: Throwable? = null
         for (explorer in network.explorers) {
             try {
                 // TASK-53 — گویشِ اکسپلورر داده است، نه کد. قبلاً این یک `when (network.name)` بود و
@@ -106,11 +109,28 @@ class EvmDataSource(
                     else -> fetchEVMTransactions(explorer, address)
                 }
                 if (result is ResultResponse.Success) return result
+                lastError = (result as ResultResponse.Error).exception
             } catch (e: Exception) {
                 Timber.w(e, "Failed to fetch history from explorer: $explorer")
+                lastError = e
             }
         }
-        return ResultResponse.Error(Exception("All explorers failed"))
+        return ResultResponse.Error(
+            lastError ?: Exception("No explorer configured for ${network.id}")
+        )
+    }
+
+    /**
+     * یک ردیفِ خراب نباید کلِ صفحهٔ تاریخچه را از بین ببرد. Gson با Unsafe نمونه می‌سازد و چکِ
+     * nullability کاتلین را دور می‌زند، پس هر فیلدِ «non-null»ِ DTO می‌تواند در زمان اجرا null باشد و
+     * اولین جایی که سر باز می‌کند سازندهٔ مدلِ دامنه است. قبلاً یک NFTِ اسپم بدون symbol کافی بود تا
+     * ۳۰ تراکنشِ سالمِ کنارش هم دیده نشوند و کاربر «تاریخچهٔ خالی» ببیند.
+     */
+    private fun mapRowOrNull(what: String?, block: () -> TransactionRecord): TransactionRecord? = try {
+        block()
+    } catch (e: Exception) {
+        Timber.w(e, "Skipping unmappable history row (%s)", what ?: "unknown")
+        null
     }
 
     private suspend fun fetchEVMTransactions(baseUrl: String, address: String): ResultResponse<List<TransactionRecord>> {
@@ -124,10 +144,14 @@ class EvmDataSource(
             val allRecords = mutableListOf<TransactionRecord>()
 
             if (nativeTxsResponse.isSuccessful) {
-                nativeTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address)) }
+                nativeTxsResponse.body()?.items?.forEach { dto ->
+                    mapRowOrNull(dto.hash) { dto.toDomainModel(address) }?.let(allRecords::add)
+                }
             }
             if (tokenTxsResponse.isSuccessful) {
-                tokenTxsResponse.body()?.items?.forEach { allRecords.add(it.toDomainModel(address)) }
+                tokenTxsResponse.body()?.items?.forEach { dto ->
+                    mapRowOrNull(dto.txHash) { dto.toDomainModel(address) }?.let(allRecords::add)
+                }
             }
             
             if (!nativeTxsResponse.isSuccessful && !tokenTxsResponse.isSuccessful) {
@@ -149,12 +173,12 @@ class EvmDataSource(
 
             if (nativeTxsResponse.isSuccessful) {
                 nativeTxsResponse.body()?.data?.list?.forEach { dto ->
-                    allRecords.add(mapNodeRealToDomain(dto, address))
+                    mapRowOrNull(dto.hash) { mapNodeRealToDomain(dto, address) }?.let(allRecords::add)
                 }
             }
             if (tokenTxsResponse.isSuccessful) {
                 tokenTxsResponse.body()?.data?.list?.forEach { dto ->
-                    allRecords.add(mapNodeRealToDomain(dto, address))
+                    mapRowOrNull(dto.hash) { mapNodeRealToDomain(dto, address) }?.let(allRecords::add)
                 }
             }
 
@@ -606,7 +630,7 @@ class EvmDataSource(
                 from = this.fromAddress.hash,
                 to = this.toAddress.hash,
                 amount = this.total.value?.toBigIntegerOrNull() ?: BigInteger.ZERO,
-                tokenSymbol = this.token.symbol ,
+                tokenSymbol = this.token.symbol?.takeIf { it.isNotBlank() } ?: "TOKEN",
                 tokenDecimals = this.token.decimals?.toIntOrNull() ?: 18,
                 contractAddress = this.token.address
             )

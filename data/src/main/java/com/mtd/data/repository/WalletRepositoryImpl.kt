@@ -496,8 +496,12 @@ class WalletRepositoryImpl @Inject constructor(
                 val network = blockchainRegistry.getNetworkById(networkId)
                     ?: throw IllegalStateException("Network $networkId not found")
                 val dataSource = dataSourceFactory.get().create(network)
-                val result = dataSource.getTransactionHistory(userAddress)
-                if (result is ResultResponse.Success) result.data else throw Exception("Failed to fetch history")
+                // خطای واقعیِ منبع را رد کن؛ یک Exception عمومیِ جدید علت را پاک می‌کرد و
+                // ErrorManager فقط «Failed to fetch history» را می‌دید.
+                when (val result = dataSource.getTransactionHistory(userAddress)) {
+                    is ResultResponse.Success -> result.data
+                    is ResultResponse.Error -> throw result.exception
+                }
             }
         }
 

@@ -18,7 +18,10 @@ data class EVMTokenTransferDto(
     )
     data class TokenDto(
         @SerializedName("address_hash") val address: String,
-        @SerializedName("symbol") val symbol: String,
+        // <<-- NFTهای اسپم (ERC-721/1155) معمولاً symbol و name ندارند و Blockscout null برمی‌گرداند.
+        // non-null بودنِ این فیلد دروغ بود: Gson با Unsafe نمونه می‌سازد و چکِ nullability را دور
+        // می‌زند، پس null تا سازندهٔ TokenTransferDetails می‌رفت و آن‌جا NPE می‌داد.
+        @SerializedName("symbol") val symbol: String?,
         @SerializedName("decimals") val decimals: String? // <<-- ممکن است null باشد
     )
     data class TotalDto(@SerializedName("value") val value: String?)
