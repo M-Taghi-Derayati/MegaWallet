@@ -1,6 +1,5 @@
 package com.mtd.megawallet.ui.compose.screens.history.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,8 +36,9 @@ import com.mtd.common_ui.R
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
-import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
+import com.mtd.megawallet.ui.compose.components.AssetIcon
+import com.mtd.megawallet.ui.compose.components.getLocalIconResId
+import com.mtd.megawallet.ui.compose.components.NetworkIcon
 import com.mtd.common_ui.theme.Green
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.common_ui.theme.InterMedium
@@ -54,7 +53,8 @@ fun TransactionHistoryItem(
     viewModel: TransactionHistoryViewModel,
     onClick: () -> Unit
 ) {
-    val iconUrl = remember(transaction) { getLocalIconResId(viewModel.getHistoryAssetIconUrl(transaction) ?: "") }
+    val iconUrl = remember(transaction) { viewModel.getHistoryAssetIconUrl(transaction) }
+    val assetSymbol = remember(transaction) { viewModel.getHistoryAssetSymbol(transaction) }
     // TASK-53 — آیکون شبکه از کانفیگ می‌آید، نه از نگاشتِ هاردکدِ networkId→drawable.
     val networkIconUrl = remember(transaction) { viewModel.networkIconUrl(transaction) }
 
@@ -75,6 +75,7 @@ fun TransactionHistoryItem(
         isOutgoing = transaction.isOutgoing,
         status = transaction.status,
         iconUrl = iconUrl,
+        assetSymbol = assetSymbol,
         iconNetworkUrl = networkIconUrl,
         assetTitle = assetTitle,
         primaryLabel = primaryLabel,
@@ -89,7 +90,8 @@ fun TransactionHistoryItem(
 fun TransactionHistoryItemContent(
     isOutgoing: Boolean,
     status: TransactionStatus,
-    iconUrl: Int,
+    iconUrl: String?,
+    assetSymbol: String,
     iconNetworkUrl: String?,
     assetTitle: String,
     primaryLabel: String,
@@ -126,6 +128,7 @@ fun TransactionHistoryItemContent(
             ) {
                 AssetAvatar(
                     iconUrl = iconUrl,
+                    symbol = assetSymbol,
                     fallbackLabel = assetTitle,
                     modifier = Modifier
                         .size(WalletScreenConstants.ASSET_ICON_SIZE)
@@ -250,17 +253,20 @@ fun TransactionHistoryItemContent(
 
 @Composable
 internal fun AssetAvatar(
-    iconUrl: Int,
+    iconUrl: String?,
+    symbol: String,
     fallbackLabel: String,
     modifier: Modifier = Modifier
 ) {
-    if (iconUrl != 0) {
-        Image(
-            painter = painterResource(id = iconUrl),
-            contentDescription = "$iconUrl icon",
-            modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-            contentScale = ContentScale.Fit,
-            colorFilter = null
+    // حرفِ اولِ نامِ ارز فقط وقتی می‌ماند که نه URLای هست نه drawableِ لوکالی؛ در غیر این صورت
+    // AssetIcon خودش زنجیرهٔ URL → drawableِ نماد → آیکونِ عمومی را مدیریت می‌کند.
+    val hasIcon = !iconUrl.isNullOrBlank() || getLocalIconResId(symbol) != 0
+    if (hasIcon) {
+        AssetIcon(
+            iconUrl = iconUrl,
+            symbol = symbol,
+            contentDescription = "${fallbackLabel.ifBlank { symbol }} icon",
+            modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE)
         )
     } else {
         Box(

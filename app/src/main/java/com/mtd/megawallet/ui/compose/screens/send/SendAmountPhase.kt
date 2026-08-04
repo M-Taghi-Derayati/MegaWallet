@@ -10,7 +10,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -38,25 +37,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.imageLoader
 import com.mtd.common_ui.R
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.domain.model.AssetItem
 import com.mtd.megawallet.ui.compose.components.RollingCounter
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
+import com.mtd.megawallet.ui.compose.components.AmountDisplaySection
+import com.mtd.megawallet.ui.compose.components.KEYPAD_DELETE_KEY
+import com.mtd.megawallet.ui.compose.components.NumericKeypad
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
-import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
-import com.mtd.megawallet.ui.compose.screens.wallet.getPlaceholderIconResId
+import com.mtd.megawallet.ui.compose.components.normalizeAmountForCalculation
+import com.mtd.megawallet.ui.compose.components.AssetIcon
+import com.mtd.megawallet.ui.compose.components.NetworkIcon
 import java.math.BigDecimal
 import java.math.RoundingMode
 import com.mtd.common_ui.theme.InterBold
@@ -87,12 +85,7 @@ internal fun AmountInputPhase(
     onContinue: () -> Unit
 ) {
     // Determine if entered amount exceeds available balance
-    val calculationAmount = when {
-        amountText.isBlank() || amountText == "0" -> "0"
-        amountText == "." -> "0"
-        amountText.endsWith(".") -> amountText + "0"
-        else -> amountText
-    }
+    val calculationAmount = normalizeAmountForCalculation(amountText)
     // TASK-56 — the over-balance check is done in the unit the user is TYPING in.
     //
     // It used to compare a typed fiat amount against `balanceRaw * priceUsdRaw`, i.e. against the
@@ -169,7 +162,7 @@ internal fun AmountInputPhase(
                 NumericKeypad(
                     onKeyPress = { key ->
                         val newAmount = when (key) {
-                            "del" -> if (amountText.length <= 1) "0" else amountText.dropLast(1)
+                            KEYPAD_DELETE_KEY -> if (amountText.length <= 1) "0" else amountText.dropLast(1)
                             "." -> if (amountText.contains(".")) amountText else if (amountText == "0") "0." else "$amountText."
                             else -> if (amountText == "0") key else amountText + key
                         }
@@ -189,148 +182,10 @@ internal fun AmountInputPhase(
 }
 
 @Composable
-private fun AmountDisplaySection(
-    asset: AssetItem,
-    amount: String,
-    calculationAmount: String,
-    isFiatMode: Boolean,
-    fiatCurrency: FiatCurrency,
-    usdToIrrRate: CurrencyRate?,
-    isOverBalance: Boolean,
-    onToggle: () -> Unit
-) {
-    val price = asset.priceUsdRaw
-    // TASK-56 — the "other side" of the amount box, in the selected currency rather than always USD.
-    val equivalent = remember(calculationAmount, isFiatMode, fiatCurrency, usdToIrrRate) {
-        try {
-            val bdVal = BigDecimal(calculationAmount)
-            if (isFiatMode) {
-                val usdVal = when (fiatCurrency) {
-                    FiatCurrency.USD -> bdVal
-                    FiatCurrency.TOMAN -> FiatConversion.tomanToUsd(bdVal, usdToIrrRate)
-                }
-                if (usdVal == null || price <= BigDecimal.ZERO) {
-                    FiatConversion.UNKNOWN_PLACEHOLDER
-                } else {
-                    val cryptoVal = usdVal.divide(price, 8, RoundingMode.DOWN)
-                    "${BalanceFormatter.formatBalance(cryptoVal, asset.decimals)} ${asset.symbol}"
-                }
-            } else {
-                BalanceFormatter.formatFiatValue(
-                    usdAmount = bdVal.multiply(price),
-                    currency = fiatCurrency,
-                    rate = usdToIrrRate
-                )
-            }
-        } catch (e: Exception) { FiatConversion.UNKNOWN_PLACEHOLDER }
-    }
-
-    val amountColor = if (isOverBalance) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary
-    val subColor = if (isOverBalance) MaterialTheme.colorScheme.error.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onTertiary
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onToggle
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // --- Main Amount Row with per-digit Rolling Counter (odometer) ---
-        // شمارندهٔ اودومترِ مشترک: رشتهٔ تایپ‌شده را عیناً نشان می‌دهد و فقط ارقامِ تغییرکرده را در فازِ draw
-        // می‌غلتاند (بدونِ recomposition per-frame). همان موتوری که موجودیِ کل استفاده می‌کند.
-        Row(
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            RollingCounter(
-                text = amount,
-                style = TextStyle(
-                    fontSize = 52.sp,
-                    color = amountColor,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = InterBold
-                )
-            )
-
-            AnimatedVisibility(
-                visible = isFiatMode,
-                enter = fadeIn(tween(180)) + slideInVertically { it / 2 },
-                exit = fadeOut(tween(150)) + slideOutVertically { it / 2 }
-            ) {
-                Text(
-                    text = BalanceFormatter.fiatSymbol(fiatCurrency),
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontSize = WalletScreenConstants.CURRENCY_SYMBOL_FONT_SIZE,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        fontFamily = InterRegularMedium
-                    ),
-                    modifier = Modifier.padding(top = WalletScreenConstants.CURRENCY_SYMBOL_PADDING_TOP)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // --- Equivalent / Swap Row ---
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (!isFiatMode) {
-                val iconRes = getLocalIconResId(asset.symbol).let { if (it == 0) R.drawable.ic_wallet else it }
-                Image(
-                    painter = painterResource(id = iconRes),
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-            Text(
-                text = equivalent,
-                color = subColor,
-                fontSize = 16.sp,
-                fontFamily = InterMedium
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Icon(
-                imageVector = Icons.Default.SwapVert,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = subColor
-            )
-        }
-
-        // --- Insufficient Balance Error ---
-        AnimatedVisibility(
-            visible = isOverBalance,
-            enter = fadeIn(tween(200)) + slideInVertically { -it / 2 },
-            exit = fadeOut(tween(150)) + slideOutVertically { -it / 2 }
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "موجودی کافی نیست",
-                    color = MaterialTheme.colorScheme.error,
-                    fontFamily = IranSansRegular,
-                    fontSize = 14.sp
-                )
-            }
-        }
-    }
-}
-
-
-@Composable
 private fun AssetInfoCard(
     asset: AssetItem,
     onUseMax: () -> Unit
 ) {
-    val localIconResId = remember(asset.symbol) {
-        getLocalIconResId(asset.symbol)
-    }
-    val imageLoader = LocalContext.current.imageLoader
-    val placeholderResId = remember { getPlaceholderIconResId() }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -349,36 +204,16 @@ private fun AssetInfoCard(
                 modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_SIZE)
             ) {
                 // آیکون اصلی ارز
-                if (localIconResId != 0) {
-                    Box(
-                        modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(id = localIconResId),
-                            contentDescription = "${asset.name} icon",
-                            modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                            contentScale = ContentScale.Fit,
-                            colorFilter = null
-                        )
-                    }
-                }
-                else {
-                    Box(
-                        modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AsyncImage(
-                            model = asset.iconUrl,
-                            contentDescription = "${asset.name} icon",
-                            modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                            contentScale = ContentScale.Fit,
-                            placeholder = painterResource(id = placeholderResId),
-                            error = painterResource(id = placeholderResId),
-                            fallback = painterResource(id = placeholderResId),
-                            imageLoader = imageLoader
-                        )
-                    }
+                Box(
+                    modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AssetIcon(
+                        iconUrl = asset.iconUrl,
+                        symbol = asset.symbol,
+                        contentDescription = "${asset.name} icon",
+                        modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE)
+                    )
                 }
 
                 // بج شبکه (پایین سمت راست)
@@ -442,49 +277,6 @@ private fun AssetInfoCard(
     }
 }
 
-@Composable
-private fun NumericKeypad(onKeyPress: (String) -> Unit) {
-    val keys = listOf(
-        listOf("3", "2", "1"),
-        listOf("6", "5", "4"),
-        listOf("9", "8", "7"),
-        listOf("del", "0", ".")
-    )
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        keys.forEach { row ->
-            Row(modifier = Modifier.fillMaxWidth()) {
-                row.forEach { key ->
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(64.dp)
-                            .clickable(indication = null, interactionSource = null){onKeyPress(key)},
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (key == "del") {
-                            Icon(
-                                imageVector = Icons.Default.Backspace,
-                                contentDescription = "Delete",
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.tertiary
-                            )
-                        } else {
-                            Text(
-                                text = key,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                fontSize = 24.sp,
-                                fontFamily = InterBold
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-}
-
 // ============================================
 // Previews
 // ============================================
@@ -496,39 +288,6 @@ private fun AssetInfoCardLightPreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             Box(modifier = Modifier.padding(16.dp)) {
                 AssetInfoCard(asset = sampleConfirmAsset, onUseMax = {})
-            }
-        }
-    }
-}
-
-@Preview(name = "NumericKeypad - Dark")
-@Composable
-private fun NumericKeypadDarkPreview() {
-    MegaWalletTheme(darkTheme = true) {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            Box(modifier = Modifier.padding(16.dp)) {
-                NumericKeypad(onKeyPress = {})
-            }
-        }
-    }
-}
-
-@Preview(name = "AmountDisplaySection - Dark")
-@Composable
-private fun AmountDisplaySectionDarkPreview() {
-    MegaWalletTheme(darkTheme = true) {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            Box(modifier = Modifier.padding(16.dp)) {
-                AmountDisplaySection(
-                    asset = sampleConfirmAsset,
-                    amount = "0.25",
-                    calculationAmount = "0.25",
-                    isFiatMode = false,
-                    fiatCurrency = FiatCurrency.USD,
-                    usdToIrrRate = null,
-                    isOverBalance = false,
-                    onToggle = {}
-                )
             }
         }
     }

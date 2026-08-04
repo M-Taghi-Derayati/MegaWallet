@@ -1,6 +1,7 @@
 package com.mtd.megawallet.viewmodel.swap
 
 import com.mtd.core.utils.FiatConversion
+import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.FeeOption
@@ -89,6 +90,11 @@ data class SwapUiState(
     val payQuery: String = "",
     val payTokens: List<SwapPayToken> = emptyList(),
     val payToken: SwapPayToken? = null,
+    /**
+     * همان دارایی به شکلِ `AssetItem`. کارتِ مبلغ کامپوننتِ مشترک با ارسال است و با این نوع کار
+     * می‌کند؛ نگه‌داشتنش اینجا از ساختِ دوبارهٔ یک دارایی از روی [payToken] جلوگیری می‌کند.
+     */
+    val payAsset: AssetItem? = null,
 
     // ── مبلغ ──
     val amountInput: String = "0",
@@ -188,9 +194,6 @@ data class SwapUiState(
             prepareState !is SwapPrepareState.Loading &&
             fee.selected?.gasPrice != null
 
-    val visiblePayTokens: List<SwapPayToken>
-        get() = payTokens.filter { it.option.matches(payQuery) }
-
     val visibleReceiveTokens: List<SwapTokenOption>
         get() = receiveTokens.filter { it.matches(receiveQuery) }
 
@@ -217,7 +220,12 @@ private fun String.toBigDecimalOrZero(): BigDecimal =
 /** کاربر روی این‌ها اثر می‌گذارد؛ ViewModel تنها مصرف‌کننده است. */
 sealed interface SwapEvent {
     data class PayQueryChanged(val query: String) : SwapEvent
-    data class PayTokenSelected(val token: SwapPayToken) : SwapEvent
+
+    /**
+     * فهرستِ پرداخت از همان `AssetItem`های صفحهٔ اصلی ساخته می‌شود (کامپوننتِ مشترک با ارسال)،
+     * پس انتخاب هم با همان نوع می‌آید و ViewModel آن را به [SwapPayToken] نگاشت می‌کند.
+     */
+    data class PayAssetSelected(val asset: AssetItem) : SwapEvent
     data object BackToPaySelect : SwapEvent
 
     data class AmountKeyPressed(val key: String) : SwapEvent
@@ -239,4 +247,5 @@ sealed interface SwapEvent {
     data object ResultDismissed : SwapEvent
 }
 
-const val SWAP_KEY_DELETE = "⌫"
+/** باید با کلیدی که صفحه‌کلیدِ مشترکِ ارسال منتشر می‌کند یکی بماند. */
+const val SWAP_KEY_DELETE = "del"

@@ -144,6 +144,11 @@ dependencies {
     // دیسوگر جاوا
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
+    // فقط برای تزریقِ کلاینتِ OkHttpِ اپ به ImageLoaderِ Coil در MegaWalletApplication؛
+    // بقیهٔ کارِ شبکه در :data می‌ماند.
+    implementation(platform(libs.okhttp.bom))
+    implementation(libs.okhttp)
+
     // AndroidX & UI Essentials
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.biometric)

@@ -2,10 +2,9 @@ package com.mtd.data.repository
 
 import android.content.SharedPreferences
 import androidx.core.content.edit
-import com.mtd.data.BuildConfig
+import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.FiatCurrency
-import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,7 +41,7 @@ class UserPreferencesRepositoryImpl @Inject constructor(
      * در ریلیز نه. این‌جا تعیین می‌شود چون BuildConfig در لایهٔ `data` است، نه `domain`.
      */
     override suspend fun getShowTestnets(): Boolean =
-        prefs.getBoolean(KEY_SHOW_TESTNETS, BuildConfig.DEBUG)
+        prefs.getBoolean(KEY_SHOW_TESTNETS, true)
 
     override suspend fun setShowTestnets(show: Boolean) {
         prefs.edit { putBoolean(KEY_SHOW_TESTNETS, show) }

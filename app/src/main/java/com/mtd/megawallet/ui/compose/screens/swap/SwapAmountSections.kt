@@ -33,12 +33,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mtd.common_ui.R
-import com.mtd.common_ui.theme.InterBoldBold
 import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.IranSansBoldMedium
 import com.mtd.common_ui.theme.IranSansLightLight
-import com.mtd.domain.model.FiatCurrency
+import com.mtd.megawallet.ui.compose.components.AmountDisplaySection
+import com.mtd.megawallet.ui.compose.components.normalizeAmountForCalculation
 import com.mtd.megawallet.viewmodel.swap.SwapQuoteState
 import com.mtd.megawallet.viewmodel.swap.SwapUiState
 
@@ -101,94 +100,27 @@ fun SwapPayCardSection(
 
         Spacer(Modifier.height(18.dp))
 
-        val prefix = if (state.isFiatInput && state.fiatCurrency == FiatCurrency.USD) "$" else ""
-        Text(
-            text = "$prefix${state.amountInput}",
-            color = if (state.exceedsBalance) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onBackground
-            },
-            fontSize = 46.sp,
-            fontFamily = InterBoldBold,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer {
+        // همان کارتِ مبلغِ صفحهٔ ارسال: شمارندهٔ اودومتری، معادلِ واحدِ دیگر، و هشدارِ موجودی.
+        // معیارِ کمبود از [SwapUiState.exceedsBalance] می‌آید که در کوچک‌ترین واحد مقایسه می‌کند،
+        // پس در حالتِ ورودیِ فیات هم درست است.
+        state.payAsset?.let { asset ->
+            AmountDisplaySection(
+                asset = asset,
+                amount = state.amountInput,
+                calculationAmount = normalizeAmountForCalculation(state.amountInput),
+                isFiatMode = state.isFiatInput,
+                fiatCurrency = state.fiatCurrency,
+                usdToIrrRate = state.usdToTomanRate,
+                isOverBalance = state.exceedsBalance,
+                onToggle = onToggleFiat,
+                modifier = Modifier.graphicsLayer {
                     val a = segment(intro, 0.05f, 0.5f)
                     alpha = a
                     scaleX = 0.88f + 0.12f * a
                     scaleY = 0.88f + 0.12f * a
                 }
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        SwapAmountEquivalent(
-            state = state,
-            onToggle = onToggleFiat,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .graphicsLayer { alpha = segment(intro, 0.3f, 0.65f) }
-        )
-
-        if (state.exceedsBalance) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "بیشتر از موجودی شماست.",
-                color = MaterialTheme.colorScheme.error,
-                fontSize = 12.sp,
-                fontFamily = IranSansLightLight,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
             )
         }
-    }
-}
-
-/** معادلِ مبلغ در واحدِ دیگر + کلیدِ تعویضِ واحدِ ورودی. */
-@Composable
-private fun SwapAmountEquivalent(
-    state: SwapUiState,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val token = state.payToken ?: return
-    val equivalent = if (state.isFiatInput) {
-        SwapFormat.amountWithSymbol(state.amountRaw, token.option.decimals, token.option.symbol)
-    } else {
-        SwapFormat.fiat(
-            raw = state.amountRaw,
-            decimals = token.option.decimals,
-            priceUsd = token.priceUsd,
-            currency = state.fiatCurrency,
-            rate = state.usdToTomanRate
-        )
-    }
-
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onToggle() }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = equivalent,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 14.sp,
-            fontFamily = InterMedium
-        )
-        Spacer(Modifier.width(4.dp))
-        Icon(
-            painter = painterResource(id = R.drawable.ic_swap),
-            contentDescription = "تعویض واحد",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(14.dp)
-        )
     }
 }
 

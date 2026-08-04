@@ -57,15 +57,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.InterMedium
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansLight
+import com.mtd.common_ui.theme.IranSansRegularMedium
 import com.mtd.domain.model.core.Wallet
 import com.mtd.megawallet.ui.compose.components.AnimatedFlipCard
 import com.mtd.megawallet.ui.compose.components.FlipCardTargets
 import com.mtd.megawallet.ui.compose.components.PrivateKeyWallet
 import com.mtd.megawallet.ui.compose.components.SeedPhraseGrid
-import com.mtd.common_ui.theme.InterMedium
-import com.mtd.common_ui.theme.IranSansBold
-import com.mtd.common_ui.theme.IranSansLight
 
 private val PremiumSpring = spring<Float>(
     dampingRatio = 0.82f,
@@ -349,7 +349,7 @@ private fun WalletCardContent(
                     text = balance,
                     color = Color.White.copy(alpha = 0.85f),
                     style = MaterialTheme.typography.bodySmall,
-                    fontFamily = InterMedium,
+                    fontFamily = if (balance.contains("$"))InterMedium else IranSansRegularMedium,
                     fontSize = if (isSmall) 12.sp else 22.sp
                 )
 

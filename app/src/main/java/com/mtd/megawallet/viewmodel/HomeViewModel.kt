@@ -10,11 +10,13 @@ import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.IAppCacheStore.Companion.ASSETS_TTL
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.CachedAssetBalance
 import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.FiatCurrency
@@ -27,6 +29,7 @@ import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.domain.usecase.asset.GetLatestAssetPricesUseCase
+import com.mtd.domain.usecase.auth.EnsureAuthenticatedUseCase
 import com.mtd.domain.usecase.network.GetNetworkTypeByIdUseCase
 import com.mtd.domain.usecase.network.GetNetworkTypeForAddressUseCase
 import com.mtd.domain.usecase.wallet.GetActiveWalletUseCase
@@ -58,6 +61,9 @@ class HomeViewModel @Inject constructor(
     private val usdToIrrRateProvider: IUsdToIrrRateProvider,
     /** TASK-56 — shared observable fiat currency; the header toggle and every screen read this one. */
     private val fiatCurrencyProvider: IFiatCurrencyProvider,
+    /** فقط برای تشخیص PROXY: در DIRECT هیچ توکنی لازم نیست و نباید معطلِ نشست شویم. */
+    private val connectionModeProvider: IBlockchainConnectionModeProvider,
+    private val ensureAuthenticatedUseCase: EnsureAuthenticatedUseCase,
     private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
     private val getActiveWalletUseCase: GetActiveWalletUseCase,
     private val loadExistingWalletUseCase: LoadExistingWalletUseCase,
@@ -436,6 +442,15 @@ class HomeViewModel @Inject constructor(
     private fun refreshBalances(wallet: Wallet) {
         launchSafe {
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
+
+            // در PROXY هر خواندن به JWT نیاز دارد و نشست را [WalletSessionAuthCoordinator] غیرهمزمان
+            // می‌سازد؛ در کولداستارت این رفرش می‌توانست از آن جلو بزند و 401 بگیرد.
+            // `forceFresh = false` یعنی توکنِ معتبر بلافاصله برمی‌گردد و mintِ در جریان هم روی همان
+            // جمع می‌شود — پس این یک «انتظار» است، نه یک ورودِ اضافه. RelayerTokenAuthenticator تورِ
+            // ایمنی زیر این می‌ماند برای هر مسیری که از این‌جا رد نمی‌شود.
+            if (connectionModeProvider.currentMode() == BlockchainConnectionMode.PROXY) {
+                ensureAuthenticatedUseCase()
+            }
 
             val jobs = networkCatalog.getAllNetworkInfos().map { network ->
                 launchSafe {

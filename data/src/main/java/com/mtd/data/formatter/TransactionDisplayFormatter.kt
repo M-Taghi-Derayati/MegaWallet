@@ -298,7 +298,18 @@ class TransactionDisplayFormatter @Inject constructor(
         val networkId = networkOf(transaction)?.id ?: transaction.networkId.orEmpty()
         val symbol = transactionSymbol(transaction)
         val contractAddr = contractAddressOf(transaction)
-        return resolveAssetConfig(networkId, contractAddr, symbol)?.symbol
+        return resolveAssetConfig(networkId, contractAddr, symbol)?.iconUrl
+    }
+
+    /**
+     * نمادِ ارزِ تراکنش — برای fallbackِ آفلاینِ آیکون وقتی `historyAssetIconUrl` چیزی ندارد یا
+     * تصویرش لود نمی‌شود. اگر ارز در کاتالوگ نبود، نمادِ خودِ تراکنش برگردانده می‌شود.
+     */
+    fun historyAssetSymbol(transaction: TransactionRecord): String {
+        val networkId = networkOf(transaction)?.id ?: transaction.networkId.orEmpty()
+        val symbol = transactionSymbol(transaction)
+        val contractAddr = contractAddressOf(transaction)
+        return resolveAssetConfig(networkId, contractAddr, symbol)?.symbol ?: symbol
     }
 
     /**

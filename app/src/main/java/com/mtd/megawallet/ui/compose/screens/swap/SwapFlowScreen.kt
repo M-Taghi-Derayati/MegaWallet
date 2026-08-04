@@ -45,7 +45,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.theme.IranSansBoldMedium
+import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.HomeUiState
+import com.mtd.megawallet.ui.compose.components.ChooseBalanceBottomSheet
+import com.mtd.megawallet.ui.compose.components.NumericKeypad
+import com.mtd.megawallet.ui.compose.components.buildSendableAssetList
 import com.mtd.megawallet.viewmodel.HomeViewModel
 import com.mtd.megawallet.viewmodel.swap.SwapEvent
 import com.mtd.megawallet.viewmodel.swap.SwapPhase
@@ -95,11 +99,9 @@ fun SwapFlowScreen(
                 amountIntro.snapTo(0f)
                 confirmIntro.snapTo(0f)
                 receiveIcon.slot = null
-                if (state.payToken != null) {
-                    launch { payIcon.flyTo(SwapMorphSlot.ROW, motion) }
-                } else {
-                    payIcon.slot = null
-                }
+                // ردیف‌های فهرست حالا کامپوننتِ مشترکِ ارسال‌اند و مستطیلِ لوگو را بیرون نمی‌دهند،
+                // پس مبدأی برای پرواز وجود ندارد؛ آیکون از فازِ بعد شروع می‌شود.
+                payIcon.slot = null
             }
 
             SwapPhase.AMOUNT -> {
@@ -165,12 +167,30 @@ fun SwapFlowScreen(
         }
     }
 
+    var chooseBalanceAsset by remember { mutableStateOf<AssetItem?>(null) }
+
     BackHandler {
-        if (state.receiveSheetVisible) {
-            swapViewModel.onEvent(SwapEvent.DismissReceiveSheet)
-        } else {
-            handleBack()
+        when {
+            state.receiveSheetVisible -> swapViewModel.onEvent(SwapEvent.DismissReceiveSheet)
+            chooseBalanceAsset != null -> chooseBalanceAsset = null
+            else -> handleBack()
         }
+    }
+
+    // همان سازندهٔ فهرستِ صفحهٔ ارسال. فیلترِ نوعِ شبکه اینجا اعمال نمی‌شود چون تبدیل آدرسِ مقصدی
+    // ندارد که فهرست باید با آن سازگار باشد؛ تنها معیار، موجودیِ بزرگ‌تر از صفر است.
+    val payAssets = remember(homeState, state.fiatCurrency, state.usdToTomanRate) {
+        buildSendableAssetList(
+            fiatCurrency = state.fiatCurrency,
+            usdToIrrRate = state.usdToTomanRate,
+            source = (homeState as? HomeUiState.Success)?.assets ?: emptyList(),
+            networkType = null,
+            networkTypeResolver = { homeViewModel.getNetworkTypeForNetworkId(it) }
+        )
+    }
+
+    val visiblePayAssets = remember(payAssets, state.payQuery) {
+        payAssets.filterByPayQuery(state.payQuery)
     }
 
     CompositionLocalProvider(LocalSwapMotion provides motion) {
@@ -193,127 +213,120 @@ fun SwapFlowScreen(
                     }
                 )
 
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    SwapMorphSection(visible = state.phase == SwapPhase.PAY_TOKEN) {
+                Box(Modifier.weight(1f)) {
+                    // فهرستِ دارایی lazy است و داخلِ ستونِ اسکرول با ارتفاعِ بی‌کران اندازه‌گیری
+                    // می‌شد؛ بیرونِ آن می‌نشیند تا ارتفاعِ کران‌دار بگیرد.
+                    SwapMorphSection(
+                        visible = state.phase == SwapPhase.PAY_TOKEN,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
                         SwapPaySection(
                             state = state,
+                            assets = visiblePayAssets,
+                            hasAnyAsset = payAssets.isNotEmpty(),
                             onQueryChange = { swapViewModel.onEvent(SwapEvent.PayQueryChanged(it)) },
-                            onTokenSelected = { token, logoRect ->
-                                // مبدأِ پرواز، همان لوگویِ همان ردیف است.
-                                payIcon.iconUrl = token.option.iconUrl
-                                payIcon.currentRect = logoRect
-                                payIcon.slot = SwapMorphSlot.ROW
-                                swapViewModel.onEvent(SwapEvent.PayTokenSelected(token))
-                            },
-                            rowIcon = { token ->
-                                if (token.option.id == state.payToken?.option?.id) {
-                                    SwapMorphSlotHost(
-                                        model = payIcon,
-                                        slot = SwapMorphSlot.ROW,
-                                        size = 44.dp,
-                                        contentDescription = token.option.name
-                                    )
+                            onAssetSelected = { asset ->
+                                if (asset.isGroupHeader && asset.groupAssets.size > 1) {
+                                    chooseBalanceAsset = asset
                                 } else {
-                                    SwapTokenLogo(
-                                        iconUrl = token.option.iconUrl,
-                                        contentDescription = token.option.name,
-                                        size = 44.dp
-                                    )
+                                    swapViewModel.onEvent(SwapEvent.PayAssetSelected(asset))
                                 }
                             }
                         )
                     }
 
-                    SwapMorphSection(visible = state.phase == SwapPhase.AMOUNT) {
-                        SwapPayCardSection(
-                            state = state,
-                            intro = amountIntro.value,
-                            onUseMax = { swapViewModel.onEvent(SwapEvent.UseMax) },
-                            onToggleFiat = { swapViewModel.onEvent(SwapEvent.ToggleFiatInput) },
-                            tokenSlot = {
-                                SwapMorphSlotHost(
-                                    model = payIcon,
-                                    slot = SwapMorphSlot.PAY_PILL,
-                                    size = 30.dp
-                                )
-                            }
-                        )
-                    }
-
-                    SwapMorphSection(visible = state.phase == SwapPhase.AMOUNT) {
-                        Column {
-                            Spacer(Modifier.height(12.dp))
-                            SwapReceiveCardSection(
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        SwapMorphSection(visible = state.phase == SwapPhase.AMOUNT) {
+                            SwapPayCardSection(
                                 state = state,
                                 intro = amountIntro.value,
-                                onOpenSheet = { swapViewModel.onEvent(SwapEvent.OpenReceiveSheet) },
-                                leading = {
-                                    if (state.receiveToken == null) {
-                                        SwapReceivePlaceholder()
-                                    } else {
-                                        SwapMorphSlotHost(
-                                            model = receiveIcon,
-                                            slot = SwapMorphSlot.RECEIVE_CARD,
-                                            size = 38.dp
-                                        )
-                                    }
+                                onUseMax = { swapViewModel.onEvent(SwapEvent.UseMax) },
+                                onToggleFiat = { swapViewModel.onEvent(SwapEvent.ToggleFiatInput) },
+                                tokenSlot = {
+                                    SwapMorphSlotHost(
+                                        model = payIcon,
+                                        slot = SwapMorphSlot.PAY_PILL,
+                                        size = 30.dp
+                                    )
                                 }
                             )
                         }
-                    }
 
-                    SwapMorphSection(visible = state.phase == SwapPhase.CONFIRM) {
-                        val timer = rememberSwapQuoteCountdown(state)
-                        SwapConfirmSection(
-                            state = state,
-                            walletName = walletName,
-                            intro = confirmIntro.value,
-                            quoteFraction = timer.fraction,
-                            quoteSecondsRemaining = timer.seconds,
-                            onSlippageSelected = { swapViewModel.onEvent(SwapEvent.SlippageChanged(it)) },
-                            onFeeLevelSelected = { swapViewModel.onEvent(SwapEvent.FeeLevelSelected(it)) },
-                            payCoin = {
-                                SwapMorphSlotHost(
-                                    model = payIcon,
-                                    slot = SwapMorphSlot.COIN_PAY,
-                                    size = 60.dp
-                                )
-                            },
-                            receiveCoin = {
-                                SwapMorphSlotHost(
-                                    model = receiveIcon,
-                                    slot = SwapMorphSlot.COIN_RECEIVE,
-                                    size = 60.dp
-                                )
-                            }
-                        )
-                    }
-
-                    SwapMorphSection(visible = state.phase == SwapPhase.EXECUTING) {
-                        state.execution?.let { progress ->
+                        SwapMorphSection(visible = state.phase == SwapPhase.AMOUNT) {
                             Column {
-                                Spacer(Modifier.height(24.dp))
-                                SwapExecutionSection(state = state, progress = progress)
-                            }
-                        }
-                    }
-
-                    SwapMorphSection(visible = state.phase == SwapPhase.RESULT) {
-                        state.execution?.outcome?.let { outcome ->
-                            Column {
-                                Spacer(Modifier.height(32.dp))
-                                SwapResultSection(
+                                Spacer(Modifier.height(12.dp))
+                                SwapReceiveCardSection(
                                     state = state,
-                                    outcome = outcome,
-                                    onDone = {
-                                        swapViewModel.onEvent(SwapEvent.ResultDismissed)
-                                        onDismiss()
+                                    intro = amountIntro.value,
+                                    onOpenSheet = { swapViewModel.onEvent(SwapEvent.OpenReceiveSheet) },
+                                    leading = {
+                                        if (state.receiveToken == null) {
+                                            SwapReceivePlaceholder()
+                                        } else {
+                                            SwapMorphSlotHost(
+                                                model = receiveIcon,
+                                                slot = SwapMorphSlot.RECEIVE_CARD,
+                                                size = 38.dp
+                                            )
+                                        }
                                     }
                                 )
+                            }
+                        }
+
+                        SwapMorphSection(visible = state.phase == SwapPhase.CONFIRM) {
+                            val timer = rememberSwapQuoteCountdown(state)
+                            SwapConfirmSection(
+                                state = state,
+                                walletName = walletName,
+                                intro = confirmIntro.value,
+                                quoteFraction = timer.fraction,
+                                quoteSecondsRemaining = timer.seconds,
+                                onSlippageSelected = { swapViewModel.onEvent(SwapEvent.SlippageChanged(it)) },
+                                onFeeLevelSelected = { swapViewModel.onEvent(SwapEvent.FeeLevelSelected(it)) },
+                                payCoin = {
+                                    SwapMorphSlotHost(
+                                        model = payIcon,
+                                        slot = SwapMorphSlot.COIN_PAY,
+                                        size = 60.dp
+                                    )
+                                },
+                                receiveCoin = {
+                                    SwapMorphSlotHost(
+                                        model = receiveIcon,
+                                        slot = SwapMorphSlot.COIN_RECEIVE,
+                                        size = 60.dp
+                                    )
+                                }
+                            )
+                        }
+
+                        SwapMorphSection(visible = state.phase == SwapPhase.EXECUTING) {
+                            state.execution?.let { progress ->
+                                Column {
+                                    Spacer(Modifier.height(24.dp))
+                                    SwapExecutionSection(state = state, progress = progress)
+                                }
+                            }
+                        }
+
+                        SwapMorphSection(visible = state.phase == SwapPhase.RESULT) {
+                            state.execution?.outcome?.let { outcome ->
+                                Column {
+                                    Spacer(Modifier.height(32.dp))
+                                    SwapResultSection(
+                                        state = state,
+                                        outcome = outcome,
+                                        onDone = {
+                                            swapViewModel.onEvent(SwapEvent.ResultDismissed)
+                                            onDismiss()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -322,8 +335,8 @@ fun SwapFlowScreen(
                 // ── نوارِ پایین، مخصوصِ هر فاز ────────────────────────────────
                 SwapMorphSection(visible = state.phase == SwapPhase.AMOUNT) {
                     Column(Modifier.navigationBarsPadding()) {
-                        SwapKeypad(
-                            onKey = { swapViewModel.onEvent(SwapEvent.AmountKeyPressed(it)) },
+                        NumericKeypad(
+                            onKeyPress = { swapViewModel.onEvent(SwapEvent.AmountKeyPressed(it)) },
                             modifier = Modifier.graphicsLayer {
                                 alpha = segment(amountIntro.value, 0.45f, 0.8f)
                             }
@@ -346,6 +359,15 @@ fun SwapFlowScreen(
                     }
                 }
             }
+
+            ChooseBalanceBottomSheet(
+                asset = chooseBalanceAsset,
+                onDismiss = { chooseBalanceAsset = null },
+                onNetworkSelected = { selected ->
+                    chooseBalanceAsset = null
+                    swapViewModel.onEvent(SwapEvent.PayAssetSelected(selected))
+                }
+            )
 
             SwapReceiveTokenSheet(
                 visible = state.receiveSheetVisible,

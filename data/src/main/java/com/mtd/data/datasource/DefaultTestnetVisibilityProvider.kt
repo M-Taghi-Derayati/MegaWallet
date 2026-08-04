@@ -1,6 +1,5 @@
 package com.mtd.data.datasource
 
-import com.mtd.data.BuildConfig
 import com.mtd.domain.interfaceRepository.ITestnetVisibilityProvider
 import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import javax.inject.Inject
@@ -30,7 +29,7 @@ class DefaultTestnetVisibilityProvider @Inject constructor(
     private var cached: Boolean? = null
 
     /** غیرمسدودکننده. تا پیش از [prime]، پیش‌فرضِ نوعِ بیلد. */
-    override fun showTestnets(): Boolean = cached ?: BuildConfig.DEBUG
+    override fun showTestnets(): Boolean = cached ?: true
 
     /**
      * کشِ درون‌حافظه‌ای را از ترجیحِ ذخیره‌شده پر می‌کند. suspend — خارج از ترد اصلی صدا بزنید

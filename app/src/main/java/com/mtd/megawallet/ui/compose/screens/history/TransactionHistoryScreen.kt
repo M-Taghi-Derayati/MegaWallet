@@ -72,7 +72,7 @@ import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetai
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryEmptyState
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryItem
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryShimmer
-import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
+import com.mtd.megawallet.ui.compose.components.NetworkIcon
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.megawallet.viewmodel.HomeViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged

@@ -1,4 +1,4 @@
-package com.mtd.megawallet.ui.compose.screens.send
+package com.mtd.megawallet.ui.compose.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -34,14 +33,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.imageLoader
 import com.mtd.common_ui.R
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.domain.model.CurrencyRate
@@ -49,10 +44,7 @@ import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
-import com.mtd.megawallet.ui.compose.components.AnimatedCounter
-import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
-import com.mtd.megawallet.ui.compose.screens.wallet.getPlaceholderIconResId
+import com.mtd.megawallet.ui.compose.screens.send.sampleConfirmAsset
 import kotlinx.coroutines.delay
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -110,13 +102,6 @@ private fun AssetListItems(
     onClick: () -> Unit = {}
 ) {
     val isDark = isSystemInDarkTheme()
-    val imageLoader = LocalContext.current.imageLoader
-
-
-    // تلاش برای پیدا کردن آیکون لوکال با فرمت ic_symbol (مثلا ic_btc)
-    val localIconResId = remember(asset.symbol) {
-        getLocalIconResId(asset.symbol)
-    }
 
     // جداسازی مقدار و نماد برای انیمیشن
     val balanceAmount = remember(asset.balance, asset.symbol) {
@@ -136,38 +121,17 @@ private fun AssetListItems(
             modifier = Modifier
                 .size(WalletScreenConstants.ASSET_ICON_SIZE)
         ) {
-            // آیکون اصلی ارز (Local یا Remote)
-            if (localIconResId != 0) {
-                Box(
-                    modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = localIconResId),
-                        contentDescription = "${asset.name} icon",
-                        modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                        contentScale = ContentScale.Fit,
-                        colorFilter = null
-                    )
-                }
-            }
-            else {
-                val placeholderResId = remember { getPlaceholderIconResId() }
-                Box(
-                    modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = asset.iconUrl,
-                        contentDescription = "${asset.name} icon",
-                        modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                        contentScale = ContentScale.Fit,
-                        placeholder = painterResource(id = placeholderResId),
-                        error = painterResource(id = placeholderResId),
-                        fallback = painterResource(id = placeholderResId),
-                        imageLoader = imageLoader
-                    )
-                }
+            // آیکون اصلی ارز
+            Box(
+                modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
+                contentAlignment = Alignment.Center
+            ) {
+                AssetIcon(
+                    iconUrl = asset.iconUrl,
+                    symbol = asset.symbol,
+                    contentDescription = "${asset.name} icon",
+                    modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE)
+                )
             }
 
             // بج شبکه (پایین سمت راست)
@@ -287,18 +251,22 @@ private fun AssetListItems(
 /**
  * ساخت لیست دارایی‌های قابل ارسال بر اساس نوع شبکهٔ گیرنده؛ گروه‌های چند-شبکه‌ای
  * تجمیع می‌شوند و بر اساس ارزش دلاری مرتب می‌گردند.
+ *
+ * [networkType] برابر `null` یعنی هیچ فیلتری روی نوع شبکه اعمال نشود؛ صفحهٔ تبدیل مقصدی ندارد
+ * که آدرسش باید با شبکه سازگار باشد، پس فقط «موجودی بزرگ‌تر از صفر» برایش معیار است.
  */
 internal fun buildSendableAssetList(
     fiatCurrency: FiatCurrency,
     usdToIrrRate: CurrencyRate?,
     source: List<AssetItem>,
-    networkType: NetworkType,
+    networkType: NetworkType?,
     networkTypeResolver: (String) -> NetworkType?
 ): List<AssetItem> {
     return source.mapNotNull { asset ->
         if (asset.isGroupHeader && asset.groupAssets.isNotEmpty()) {
             val matched = asset.groupAssets.filter { sub ->
-                sub.balanceRaw > BigDecimal.ZERO && networkTypeResolver(sub.networkId) == networkType
+                sub.balanceRaw > BigDecimal.ZERO &&
+                    (networkType == null || networkTypeResolver(sub.networkId) == networkType)
             }
             when {
                 matched.isEmpty() -> null
@@ -314,7 +282,7 @@ internal fun buildSendableAssetList(
                     }
 
                     asset.copy(
-                        id = "send_${asset.id}_${networkType.name}",
+                        id = "send_${asset.id}_${networkType?.name ?: "ANY"}",
                         networkId = "GROUP",
                         networkName = "",
                         networkFaName = null,
@@ -337,7 +305,7 @@ internal fun buildSendableAssetList(
                 null
             } else {
                 val itemNetworkType = networkTypeResolver(asset.networkId)
-                if (itemNetworkType == networkType) asset else null
+                if (networkType == null || itemNetworkType == networkType) asset else null
             }
         }
     }.sortedByDescending { it.balanceRaw * it.priceUsdRaw }

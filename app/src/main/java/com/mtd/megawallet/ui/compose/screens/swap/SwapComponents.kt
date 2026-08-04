@@ -48,7 +48,7 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import androidx.compose.ui.platform.LocalContext
 import com.mtd.common_ui.theme.InterMedium
-import com.mtd.megawallet.ui.compose.screens.wallet.getPlaceholderIconResId
+import com.mtd.megawallet.ui.compose.components.getPlaceholderIconResId
 import com.mtd.megawallet.viewmodel.swap.SWAP_KEY_DELETE
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
@@ -79,7 +79,7 @@ fun SwapTokenLogo(
 // ── عنصرِ اشتراکی و پروازِ FLIP ───────────────────────────────────────────────
 
 /** جایگاه‌هایی که یک آیکونِ اشتراکی می‌تواند در آن‌ها بنشیند. */
-enum class SwapMorphSlot { ROW, PAY_PILL, RECEIVE_CARD, COIN_PAY, COIN_RECEIVE }
+enum class SwapMorphSlot { PAY_PILL, RECEIVE_CARD, COIN_PAY, COIN_RECEIVE }
 
 /**
  * یک هویتِ توکن که در کلِ فلو **یک** عنصر است و بین جایگاه‌ها پرواز می‌کند.
@@ -194,72 +194,6 @@ fun SwapMorphSection(
             shrinkVertically(motion.morph(SwapMotion.MORPH_EXIT), shrinkTowards = Alignment.Top)
     ) {
         content()
-    }
-}
-
-// ── صفحه‌کلید عددی ────────────────────────────────────────────────────────────
-
-private val KEYPAD_ROWS = listOf(
-    listOf("1", "2", "3"),
-    listOf("4", "5", "6"),
-    listOf("7", "8", "9"),
-    listOf(".", "0", SWAP_KEY_DELETE)
-)
-
-@Composable
-fun SwapKeypad(
-    onKey: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        KEYPAD_ROWS.forEach { row ->
-            Row(Modifier.fillMaxWidth()) {
-                row.forEach { key ->
-                    SwapKeypadKey(
-                        label = key,
-                        onClick = { onKey(key) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SwapKeypadKey(
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val motion = LocalSwapMotion.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val background by animateColorAsState(
-        targetValue = if (pressed) {
-            MaterialTheme.colorScheme.surface
-        } else {
-            Color.Transparent
-        },
-        animationSpec = motion.snapping(),
-        label = "swapKeypadPress"
-    )
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .height(66.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(background)
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
-    ) {
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 26.sp,
-            fontFamily = InterMedium,
-            fontWeight = FontWeight.Medium
-        )
     }
 }
 

@@ -7,7 +7,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,26 +27,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.mtd.common_ui.theme.InterBold
 import com.mtd.common_ui.theme.IranSansBold
 import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.domain.model.AssetItem
-import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
+import com.mtd.megawallet.ui.compose.components.AssetIcon
+import com.mtd.megawallet.ui.compose.components.NetworkIcon
 
 /**
  * آواتار گیرنده در صفحهٔ تأیید تراکنش (آیکون ارز + نشانِ تأیید).
@@ -60,21 +55,17 @@ internal fun RecipientAvatar(
     modifier: Modifier = Modifier,
     showBadge: Boolean = true
 ) {
-    val context = LocalContext.current
-    val imageLoader = remember { coil.ImageLoader(context) }
     Box(modifier = modifier.size(64.dp)) {
         Box(
             modifier = Modifier.size(56.dp),
             contentAlignment = Alignment.Center
         ) {
-            val icon = getLocalIconResId(asset.symbol)
-            if (icon != 0) {
-                Image(painterResource(icon), null, modifier = Modifier.size(56.dp))
-            } else if (!asset.iconUrl.isNullOrBlank()) {
-                AsyncImage(model = asset.iconUrl, contentDescription = null, modifier = Modifier.size(36.dp).clip(CircleShape), imageLoader = imageLoader)
-            } else {
-                Text("?", color = MaterialTheme.colorScheme.onTertiary, fontSize = 20.sp)
-            }
+            AssetIcon(
+                iconUrl = asset.iconUrl,
+                symbol = asset.symbol,
+                contentDescription = null,
+                modifier = Modifier.size(56.dp)
+            )
         }
         if (showBadge) {
             Box(
@@ -137,11 +128,13 @@ internal fun TransactionDetailCard(
                 label = "ارسال ${asset.faName}",
                 valueLeft = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        val icon = getLocalIconResId(asset.symbol)
-                        if (icon != 0) {
-                            Image(painterResource(icon), null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(6.dp))
-                        }
+                        AssetIcon(
+                            iconUrl = asset.iconUrl,
+                            symbol = asset.symbol,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             text = displayCrypto,
                             color = if (isAmountTooSmall) MaterialTheme.colorScheme.error else primaryColor,

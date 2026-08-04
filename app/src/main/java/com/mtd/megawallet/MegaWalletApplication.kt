@@ -14,12 +14,14 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.mtd.data.config.ConfigCatalogBootstrapper
 import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
 import com.mtd.data.datasource.DefaultTestnetVisibilityProvider
+import com.mtd.data.di.ForImageLoading
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -35,6 +37,10 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
 
     // TASK-53 — ترجیحِ نمایشِ شبکه‌های تست؛ مثل حالتِ اتصال، خارج از ترد اصلی hydrate می‌شود.
     @Inject lateinit var testnetVisibilityProvider: DefaultTestnetVisibilityProvider
+
+    // Lazy است چون newImageLoader ممکن است پیش از آماده‌شدنِ کاملِ گراف صدا زده شود و ساختنِ
+    // کلاینت زنجیرهٔ tokenStore/authenticator را هم می‌کشد؛ با Lazy تا اولین درخواستِ تصویر عقب می‌افتد.
+    @Inject @ForImageLoading lateinit var imageOkHttpClient: dagger.Lazy<OkHttpClient>
 
 
     private val crashHandler = CoroutineExceptionHandler { _, throwable ->
@@ -79,9 +85,7 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
                 .onFailure { Timber.w(it, "Connection-mode prime failed; defaulting to DIRECT") }
             runCatching { testnetVisibilityProvider.prime() }
                 .onFailure { Timber.w(it, "Testnet-visibility prime failed; using the build default") }
-            // TASK-53 — این دیگر یک warm-up بی‌نتیجه نیست: باندلِ تأییدشده روی رجیستری‌ها
-            // نشانده می‌شود. رجیستری‌ها از قبل با seed محلی پر شده‌اند، پس شکست این مرحله
-            // یعنی «کاتالوگِ محلی سرِ جایش می‌ماند»، نه کاتالوگِ خالی.
+
             runCatching { configCatalogBootstrapper.bootstrap() }
                 .onSuccess { Timber.i("Catalog bootstrap finished (appliedFromBundle=$it)") }
                 .onFailure { Timber.w(it, "Catalog bootstrap failed; using the local seed catalog") }
@@ -122,6 +126,7 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
 
 
         return ImageLoader.Builder(this)
+            .okHttpClient { imageOkHttpClient.get() }
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizePercent(0.20)

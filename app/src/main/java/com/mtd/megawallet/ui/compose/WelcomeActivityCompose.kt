@@ -31,9 +31,9 @@ import com.mtd.core.manager.ErrorManager
 import com.mtd.domain.model.CreateWalletStep
 import com.mtd.domain.model.ImportScreenState
 import com.mtd.megawallet.ui.compose.components.AppMessageHost
-import com.mtd.megawallet.ui.compose.screens.splash.SplashScreen
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWalletScreen
 import com.mtd.megawallet.ui.compose.screens.createwallet.CreateWalletScreen
+import com.mtd.megawallet.ui.compose.screens.splash.SplashScreen
 import com.mtd.megawallet.ui.compose.screens.welcome.WelcomeIntroScreen
 import com.mtd.megawallet.viewmodel.CreateWalletViewModel
 import com.mtd.megawallet.viewmodel.WalletImportViewModel
@@ -76,7 +76,7 @@ class WelcomeActivityCompose : ComponentActivity() {
                             viewModelWalletImport = viewModelWalletImport,
                             viewModelCreateWallet=viewModelCreateWallet,
                             onNavigateToHome = {
-                                startActivity(Intent(this,MainActivityCompose::class.java))
+                                startActivity(Intent(this@WelcomeActivityCompose,MainActivityCompose::class.java))
                                 finish()
                             }
                         )

@@ -50,6 +50,8 @@ import androidx.compose.animation.core.Animatable
 import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.IranSansBoldMedium
 import com.mtd.common_ui.theme.IranSansLightLight
+import com.mtd.megawallet.ui.compose.components.HintState
+import com.mtd.megawallet.ui.compose.components.SearchInputField
 import com.mtd.megawallet.viewmodel.swap.SwapTokenOption
 import kotlinx.coroutines.launch
 
@@ -128,8 +130,9 @@ fun SwapReceiveTokenSheet(
 
             Spacer(Modifier.height(14.dp))
 
-            SwapSearchField(
+            SearchInputField(
                 value = query,
+                label = "جست‌وجو",
                 placeholder = "جست‌وجوی ارز",
                 onValueChange = onQueryChange,
                 modifier = Modifier.padding(horizontal = 20.dp)
@@ -138,7 +141,7 @@ fun SwapReceiveTokenSheet(
             Spacer(Modifier.height(10.dp))
 
             if (tokens.isEmpty()) {
-                SwapHint("ارزی با این نام پیدا نشد.", Modifier.padding(horizontal = 20.dp))
+                HintState("ارزی با این نام پیدا نشد", Modifier.padding(horizontal = 20.dp))
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().weight(1f),

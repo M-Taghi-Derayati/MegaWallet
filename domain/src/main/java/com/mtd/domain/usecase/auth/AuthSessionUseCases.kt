@@ -6,7 +6,10 @@ import com.mtd.domain.interfaceRepository.IRealtimeConnectionGateway
 import com.mtd.domain.interfaceRepository.ITokenStore
 import com.mtd.domain.model.AuthSession
 import com.mtd.domain.model.ResultResponse
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Phase 2 — Web3 baseline sign-in: `challenge → personal_sign → verify → persist JWT`.
@@ -54,12 +57,26 @@ class SignInWithWalletUseCase @Inject constructor(
  * On success the [IRealtimeConnectionGateway] is connected (idempotent). Returns the minted session,
  * or `null` data when an already-valid token was reused (no new session object available).
  */
+@Singleton
 class EnsureAuthenticatedUseCase(
     private val tokenStore: ITokenStore,
     private val signInWithWallet: SignInWithWalletUseCase,
     private val realtimeGateway: IRealtimeConnectionGateway,
     private val clockEpochSec: () -> Long
 ) {
+    /**
+     * Single-flight. Sign-in is challenge → sign → verify, and the backend keeps **one** live challenge
+     * per address: a second concurrent flow requests a fresh nonce, which invalidates the first. Both
+     * verifies then fail — `Signature does not match address` for the one holding the stale nonce, then
+     * `Challenge not found or expired` — and the app ends up with no session at all.
+     *
+     * Callers are legitimately plural (the session coordinator at startup, the 401 authenticator, the
+     * pre-flight gate before proxy reads), so the exclusion has to live here rather than at each call
+     * site. [Singleton] is load-bearing: an unscoped use case would hand every injection point its own
+     * lock and change nothing.
+     */
+    private val signInMutex = Mutex()
+
     @Inject
     constructor(
         tokenStore: ITokenStore,
@@ -68,19 +85,32 @@ class EnsureAuthenticatedUseCase(
     ) : this(tokenStore, signInWithWallet, realtimeGateway, { System.currentTimeMillis() / 1000 })
 
     suspend operator fun invoke(forceFresh: Boolean = false): ResultResponse<AuthSession?> {
-        if (forceFresh) tokenStore.clear()
-
+        // Fast path — a live token needs no coordination, so callers never queue behind an unrelated
+        // sign-in just to be told they already had one.
         if (!forceFresh && tokenStore.isTokenValid(clockEpochSec())) {
             realtimeGateway.connect()
             return ResultResponse.Success(null)
         }
 
-        return when (val r = signInWithWallet()) {
-            is ResultResponse.Success -> {
+        return signInMutex.withLock {
+            // `clear` belongs inside the lock too, or a wallet switch can wipe a token another flow
+            // just minted.
+            if (forceFresh) tokenStore.clear()
+
+            // Re-check under the lock: whoever held it may have minted exactly what we came for, and
+            // signing in again would invalidate their nonce — the very collision this guards.
+            if (!forceFresh && tokenStore.isTokenValid(clockEpochSec())) {
                 realtimeGateway.connect()
-                ResultResponse.Success(r.data)
+                return@withLock ResultResponse.Success(null)
             }
-            is ResultResponse.Error -> r
+
+            when (val r = signInWithWallet()) {
+                is ResultResponse.Success -> {
+                    realtimeGateway.connect()
+                    ResultResponse.Success(r.data)
+                }
+                is ResultResponse.Error -> r
+            }
         }
     }
 }

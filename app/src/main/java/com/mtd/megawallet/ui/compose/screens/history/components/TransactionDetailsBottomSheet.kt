@@ -87,8 +87,7 @@ import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedBottomSheetCard
 import com.mtd.megawallet.ui.compose.components.rememberClipboardCopier
 import com.mtd.megawallet.ui.compose.screens.wallet.AutoResizeBalanceRows
-import com.mtd.megawallet.ui.compose.screens.wallet.getLocalIconResId
-import com.mtd.megawallet.ui.compose.screens.wallet.NetworkIcon
+import com.mtd.megawallet.ui.compose.components.NetworkIcon
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -120,11 +119,8 @@ fun TransactionDetailsBottomSheet(
 
     val currentTx = transaction ?: activeTransaction ?: return
 
-    val iconUrl = remember(transaction) {
-        getLocalIconResId(
-            viewModel.getHistoryAssetIconUrl(currentTx) ?: ""
-        )
-    }
+    val iconUrl = remember(transaction) { viewModel.getHistoryAssetIconUrl(currentTx) }
+    val assetSymbol = remember(transaction) { viewModel.getHistoryAssetSymbol(currentTx) }
     // TASK-53 — آیکون شبکه از کانفیگ؛ دیگر resource id نیست.
     val networkIconUrl =
         remember(transaction) { viewModel.networkIconUrl(currentTx) }
@@ -162,7 +158,8 @@ fun TransactionDetailsBottomSheet(
             transaction = currentTx,
             viewModel = viewModel,
             iconUrl = iconUrl,
-            networkIconUrl,
+            assetSymbol = assetSymbol,
+            networkIconUrl = networkIconUrl,
             expanded = expanded,
             onExpand = { expanded = true },
             onDone = { expanded = false }
@@ -174,7 +171,8 @@ fun TransactionDetailsBottomSheet(
 private fun TransactionDetailsContent(
     transaction: TransactionRecord,
     viewModel: TransactionHistoryViewModel,
-    iconUrl: Int,
+    iconUrl: String?,
+    assetSymbol: String,
     networkIconUrl: String?,
     expanded: Boolean,
     onExpand: () -> Unit,
@@ -256,6 +254,7 @@ private fun TransactionDetailsContent(
                     transaction = transaction,
                     viewModel = viewModel,
                     iconUrl = iconUrl,
+                    assetSymbol = assetSymbol,
                     networkIconUrl = networkIconUrl,
                     style = style
                 )
@@ -352,7 +351,8 @@ private fun TransactionDetailsContent(
 private fun TransactionHeader(
     transaction: TransactionRecord,
     viewModel: TransactionHistoryViewModel,
-    iconUrl: Int,
+    iconUrl: String?,
+    assetSymbol: String,
     networkIconUrl: String?,
     style: TransactionVisualStyle
 ) {
@@ -367,6 +367,7 @@ private fun TransactionHeader(
     ) {
         AssetIconWithDirection(
             iconUrl = iconUrl,
+            assetSymbol = assetSymbol,
             networkIconUrl = networkIconUrl,
             style = style,
             isOutgoing = transaction.isOutgoing
@@ -472,7 +473,8 @@ private fun TransactionHeader(
 
 @Composable
 private fun AssetIconWithDirection(
-    iconUrl: Int,
+    iconUrl: String?,
+    assetSymbol: String,
     networkIconUrl: String?,
     style: TransactionVisualStyle,
     isOutgoing: Boolean
@@ -485,6 +487,7 @@ private fun AssetIconWithDirection(
 
         AssetAvatar(
             iconUrl = iconUrl,
+            symbol = assetSymbol,
             fallbackLabel = "",
             modifier = Modifier
                 .size(WalletScreenConstants.ASSET_ICON_SIZE)

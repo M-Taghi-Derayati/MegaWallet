@@ -53,7 +53,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,8 +77,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.mtd.common_ui.R
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.theme.Green
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.IranSansRegularMedium
 import com.mtd.domain.model.ResultResponse
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudBackupPasswordScreen
@@ -94,9 +96,6 @@ import com.mtd.megawallet.viewmodel.AppLockViewModel
 import com.mtd.megawallet.viewmodel.MultiWalletViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.mtd.common_ui.theme.IranSansBold
-import com.mtd.common_ui.theme.IranSansRegular
-import com.mtd.common_ui.theme.IranSansRegularMedium
 
 
 private val PremiumSpringInt = spring<IntOffset>(
@@ -903,9 +902,9 @@ private fun AddWalletItem(
 fun previewCard() {
     MaterialTheme {
 //        ManagementMenuContent(false,{}, {}, {})
-//        RecoveryMethodsContent(false,false,{},{})
+//       RecoveryMethodsContent(false,false,{},{})
 
-        SecretRecoveryPromptBottomSheet(true, isMnemonic = true, onDismiss = {}, onReveal = {})
+       // SecretRecoveryPromptBottomSheet(true, isMnemonic = true, onDismiss = {}, onReveal = {})
 
     }
 }

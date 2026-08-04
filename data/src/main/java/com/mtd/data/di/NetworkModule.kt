@@ -8,6 +8,7 @@ import com.mtd.data.dto.HistoryItemDto
 import com.mtd.data.dto.HistoryItemDtoDeserializer
 import com.mtd.data.network.interceptor.AuthInterceptor
 import com.mtd.data.network.interceptor.IdempotencyInterceptor
+import com.mtd.data.network.interceptor.RelayerTokenAuthenticator
 import com.mtd.data.network.wire.BigIntegerStringAdapter
 import com.mtd.data.service.AuthApiService
 import com.mtd.data.service.CoinDetailApiService
@@ -21,11 +22,13 @@ import com.mtd.data.service.SwapApiService
 import com.mtd.data.service.USDTApiService
 import com.mtd.domain.interfaceRepository.ITokenStore
 import com.mtd.domain.model.TransactionRecord
+import com.mtd.domain.usecase.auth.EnsureAuthenticatedUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Authenticator
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -41,6 +44,11 @@ import javax.inject.Singleton
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class ForWebSocket
+
+/** کلاینتِ مخصوصِ بارگذاری تصویر (Coil). ببین [NetworkModule.provideImageOkHttpClient]. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ForImageLoading
 
 
 @Module
@@ -87,6 +95,25 @@ object NetworkModule {
             }
         }
 
+        /**
+         * Recovers from a relayer `401` by minting a session and replaying once — the cold-start race
+         * where a proxy read outruns the coordinator's asynchronous sign-in.
+         *
+         * [Lazy] is what breaks the cycle: EnsureAuthenticated → AuthRepository → Retrofit →
+         * OkHttpClient → this. It is resolved only when a 401 actually arrives, long after the object
+         * graph is built.
+         */
+        @Provides
+        @Singleton
+        fun provideRelayerAuthenticator(
+            ensureAuthenticated: dagger.Lazy<EnsureAuthenticatedUseCase>,
+            tokenStore: ITokenStore
+        ): Authenticator = RelayerTokenAuthenticator(
+            ensureAuthenticated = ensureAuthenticated,
+            tokenStore = tokenStore,
+            relayerHost = BuildConfig.RELAYER_HOST
+        )
+
         // --- ارائه‌دهنده‌های شبکه ---
         @Provides
         @Singleton
@@ -94,7 +121,10 @@ object NetworkModule {
             httpLoggingInterceptor: HttpLoggingInterceptor,
             networkConnectionInterceptor: NetworkConnectionInterceptor,
             // Default lets manual (test) callers omit it; Hilt always injects the real SecureTokenStore.
-            tokenStore: ITokenStore = com.mtd.data.repository.auth.NoOpTokenStore
+            tokenStore: ITokenStore = com.mtd.data.repository.auth.NoOpTokenStore,
+            // Same idiom: Dagger ignores Kotlin defaults and always injects the real binding, so this
+            // only keeps the androidTest callers that omit it compiling.
+            relayerAuthenticator: Authenticator = Authenticator.NONE
         ): OkHttpClient {
             return OkHttpClient.Builder()
                 .addInterceptor(networkConnectionInterceptor)
@@ -102,6 +132,8 @@ object NetworkModule {
                 .addInterceptor(AuthInterceptor(tokenStore, BuildConfig.RELAYER_HOST))
                 .addInterceptor(IdempotencyInterceptor(BuildConfig.RELAYER_HOST))
                 .addInterceptor(httpLoggingInterceptor) // last → logs the final, mutated headers
+                // Host-scoped inside the authenticator itself; a 401 from anywhere else is left alone.
+                .authenticator(relayerAuthenticator)
                 .connectTimeout(35, TimeUnit.SECONDS)
                 .writeTimeout(35, TimeUnit.SECONDS)
                 .readTimeout(35, TimeUnit.SECONDS)
@@ -109,6 +141,25 @@ object NetworkModule {
         }
 
 
+
+        /**
+         * کلاینتی که Coil برای آیکون‌ها استفاده می‌کند.
+         *
+         * از [provideOkHttpClient] مشتق می‌شود نه از صفر: آیکون‌های خودِ رله زیر
+         * `/api/v1/icons/` سرو می‌شوند، پس باید همان `AuthInterceptor` و همان authenticatorِ
+         * ۴۰۱ را داشته باشند، وگرنه اگر اندپوینت auth بخواهد همهٔ آیکون‌ها بی‌صدا به placeholder
+         * می‌افتند. `newBuilder` همچنین connection pool و dispatcher را با بقیهٔ اپ مشترک می‌کند.
+         *
+         * تنها چیزی که برداشته می‌شود لاگر است: در دیباگ روی `BODY` است و بدنهٔ هر تصویر را
+         * چاپ می‌کرد.
+         */
+        @Provides
+        @Singleton
+        @ForImageLoading
+        fun provideImageOkHttpClient(okHttpClient: OkHttpClient): OkHttpClient =
+            okHttpClient.newBuilder()
+                .apply { interceptors().removeAll { it is HttpLoggingInterceptor } }
+                .build()
 
         @Provides
         @Singleton

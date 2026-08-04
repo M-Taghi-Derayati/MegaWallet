@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -47,7 +46,6 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,8 +60,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -74,26 +70,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.imageLoader
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.R
-import com.mtd.core.utils.BalanceFormatter
-import com.mtd.core.utils.formatWithSeparator
-import com.mtd.domain.model.AssetItem
-import com.mtd.domain.model.FiatCurrency
-import com.mtd.domain.model.HomeUiState
-import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
-import com.mtd.megawallet.ui.compose.components.AnimatedCounter
-import com.mtd.megawallet.ui.compose.components.PrimaryButton
-import com.mtd.megawallet.ui.compose.screens.send.ChooseBalanceBottomSheet
-import com.mtd.megawallet.viewmodel.assetdetail.AssetDetailViewModel
-import com.mtd.megawallet.viewmodel.HomeViewModel
-import kotlinx.coroutines.delay
-import java.math.BigDecimal
-import java.math.RoundingMode
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import com.mtd.common_ui.theme.InterRegular
 import com.mtd.common_ui.theme.InterRegularBold
 import com.mtd.common_ui.theme.InterRegularMedium
@@ -101,6 +79,24 @@ import com.mtd.common_ui.theme.IranSansBoldBold
 import com.mtd.common_ui.theme.IranSansBoldMedium
 import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.common_ui.theme.IranSansRegularMedium
+import com.mtd.core.utils.BalanceFormatter
+import com.mtd.core.utils.formatWithSeparator
+import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.FiatCurrency
+import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
+import com.mtd.megawallet.ui.compose.components.AnimatedCounter
+import com.mtd.megawallet.ui.compose.components.AssetIcon
+import com.mtd.megawallet.ui.compose.components.NetworkIcon
+import com.mtd.megawallet.ui.compose.components.PrimaryButton
+import com.mtd.megawallet.ui.compose.components.ChooseBalanceBottomSheet
+import com.mtd.megawallet.viewmodel.HomeViewModel
+import com.mtd.megawallet.viewmodel.assetdetail.AssetDetailViewModel
+import kotlinx.coroutines.delay
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun AssetDetailScreen(
@@ -285,14 +281,7 @@ private fun AssetDetailHeader(
     onBackClick: () -> Unit,
     isExpanded: Boolean = false
 ) {
-    val imageLoader = LocalContext.current.imageLoader
     val isDark = isSystemInDarkTheme()
-
-    // ✅ استفاده از همان توابع helper برای آیکون
-    val localIconResId = remember(asset?.symbol) {
-        asset?.symbol?.let { getLocalIconResId(it) } ?: 0
-    }
-    val placeholderResId = remember { getPlaceholderIconResId() }
 
     Row(
         modifier = Modifier
@@ -330,36 +319,16 @@ private fun AssetDetailHeader(
                     modifier = Modifier.size(boxSize)
                 ) {
                     // آیکون اصلی ارز
-                    if (localIconResId != 0) {
-                        Box(
-                            modifier = Modifier.size(iconSize),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = localIconResId),
-                                contentDescription = "${asset.name} icon",
-                                modifier = Modifier.size(iconSize),
-                                contentScale = ContentScale.Fit,
-                                colorFilter = null
-                            )
-                        }
-                    }
-                    else {
-                        Box(
-                            modifier = Modifier.size(iconSize),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AsyncImage(
-                                model = asset.iconUrl,
-                                contentDescription = "${asset.name} icon",
-                                modifier = Modifier.size(iconSize),
-                                contentScale = ContentScale.Fit,
-                                placeholder = painterResource(id = placeholderResId),
-                                error = painterResource(id = placeholderResId),
-                                fallback = painterResource(id = placeholderResId),
-                                imageLoader = imageLoader
-                            )
-                        }
+                    Box(
+                        modifier = Modifier.size(iconSize),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AssetIcon(
+                            iconUrl = asset.iconUrl,
+                            symbol = asset.symbol,
+                            contentDescription = "${asset.name} icon",
+                            modifier = Modifier.size(iconSize)
+                        )
                     }
 
                     // بج شبکه (پایین سمت راست)
@@ -880,7 +849,7 @@ private fun AssetDetailBreakdownSection(asset: AssetItem) {
 
                 // آیکون شبکه‌ها (سمت چپ در RTL)
                 val networkIds = listToDisplay.map { it.networkId }
-                val iconUrls = listToDisplay.map { it.iconUrl ?: "" }
+                val iconUrls = listToDisplay.map { it.networkIconUrl ?: "" }
                 SupportedNetworksRow(networkIds = networkIds, iconUrls = iconUrls, MaterialTheme.colorScheme.surface)
             }
 
@@ -1088,7 +1057,7 @@ fun PreviewAssetsDetail() {
             asset = item
         )*/
 
-        AssetDetailTopSection(item, homeViewModel = null)
-      //  AssetDetailBottomSection(item)
+       // AssetDetailTopSection(item, homeViewModel = null)
+        AssetDetailBottomSection(item)
     }
 }

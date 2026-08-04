@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.platform.testTag
 import com.mtd.megawallet.ui.compose.TestTags
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -74,6 +75,8 @@ import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.NetworkShare
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
+import com.mtd.megawallet.ui.compose.components.AssetIcon
+import com.mtd.megawallet.ui.compose.components.NetworkIcon
 import com.mtd.megawallet.viewmodel.HomeViewModel
 import java.math.BigDecimal
 import com.mtd.common_ui.theme.InterBoldBold
@@ -262,9 +265,54 @@ fun WalletScreens(
                     }
                 }
             }
-            else->{
+            // خطا قبلاً به همین شاخهٔ shimmer می‌افتاد، پس هر شکستی به‌شکلِ «هنوز در حال بارگذاری»
+            // دیده می‌شد: بدون پیام، بدون راهِ خروج، برای همیشه.
+            is HomeUiState.Error -> {
+                WalletErrorState(
+                    message = state.message,
+                    onRetry = { viewModel.retry() }
+                )
+            }
+
+            HomeUiState.Loading -> {
                 ShimmerWalletScreen()
             }
+        }
+    }
+}
+
+/**
+ * حالتِ خطای صفحهٔ کیف پول. تنها جایی که [HomeUiState.Error] دیده می‌شود؛ بدون این، خطا از
+ * شاخهٔ پیش‌فرض رد می‌شد و کاربر یک shimmerِ بی‌پایان می‌دید.
+ */
+@Composable
+private fun WalletErrorState(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(WalletScreenConstants.ERROR_STATE_PADDING),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = message,
+            fontFamily = IranSansRegularMedium,
+            fontSize = WalletScreenConstants.ERROR_STATE_MESSAGE_SIZE,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(WalletScreenConstants.ERROR_STATE_SPACING))
+
+        Button(onClick = onRetry) {
+            Text(
+                text = "تلاش دوباره",
+                fontFamily = IranSansRegularMedium,
+                fontSize = WalletScreenConstants.ERROR_STATE_ACTION_SIZE
+            )
         }
     }
 }
@@ -368,17 +416,11 @@ private fun AssetListItems(
     onClick: () -> Unit = {}
 ) {
     val isDark = isSystemInDarkTheme()
-    val imageLoader = LocalContext.current.imageLoader
     val displayBalance = remember(displayCurrency, asset.balanceUsdt, asset.balanceIrr) {
         when (displayCurrency) {
             FiatCurrency.USD -> asset.balanceUsdt
             FiatCurrency.TOMAN -> asset.balanceIrr
         }
-    }
-
-    // تلاش برای پیدا کردن آیکون لوکال با فرمت ic_symbol (مثلا ic_btc)
-    val localIconResId = remember(asset.symbol) {
-        getLocalIconResId(asset.symbol)
     }
 
     // جداسازی مقدار و نماد برای انیمیشن
@@ -405,38 +447,19 @@ private fun AssetListItems(
                 modifier = Modifier
                     .size(WalletScreenConstants.ASSET_ICON_SIZE)
             ) {
-                // آیکون اصلی ارز (Local یا Remote)
-                if (localIconResId != 0) {
-                    Box(
-                        modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(id = localIconResId),
-                            contentDescription = "${asset.name} icon",
-                            modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                            contentScale = ContentScale.Fit,
-                            colorFilter = null
-                        )
-                    }
-                }
-                else {
-                    val placeholderResId = remember { getPlaceholderIconResId() }
-                    Box(
-                        modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AsyncImage(
-                            model = asset.iconUrl,
-                            contentDescription = "${asset.name} icon",
-                            modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                            contentScale = ContentScale.Fit,
-                            placeholder = painterResource(id = placeholderResId),
-                            error = painterResource(id = placeholderResId),
-                            fallback = painterResource(id = placeholderResId),
-                            imageLoader = imageLoader
-                        )
-                    }
+                // آیکون اصلی ارز. اولویت با iconUrlِ کانفیگ است، نه drawableِ لوکال: پیش از این
+                // شرطْ وارونه بود و برای هر نمادی که در getLocalIconResId شاخه داشت (BTC/ETH/USDT/…)
+                // اصلاً سراغ URL نمی‌رفت، پس آیکونی که سرور در باندل می‌فرستاد هیچ‌وقت دیده نمی‌شد.
+                Box(
+                    modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AssetIcon(
+                        iconUrl = asset.iconUrl,
+                        symbol = asset.symbol,
+                        contentDescription = "${asset.name} icon",
+                        modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE)
+                    )
                 }
 
                 // بج شبکه (پایین سمت راست)
@@ -695,54 +718,6 @@ private fun AutoResizeBalanceRow(
 }
 
 /**
- * تبدیل symbol ارز به resource ID آیکون لوکال
- */
-fun getLocalIconResId(symbol: String): Int {
-    return when (symbol.uppercase()) {
-        "BTC" -> R.drawable.ic_btc
-        "ETH" -> R.drawable.ic_eth
-        "BASE" -> R.drawable.ic_base
-        "ARB" -> R.drawable.ic_arb
-        "POL" -> R.drawable.ic_pol
-        "USDT" -> R.drawable.ic_usdt
-        "BNB","tBNB" -> R.drawable.ic_bnb
-        "USDC" -> R.drawable.ic_usdc
-        "XRP" -> R.drawable.ic_xrp
-        "DOGE" -> R.drawable.ic_doge
-        "TRX" -> R.drawable.ic_trx
-        // می‌توانید آیکون‌های دیگر را هم اضافه کنید
-        else -> 0 // اگر آیکون پیدا نشد، 0 برمی‌گرداند
-    }
-}
-
-/**
- * TASK-53 — آیکونِ شبکه، از روی داده.
- *
- * جایگزینِ `getNetworkIconResId(networkId)` که یک `when` روی فهرستِ هاردکدِ networkIdها بود و
- * شاخهٔ `else` آن یعنی هر زنجیره‌ای که سرور اضافه می‌کرد آیکونِ عمومیِ کیف‌پول می‌گرفت. حالا
- * `NetworkInfo.iconUrl` (که از networks.json / باندلِ امضاشده می‌آید) رندر می‌شود و drawableِ
- * عمومی **فقط** placeholderِ حالتِ لودنشدن/نبودِ آیکون است، نه یک شاخهٔ per-network.
- */
-@Composable
-fun NetworkIcon(
-    iconUrl: String?,
-    contentDescription: String?,
-    modifier: Modifier = Modifier
-) {
-    val placeholder = painterResource(id = getPlaceholderIconResId())
-    AsyncImage(
-        model = iconUrl,
-        contentDescription = contentDescription,
-        modifier = modifier,
-        contentScale = ContentScale.Fit,
-        placeholder = placeholder,
-        error = placeholder,
-        fallback = placeholder,
-        imageLoader = LocalContext.current.imageLoader
-    )
-}
-
-/**
  * نمودار دایره‌ای (حلقه‌ای) کوچک برای نمایش توزیع موجودی در شبکه‌های مختلف
  * طراحی شده شبیه به تصویر نمونه (Donut Chart با گوشه‌های گرد و فواصل)
  */
@@ -814,14 +789,6 @@ private fun String.toColorOrGray(): Color {
     } catch (e: Exception) {
         Color.Gray
     }
-}
-
-/**
- * دریافت resource ID برای placeholder آیکون
- * اگر ic_placeholder وجود نداشت، از ic_wallet به عنوان fallback استفاده می‌شود
- */
-fun getPlaceholderIconResId(): Int {
-    return R.drawable.ic_wallet
 }
 
 @Preview

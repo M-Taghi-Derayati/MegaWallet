@@ -1016,6 +1016,9 @@ class TransactionHistoryViewModel @Inject constructor(
     fun getHistoryAssetIconUrl(transaction: TransactionRecord): String? =
         displayFormatter.historyAssetIconUrl(transaction)
 
+    fun getHistoryAssetSymbol(transaction: TransactionRecord): String =
+        displayFormatter.historyAssetSymbol(transaction)
+
     fun buildExplorerUrl(transaction: TransactionRecord): String? =
         displayFormatter.buildExplorerUrl(transaction)
 

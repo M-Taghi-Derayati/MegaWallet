@@ -46,6 +46,12 @@ import androidx.compose.ui.unit.sp
     val ASSET_PRICE_SYMBOL_FONT_SIZE = 10.sp
     val ASSET_PRICE_SYMBOL_PADDING_END = 2.dp
     val ASSET_LIST_BOTTOM_SPACING = 80.dp
+
+    // Error state
+    val ERROR_STATE_PADDING = 24.dp
+    val ERROR_STATE_SPACING = 16.dp
+    val ERROR_STATE_MESSAGE_SIZE = 14.sp
+    val ERROR_STATE_ACTION_SIZE = 14.sp
     
     // Network Distribution Chart
     val CHART_STROKE_WIDTH = 2.5.dp

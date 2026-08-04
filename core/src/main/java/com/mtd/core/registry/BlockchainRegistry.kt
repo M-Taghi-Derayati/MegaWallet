@@ -47,9 +47,7 @@ class BitcoinNetworkFactory : NetworkFactory {
     }
 
     override fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork {
-        // TASK-53 — زنجیره‌های UTXO هنوز به پارامترهای bitcoinjِ مخصوصِ خودشان نیاز دارند، پس
-        // alias برای این خانواده اجباری است. اگر ناشناخته بود شبکه ساخته نمی‌شود (خطا پرتاب
-        // می‌شود و رجیستری آن را رد می‌کند) — برخلاف EVM که کاملاً داده‌محور است.
+
         val networkName = NetworkName.fromConfigName(config.name)
             ?: throw IllegalArgumentException(
                 "UTXO network '${config.id}' has no known NetworkName alias; " +
@@ -66,9 +64,7 @@ class UtxoNetworkFactory : NetworkFactory {
     }
 
     override fun create(networkType: NetworkType, config: NetworkConfig): BlockchainNetwork {
-        // TASK-53 — زنجیره‌های UTXO هنوز به پارامترهای bitcoinjِ مخصوصِ خودشان نیاز دارند، پس
-        // alias برای این خانواده اجباری است. اگر ناشناخته بود شبکه ساخته نمی‌شود (خطا پرتاب
-        // می‌شود و رجیستری آن را رد می‌کند) — برخلاف EVM که کاملاً داده‌محور است.
+
         val networkName = NetworkName.fromConfigName(config.name)
             ?: throw IllegalArgumentException(
                 "UTXO network '${config.id}' has no known NetworkName alias; " +
@@ -95,16 +91,7 @@ class BlockchainRegistry @Inject constructor(
 ) : INetworkCatalog {
 
 
-    /**
-     * TASK-53 — همهٔ ایندکس‌ها در یک snapshotِ **تغییرناپذیر** نگهداری می‌شوند و یکجا جابه‌جا
-     * می‌شوند.
-     *
-     * دلیل: با [applyConfig] کاتالوگ در زمان اجرا (روی ترد IO، هنگام رسیدنِ باندلِ امضاشده)
-     * بازسازی می‌شود، در حالی که ViewModelها هم‌زمان از آن می‌خوانند. با mapهای تغییرپذیر این
-     * یعنی `ConcurrentModificationException` یا بدتر، خواندنِ نیمه‌کاره در میانهٔ پاک‌سازی —
-     * جایی که خروجی به کلیدسازی و اعتبارسنجی آدرس می‌رود. خواننده‌ها بدون قفل یک snapshot
-     * سازگار می‌بینند؛ فقط نویسنده‌ها [writeLock] می‌گیرند.
-     */
+
     private class Catalog(
         val byId: Map<String, BlockchainNetwork> = emptyMap(),
         val byChainId: Map<Long, BlockchainNetwork> = emptyMap(),
@@ -135,21 +122,14 @@ class BlockchainRegistry @Inject constructor(
         }
     }
 
-    /**
-     * یک شبکه را روی snapshot می‌نشاند و snapshotِ تازه را برمی‌گرداند (بدونِ تغییرِ قبلی).
-     */
+
     private fun Catalog.withNetwork(network: BlockchainNetwork): Catalog {
         val newById = byId + (network.id to network)
 
         var newByChainId = byChainId
         val chainId = network.chainId
         if (chainId != null) {
-            // TASK-53 — تصادفِ chainId را بی‌صدا بازنویسی نکن.
-            //
-            // `getNetworkByChainId` مسیرِ مسیریابیِ ارسال است (ChainDataSourceFactory.create(chainId))،
-            // پس بازنویسیِ خاموش یعنی امضای تراکنش با پارامترهای زنجیرهٔ اشتباه. تا وقتی فیلترِ
-            // «فقط تست‌نت» فعال بود این تصادف پنهان می‌ماند؛ حالا که همهٔ شبکه‌ها ثبت می‌شوند
-            // باید صریح باشد. اولین ثبت برنده است تا نتیجه قطعی و مستقل از ترتیبِ اجرا بماند.
+
             val existing = byChainId[chainId]
             if (existing != null && existing.id != network.id) {
                 Timber.e(
@@ -189,32 +169,15 @@ class BlockchainRegistry @Inject constructor(
     }
 
 
-    /**
-     * TASK-53 — **هر شبکهٔ ثبت‌شده، بدون فیلتر.**
-     *
-     * این API هویتی است، نه نمایشی: [com.mtd.core.keymanager.KeyManager] از روی آن کلیدِ همهٔ
-     * شبکه‌ها را می‌سازد و [AssetRegistry] با آن دارایی‌های مجاز را تعیین می‌کند. اگر خروجیِ
-     * این متد به ترجیحِ «نمایش تست‌نت» گره بخورد، خاموش‌کردنِ آن کلیدهای آن شبکه‌ها را از کیف‌پول
-     * حذف می‌کند — یعنی کاربر دسترسی به آدرس‌ها و موجودی‌اش را از دست می‌دهد. هرگز فیلتر نکنید.
-     *
-     * برای فهرست‌های UI از [getAllNetworkInfos] استفاده کنید.
-     */
     fun getAllNetworks(): List<BlockchainNetwork> {
         return catalog.byId.values.toList()
     }
 
-    /**
-     * TASK-53 — **فهرستِ نمایشی**: شبکه‌های تست بر اساس ترجیحِ کاربر حذف می‌شوند.
-     *
-     * چون فیلتر این‌جا (زمانِ خواندن) اعمال می‌شود نه زمانِ ثبت، تغییرِ ترجیح بلافاصله اثر
-     * می‌کند: نه ری‌استارت لازم است و نه networks.json دوباره پارس می‌شود.
-     * جست‌وجوهای هویتی ([getNetworkById]، [getNetworkByChainId]، [getNetworkInfoById]) هرگز
-     * فیلتر نمی‌شوند، پس شبکهٔ پنهان همچنان کاملاً قابلِ resolve است.
-     */
+    val showTestnets =false //testnetVisibility.showTestnets()
     override fun getAllNetworkInfos(): List<NetworkInfo> {
-        val showTestnets = testnetVisibility.showTestnets()
+
         return getAllNetworks()
-            .filter { showTestnets || !it.isTestnet }
+            .filter { it.isTestnet==showTestnets }
             .map { it.toNetworkInfo() }
     }
 
@@ -235,26 +198,7 @@ class BlockchainRegistry @Inject constructor(
     }
 
 
-    private fun clearAll() {
-        synchronized(writeLock) { catalog = Catalog() }
-    }
-
     /**
-     * TASK-53 — کاتالوگ را از یک باندلِ **تأییدشده** بازمی‌سازد.
-     *
-     * فراخوان (ConfigCatalogBootstrapper) موظف است فقط باندلی را به این‌جا بدهد که یا امضای
-     * secp256k1 آن تأیید شده، یا از کشِ رمزنگاری‌شدهٔ آخرین-وضعیتِ-خوب آمده، یا همان seed محلیِ
-     * داخل APK است. این متد **خودش امضا را بررسی نمی‌کند** و نباید با ورودیِ شبکه‌ایِ خام صدا زده شود.
-     *
-     * محافظِ هویت: برای شبکه‌ای که در seed محلی وجود دارد، تغییرِ `chainId`، `derivationPath` یا
-     * `regex` از سمت سرور **رد** می‌شود و نسخهٔ محلی نگه داشته می‌شود. این سه فیلد تعیین می‌کنند
-     * کلید روی کدام زنجیره ساخته و آدرس چطور اعتبارسنجی می‌شود؛ عوض‌شدنشان یعنی امضا برای زنجیرهٔ
-     * اشتباه یا پذیرفتنِ آدرسی که کاربر کنترلش را ندارد. شبکه‌های تازه آزادانه پذیرفته می‌شوند —
-     * که دقیقاً همان قابلیتی است که این تسک می‌خواهد.
-     *
-     * جایگزینی اتمی است: snapshotِ کامل ساخته و یکجا نشانده می‌شود، پس خواننده‌های هم‌زمان هرگز
-     * کاتالوگِ نیمه‌ساخته نمی‌بینند.
-     *
      * @param configs شبکه‌های باندل.
      * @param trustedBaseline شبکه‌های seed محلی که هویتشان مرجع است.
      * @return تعداد شبکه‌های ثبت‌شده.
@@ -265,9 +209,11 @@ class BlockchainRegistry @Inject constructor(
     ): Int {
         val baselineById = trustedBaseline.associateBy { it.id.trim().lowercase() }
 
-        val accepted = configs.mapNotNull { config ->
+        val accepted = configs
+            .filter { it.isTestnet==showTestnets }
+            .map { config ->
             val baseline = baselineById[config.id.trim().lowercase()]
-                ?: return@mapNotNull config // شبکهٔ تازه — همین است که می‌خواهیم
+                ?: return@map config // شبکهٔ تازه — همین است که می‌خواهیم
 
             val violations = buildList {
                 if (baseline.chainId != config.chainId) add("chainId ${baseline.chainId}->${config.chainId}")
@@ -286,13 +232,20 @@ class BlockchainRegistry @Inject constructor(
             }
         }
 
-        synchronized(writeLock) {
-            clearAll()
-            indexAddressRegex(accepted)
-            accepted.forEach { registerFromConfig(it) }
+        val rebuilt = buildCatalog(accepted)
+        synchronized(writeLock) { catalog = rebuilt }
+
+        Timber.i("Catalog applied: %d/%d networks registered", rebuilt.byId.size, configs.size)
+        return rebuilt.byId.size
+    }
+
+    private fun buildCatalog(configs: List<NetworkConfig>): Catalog {
+        val (regexById, regexByType) = buildAddressRegexIndex(configs)
+        var built = Catalog(regexById = regexById, regexByType = regexByType)
+        configs.forEach { config ->
+            buildNetwork(config)?.let { built = built.withNetwork(it) }
         }
-        Timber.i("Catalog applied: %d/%d networks registered", catalog.byId.size, configs.size)
-        return catalog.byId.size
+        return built
     }
 
 
@@ -313,7 +266,6 @@ class BlockchainRegistry @Inject constructor(
                 return NetworkType.EVM
             }
 
-            // TRON addresses are Base58 too, so detect before generic Base58 checks.
             if (normalized.startsWith("T") && normalized.length == 34) {
                 try {
                     Base58.decode(normalized)
@@ -414,35 +366,30 @@ class BlockchainRegistry @Inject constructor(
         fileName: String = "networks.json",
     ) {
 
-        // TASK-53 — هیچ فیلتری در زمانِ ثبت. قبلاً این‌جا `filter { it.isTestnet == true }` بود،
-        // یعنی هر شبکهٔ mainnet حتی از فایل محلی هم حذف می‌شد. جست‌وجوی هویتی باید همیشه جواب
-        // بدهد؛ انتخابِ «نمایش تست‌نت» فقط در [getAllNetworkInfos] اعمال می‌شود.
-        //
-        // همان مسیرِ [applyConfig] استفاده می‌شود تا seed محلی و باندلِ سرور دقیقاً یک منطقِ
-        // ساخت داشته باشند (بدون baseline، چون خودِ این فایل مرجع است).
+
         applyConfig(loadNetworkConfigs(context, fileName))
     }
 
-    /**
-     * TASK-53 — ساختِ یک شبکه از روی کانفیگ، با ایزوله‌سازیِ خطا.
-     *
-     * یک ورودیِ خرابِ منفرد (خانوادهٔ ناشناخته، یا زنجیرهٔ UTXO بدون پارامترهای bitcoinj) فقط
-     * خودش رد می‌شود و بقیهٔ کاتالوگ سالم بار می‌آید. قبلاً `NetworkName.valueOf` روی هر نامِ
-     * ناشناخته استثنا پرتاب می‌کرد و کلِ بارگذاری را می‌ترکاند.
-     *
-     * @return شبکهٔ ثبت‌شده، یا `null` اگر ورودی قابل ساخت نبود.
-     */
-    private fun registerFromConfig(config: NetworkConfig): BlockchainNetwork? {
+    private fun buildNetwork(config: NetworkConfig): BlockchainNetwork? {
         val networkType =
             runCatching { NetworkType.valueOf(config.networkType.uppercase()) }.getOrNull()
-                ?: return null
-        val factory = networkFactories.firstOrNull { it.supports(networkType, config) } ?: return null
-        val network = runCatching { factory.create(networkType, config) }.getOrNull() ?: return null
-        registerNetwork(network)
-        return network
+                ?: run {
+                    Timber.w("Network '%s' skipped: unknown type '%s'", config.id, config.networkType)
+                    return null
+                }
+        val factory = networkFactories.firstOrNull { it.supports(networkType, config) }
+            ?: run {
+                Timber.w("Network '%s' skipped: no factory for %s", config.id, networkType)
+                return null
+            }
+        return runCatching { factory.create(networkType, config) }
+            .onFailure { Timber.w(it, "Network '%s' skipped: factory could not build it", config.id) }
+            .getOrNull()
     }
 
-    private fun indexAddressRegex(configs: List<NetworkConfig>) {
+    private fun buildAddressRegexIndex(
+        configs: List<NetworkConfig>
+    ): Pair<Map<String, Regex>, Map<NetworkType, List<Regex>>> {
         val byId = mutableMapOf<String, Regex>()
         val byType = mutableMapOf<NetworkType, MutableList<Regex>>()
 
@@ -461,16 +408,7 @@ class BlockchainRegistry @Inject constructor(
             byType.getOrPut(networkType) { mutableListOf() }.add(compiledRegex)
         }
 
-        synchronized(writeLock) {
-            val current = catalog
-            catalog = Catalog(
-                byId = current.byId,
-                byChainId = current.byChainId,
-                defaultByType = current.defaultByType,
-                regexById = byId.toMap(),
-                regexByType = byType.mapValues { (_, v) -> v.toList() }
-            )
-        }
+        return byId.toMap() to byType.mapValues { (_, v) -> v.toList() }
     }
 
     private fun BlockchainNetwork.toNetworkInfo(): NetworkInfo {

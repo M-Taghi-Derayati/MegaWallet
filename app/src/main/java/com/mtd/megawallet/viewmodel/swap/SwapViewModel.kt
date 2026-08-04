@@ -130,6 +130,9 @@ class SwapViewModel @Inject constructor(
                 // اگر موجودی همان توکنِ انتخاب‌شده عوض شده، نسخهٔ تازه جایگزین شود.
                 payToken = state.payToken?.let { selected ->
                     tokens.firstOrNull { it.option.id == selected.option.id } ?: selected
+                },
+                payAsset = state.payAsset?.let { selected ->
+                    payAssets[selected.id] ?: selected
                 }
             )
         }
@@ -139,14 +142,22 @@ class SwapViewModel @Inject constructor(
         when (event) {
             is SwapEvent.PayQueryChanged -> _uiState.update { it.copy(payQuery = event.query) }
 
-            is SwapEvent.PayTokenSelected -> {
+            is SwapEvent.PayAssetSelected -> {
+                // فهرست همهٔ دارایی‌های دارای موجودی را نشان می‌دهد؛ [payTokens] فقط آن‌هایی را
+                // دارد که ریلِ اجرا پشتیبانی می‌کند، پس نبودنِ دارایی در آن یعنی «قابل تبدیل نیست».
+                val token = _uiState.value.payTokens.firstOrNull { it.option.id == event.asset.id }
+                if (token == null) {
+                    showSnackbarMessage("تبدیل فعلاً فقط روی شبکه‌های EVM انجام می‌شود.")
+                    return
+                }
                 _uiState.update {
                     it.copy(
-                        payToken = event.token,
+                        payToken = token,
+                        payAsset = payAssets[event.asset.id] ?: event.asset,
                         phase = SwapPhase.AMOUNT,
                         amountInput = "0",
                         // توکنِ دریافتِ قبلی ممکن است همین توکن یا روی شبکهٔ دیگری باشد.
-                        receiveToken = it.receiveToken?.takeIf { r -> r.id != event.token.option.id },
+                        receiveToken = it.receiveToken?.takeIf { r -> r.id != token.option.id },
                         quoteState = SwapQuoteState.Idle,
                         quoteExpiresAtElapsed = null
                     )

@@ -62,7 +62,10 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.mtd.common_ui.R
 import com.mtd.domain.model.ReceiveUiState
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
+import com.mtd.megawallet.ui.compose.components.AssetIcon
+import com.mtd.megawallet.ui.compose.components.NetworkIcon
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
+import com.mtd.megawallet.ui.compose.components.getLocalIconResId
 import com.mtd.megawallet.viewmodel.ReceiveViewModel
 import java.util.EnumMap
 import com.mtd.common_ui.theme.InterRegular
@@ -148,8 +151,6 @@ fun NetworkChip(
 ) {
     val backgroundColor = MaterialTheme.colorScheme.surface
     val contentColor = MaterialTheme.colorScheme.tertiary
-    val context = LocalContext.current
-    val imageLoader = remember { coil.ImageLoader(context) }
     Surface(
         modifier = Modifier
             .clickable(onClick = onClick)
@@ -169,29 +170,14 @@ fun NetworkChip(
                 fontFamily = IranSansRegular
             )
 
-            // TASK-53 — drawable لوکالِ نماد یک مسیرِ سریع است؛ در نبودش آیکونِ خودِ آیتم از کانفیگ.
-            val localIcon = remember(item.symbol) { item.symbol?.let { getLocalIconResId(it) } ?: 0 }
-
-            if (localIcon != 0) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Image(
-                    painter = painterResource(id = localIcon),
-                    contentDescription = null,
-                    modifier = Modifier.size(25.dp).clip(CircleShape),
-                    contentScale = ContentScale.Fit
-                )
-            } else {
-                item.iconUrl?.let {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    AsyncImage(
-                        model = it,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp).clip(CircleShape),
-                        contentScale = ContentScale.Fit,
-                        imageLoader = imageLoader
-                    )
-                }
-            }
+            // آیکونِ کانفیگ مسیرِ اصلی است و drawableِ لوکال فقط fallbackِ آفلاین؛ قبلاً برعکس بود.
+            Spacer(modifier = Modifier.width(8.dp))
+            AssetIcon(
+                iconUrl = item.iconUrl,
+                symbol = item.symbol.orEmpty(),
+                contentDescription = null,
+                modifier = Modifier.size(25.dp).clip(CircleShape)
+            )
 
         }
     }
@@ -334,9 +320,6 @@ fun ReceiveCard(
 
 @Composable
 internal fun SupportedNetworksRow(networkIds: List<String>, iconUrls: List<String>,tintIcon:Color=MaterialTheme.colorScheme.background) {
-    val context = LocalContext.current
-    val imageLoader = remember { coil.ImageLoader(context) }
-    
     Row(
         horizontalArrangement = Arrangement.spacedBy((-8).dp),
         verticalAlignment = Alignment.CenterVertically

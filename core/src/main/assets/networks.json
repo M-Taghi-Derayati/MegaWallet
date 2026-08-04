@@ -53,8 +53,8 @@
     "chainId": 97,
     "derivationPath": "m/44'/60'/0'/0/0",
     "rpcUrlsEvm": [
-      "https://bsc-testnet-rpc.publicnode.com",
       "https://data-seed-prebsc-1-s1.binance.org:8545",
+      "https://bsc-testnet-rpc.publicnode.com",
       "https://bsc-testnet.drpc.org"
     ],
     "webSocketUrl": "wss://bsc-testnet.drpc.org",
