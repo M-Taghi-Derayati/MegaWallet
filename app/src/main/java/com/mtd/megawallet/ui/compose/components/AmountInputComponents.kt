@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mtd.common_ui.theme.AssetIcon
 import com.mtd.common_ui.theme.InterBold
 import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.InterRegularMedium

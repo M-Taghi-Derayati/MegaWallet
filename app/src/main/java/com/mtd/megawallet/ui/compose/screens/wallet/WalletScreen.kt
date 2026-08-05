@@ -7,7 +7,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -53,10 +52,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -66,8 +63,6 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
-import coil.compose.AsyncImage
-import coil.imageLoader
 import com.mtd.common_ui.R
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.FiatCurrency
@@ -75,8 +70,8 @@ import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.NetworkShare
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
-import com.mtd.megawallet.ui.compose.components.AssetIcon
-import com.mtd.megawallet.ui.compose.components.NetworkIcon
+import com.mtd.common_ui.theme.AssetIcon
+import com.mtd.common_ui.theme.NetworkIcon
 import com.mtd.megawallet.viewmodel.HomeViewModel
 import java.math.BigDecimal
 import com.mtd.common_ui.theme.InterBoldBold

@@ -5,6 +5,7 @@ import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.FeeOption
+import com.mtd.domain.model.SwapFees
 import com.mtd.domain.model.SwapQuote
 import com.mtd.domain.model.SwapRoute
 import com.mtd.domain.model.swap.SwapExecutionProgress
@@ -109,7 +110,6 @@ data class SwapUiState(
 
     // ── استعلام ──
     val slippageBps: Int = DEFAULT_SLIPPAGE_BPS,
-    val platformFeeBps: Int? = null,
     val quoteState: SwapQuoteState = SwapQuoteState.Idle,
     /**
      * پایانِ اعتبارِ استعلام بر مبنای `SystemClock.elapsedRealtime()`.
@@ -178,6 +178,17 @@ data class SwapUiState(
     /** مبلغِ **تضمین‌شده**: چیزی که کاربر در بدترین حالتِ لغزش دریافت می‌کند. */
     val minimumReceivedRaw: BigInteger?
         get() = readyRoute?.toAmount?.min
+
+    /**
+     * کارمزدِ پلتفرم، فقط وقتی واقعاً روی زنجیره برداشته شده — وگرنه `null` و ردیفِ کارمزد اصلاً
+     * نمایش داده نمی‌شود.
+     *
+     * نرخ از همین مسیرِ استعلام‌شده خوانده می‌شود و هیچ‌جا نگه داشته نمی‌شود: هم نرخ و هم کلیدِ
+     * برداشت در پنلِ اپراتور تغییر می‌کنند و می‌توانند بین دو استعلامِ پشت‌سرهم فرق کنند. نمایشِ
+     * `platformBps` به‌تنهایی یعنی گفتنِ «۰٫۵٪ گرفتیم» در حالی که چیزی برداشته نشده.
+     */
+    val collectedPlatformFee: SwapFees?
+        get() = readyRoute?.fees?.takeIf { it.collected }
 
     val canRequestQuote: Boolean
         get() = payToken != null &&

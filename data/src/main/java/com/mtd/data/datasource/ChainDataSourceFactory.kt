@@ -2,10 +2,10 @@ package com.mtd.data.datasource
 
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.network.bitcoin.UtxoNetworkParametersResolver
-import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.data.BuildConfig
 import com.mtd.data.service.MobileProxyApiService
+import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.core.NetworkType
@@ -29,7 +29,8 @@ class ChainDataSourceFactory @Inject constructor(
     private val blockchainRegistry: BlockchainRegistry,
     private val modeProvider: IBlockchainConnectionModeProvider,
     private val retrofitBuilder: Retrofit.Builder,
-    private val assetRegistry: AssetRegistry,
+    /** فهرستِ ادغام‌شده (باندل + توکن‌های کاربر)، که منابعِ DIRECT برای انتخابِ قراردادها می‌خوانند. */
+    private val assetCatalog: IAssetCatalog,
     private val okHttpClient: OkHttpClient
 ) {
     private val dataSourceCache = mutableMapOf<String, IChainDataSource>()
@@ -57,7 +58,7 @@ class ChainDataSourceFactory @Inject constructor(
 
                 override fun create(network: BlockchainNetwork): IChainDataSource {
                     // تغییر مهم: پاس دادن okHttpClient به جای ساختن Web3j در اینجا
-                    return EvmDataSource(network, retrofitBuilder, assetRegistry, okHttpClient)
+                    return EvmDataSource(network, retrofitBuilder, assetCatalog, okHttpClient)
                 }
             },
             object : ChainDataSourceProvider {
@@ -82,7 +83,7 @@ class ChainDataSourceFactory @Inject constructor(
                 }
 
                 override fun create(network: BlockchainNetwork): IChainDataSource {
-                    return TronDataSource(network,retrofitBuilder,assetRegistry, okHttpClient)
+                    return TronDataSource(network, retrofitBuilder, assetCatalog, okHttpClient)
                 }
             },
             object : ChainDataSourceProvider {

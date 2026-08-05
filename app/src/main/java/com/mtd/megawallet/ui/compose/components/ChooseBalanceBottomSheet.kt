@@ -42,6 +42,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.mtd.common_ui.theme.AssetIcon
 import com.mtd.domain.model.AssetItem
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.send.sampleConfirmAsset
@@ -50,6 +51,7 @@ import com.mtd.common_ui.theme.InterRegular
 import com.mtd.common_ui.theme.IranSansBold
 import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.common_ui.theme.MegaWalletTheme
+import com.mtd.common_ui.theme.NetworkIcon
 
 /**
  * شیت پایینی انتخاب موجودی برای دارایی‌های گروهیِ چند-شبکه‌ای.

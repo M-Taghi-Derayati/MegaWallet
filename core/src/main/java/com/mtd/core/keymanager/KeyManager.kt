@@ -1,7 +1,6 @@
 package com.mtd.core.keymanager
 
 import com.mtd.core.registry.BlockchainRegistry
-import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.WalletKey
 import org.web3j.crypto.Credentials
 import java.util.concurrent.ConcurrentHashMap
@@ -46,13 +45,18 @@ class KeyManager @Inject constructor (
     }
 
     /**
-     * ساخت کلید فقط برای یک شبکه خاص
+     * ساخت کلید برای یک شبکهٔ مشخص با `networkId`.
+     *
+     * عمداً `networkId` می‌گیرد و نه `NetworkType`: نسخهٔ قبلی از `registry.getNetworkByType`
+     * استفاده می‌کرد که فقط **یک** شبکهٔ پیش‌فرض برای هر نوع برمی‌گرداند. برای EVM بی‌ضرر بود
+     * (یک آدرس روی همهٔ زنجیره‌ها)، ولی دوج‌کوین و لایت‌کوین هر دو `UTXO` هستند و آدرسشان یکی
+     * نیست — پس موجودیِ هر دو با آدرسِ یکی از آن‌ها پرس‌وجو می‌شد و دیگری همیشه خالی درمی‌آمد.
      */
-    fun generateKeyForNetwork(
+    fun generateKeyForNetworkId(
         mnemonic: String,
-        networkType: NetworkType
+        networkId: String
     ): WalletKey? {
-        val network = registry.getNetworkByType(networkType)
+        val network = registry.getNetworkById(networkId)
         return network?.deriveKeyFromMnemonic(mnemonic)
     }
 

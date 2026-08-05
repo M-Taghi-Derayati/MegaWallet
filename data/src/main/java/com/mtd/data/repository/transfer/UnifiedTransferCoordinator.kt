@@ -41,7 +41,8 @@ class UnifiedTransferCoordinator @Inject constructor(
     private val evmGaslessCoordinator: EvmGaslessCoordinator,
     private val tronGaslessCoordinator: TronGaslessCoordinator,
     private val pendingGaslessTxStore: PendingGaslessTxStore,
-    // PROXY routing inputs (both Hilt-bound: IAssetCatalog→AssetRegistry, mode provider in DataModule).
+    // PROXY routing inputs (both Hilt-bound in DataModule: IAssetCatalog→MergedAssetCatalog — the
+    // signed bundle merged with the user's own token list — and the connection-mode provider).
     private val connectionModeProvider: IBlockchainConnectionModeProvider,
     private val assetCatalog: IAssetCatalog
 ) : IUnifiedTransferCoordinator {

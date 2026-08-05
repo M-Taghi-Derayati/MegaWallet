@@ -44,6 +44,7 @@ import com.mtd.domain.usecase.network.GetNetworkTypeForAddressUseCase
 import com.mtd.domain.usecase.network.ValidateAddressForNetworkUseCase
 import com.mtd.domain.usecase.send.EstimateSendFeesUseCase
 import com.mtd.domain.usecase.send.RefreshSelectedAssetBalanceUseCase
+import com.mtd.domain.usecase.wallet.ExpandWalletKeysToNetworksUseCase
 import com.mtd.domain.usecase.wallet.GetActiveWalletUseCase
 import com.mtd.domain.usecase.wallet.ObserveActiveWalletUseCase
 import com.mtd.megawallet.core.BaseViewModel
@@ -82,6 +83,7 @@ class SendViewModel @Inject constructor(
     private val estimateSendFeesUseCase: EstimateSendFeesUseCase,
     private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
     private val getActiveWalletUseCase: GetActiveWalletUseCase,
+    private val expandWalletKeysToNetworksUseCase: ExpandWalletKeysToNetworksUseCase,
     private val getNetworkTypeForAddressUseCase: GetNetworkTypeForAddressUseCase,
     private val validateAddressForNetworkUseCase: ValidateAddressForNetworkUseCase,
     errorManager: ErrorManager
@@ -277,6 +279,16 @@ class SendViewModel @Inject constructor(
 
         if (asset.isNativeToken || tokenAddress.isNullOrBlank()) {
             _gaslessAvailability.value = GaslessAvailability.Unavailable("گس‌ لس فقط برای توکن ‌های قراردادی فعال است")
+            return
+        }
+
+        // توکنی که کاربر خودش اضافه کرده هرگز به مسیرِ gasless نمی‌رود. مسیریابیِ gasless در سطحِ
+        // **شبکه** تصمیم می‌گیرد (GaslessRouteResolver)، پس بدونِ این گارد یک ERC-20ِ دلخواه روی یک
+        // شبکهٔ gasless-دار وارد جریان می‌شد و تازه سرور ردش می‌کرد — بعد از اینکه کاربر آن را
+        // انتخاب کرده بود. فهرستِ gasless جداگانه و curated است.
+        if (asset.isUserAdded) {
+            _gaslessAvailability.value =
+                GaslessAvailability.Unavailable("گس‌لس فقط برای توکن‌های فهرستِ رسمی فعال است")
             return
         }
 
@@ -1171,8 +1183,10 @@ class SendViewModel @Inject constructor(
             return
         }
 
-        // Find the corresponding wallet key for this network using the NetworkName enum
-        val senderAddress = wallet.keys.find { it.networkId == network.id }?.address
+        // روی کاتالوگِ فعلی باز می‌شود: `wallet.keys` لحظهٔ ساختِ کیف‌پول ذخیره شده و شبکه‌ای که
+        // بعداً از باندل آمده در آن نیست، پس تخمینِ کارمزد با «آدرس فرستنده یافت نشد» می‌ایستاد.
+        val senderAddress = expandWalletKeysToNetworksUseCase(wallet.keys)
+            .find { it.networkId == network.id }?.address
         
         if (senderAddress == null) {
             if (!silent) _feeState.value = FeeState.Error("آدرس فرستنده برای شبکه ${network.name} یافت نشد")

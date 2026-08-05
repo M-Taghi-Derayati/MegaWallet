@@ -9,11 +9,13 @@ import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.IAppCacheStore.Companion.HISTORY_TTL
 import com.mtd.domain.interfaceRepository.IAppEventBus
 import com.mtd.domain.interfaceRepository.IAssetCatalog
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.HISTORY_ALL_NETWORKS_OPTION_ID
@@ -38,6 +40,7 @@ import com.mtd.domain.usecase.history.GetTransactionHistoryUseCase
 import com.mtd.domain.usecase.history.GetUnifiedHistoryPageUseCase
 import com.mtd.domain.usecase.history.GetWalletAddressBookUseCase
 import com.mtd.domain.usecase.history.NormalizeTransactionHistoryUseCase
+import com.mtd.domain.usecase.wallet.ExpandWalletKeysToNetworksUseCase
 import com.mtd.domain.usecase.wallet.GetActiveWalletIdUseCase
 import com.mtd.domain.usecase.wallet.GetActiveWalletUseCase
 import com.mtd.domain.usecase.wallet.ObserveActiveWalletUseCase
@@ -76,6 +79,7 @@ class TransactionHistoryViewModel @Inject constructor(
     private val usdToIrrRateProvider: IUsdToIrrRateProvider,
     private val appEventBus: IAppEventBus,
     private val cacheStore: IAppCacheStore,
+    private val connectionModeProvider: IBlockchainConnectionModeProvider,
     private val getTransactionHistoryUseCase: GetTransactionHistoryUseCase,
     private val getUnifiedHistoryPageUseCase: GetUnifiedHistoryPageUseCase,
     private val getTransactionFeeDetailsUseCase: GetTransactionFeeDetailsUseCase,
@@ -83,6 +87,7 @@ class TransactionHistoryViewModel @Inject constructor(
     private val buildPendingHistoryTransactionUseCase: BuildPendingHistoryTransactionUseCase,
     private val getWalletAddressBookUseCase: GetWalletAddressBookUseCase,
     private val normalizeTransactionHistoryUseCase: NormalizeTransactionHistoryUseCase,
+    private val expandWalletKeysToNetworksUseCase: ExpandWalletKeysToNetworksUseCase,
     private val observeActiveWalletUseCase: ObserveActiveWalletUseCase,
     private val getActiveWalletUseCase: GetActiveWalletUseCase,
     private val getActiveWalletIdUseCase: GetActiveWalletIdUseCase,
@@ -249,9 +254,10 @@ class TransactionHistoryViewModel @Inject constructor(
 
             // Build the (networkId,address) pair-set + matching refreshing markers.
             val wallet = if (isAll) getActiveWalletUseCase() else null
-            val allKeys = wallet?.keys
-                ?.distinctBy { key -> key.networkId to key.address.lowercase(Locale.US) }
-                .orEmpty()
+            // روی کاتالوگِ فعلی باز می‌شود، نه فهرستِ منجمدِ لحظهٔ ساختِ کیف‌پول — وگرنه شبکه‌هایی که
+            // بعداً از باندل آمده‌اند نه در فیلتر دیده می‌شوند و نه اصلاً واکشی می‌شوند.
+            val allKeys = expandWalletKeysToNetworksUseCase(wallet?.keys.orEmpty())
+                .distinctBy { key -> key.networkId to key.address.lowercase(Locale.US) }
             val pairs = if (isAll) {
                 buildHistoryPairs(allKeys)
             } else {
@@ -297,8 +303,11 @@ class TransactionHistoryViewModel @Inject constructor(
                     }
                 }
 
-                // Try the unified proxy page first (§1.7); fall back on PROXY-unsupported (DIRECT mode).
-                val unified = if (pairs.isNotEmpty()) {
+                // اندپوینتِ unified فقط در حالتِ PROXY وجود دارد. قبلاً بدون توجه به ترجیحِ کاربر
+                // همیشه اول صدا زده می‌شد و در حالتِ DIRECT هم یک رفت‌وبرگشتِ اضافه به رله می‌رفت که
+                // شکست می‌خورد — یعنی کاربری که «محلی» انتخاب کرده بود عملاً اول به پراکسی می‌زد.
+                val mode = connectionModeProvider.currentMode()
+                val unified = if (mode == BlockchainConnectionMode.PROXY && pairs.isNotEmpty()) {
                     getUnifiedHistoryPageUseCase(pairs, cursor = null, limit = HISTORY_PAGE_LIMIT)
                 } else {
                     null
@@ -318,14 +327,28 @@ class TransactionHistoryViewModel @Inject constructor(
                     }
 
                     is ResultResponse.Error -> {
+                        // هر شکستی — نه فقط UnsupportedOperation — به تجمیعِ per-network می‌افتد.
+                        // قبلاً فقط UnsupportedOperation فالبک داشت، پس یک پراکسیِ بالا-ولی-خراب
+                        // (۵xx، تایم‌اوت، ۴۰۱) صفحه را با پیام خطا بن‌بست می‌کرد در حالی که مسیرِ
+                        // RPC مستقیم سالم بود.
                         unifiedActive = false
                         val apiError = (unified.exception as? ApiException)?.apiError
-                        if (apiError == ApiError.UnsupportedOperation) {
-                            loadLegacy(isAll, normalizedNetwork, normalizedAddress, cacheKey, refreshingIds)
-                        } else {
-                            // The empty-state text on the list is the surface here; a snackbar on
-                            // top of a full-screen error message would just be noise.
-                            _transactions.value = emptyList()
+                        if (apiError != ApiError.UnsupportedOperation) {
+                            Timber.w(
+                                unified.exception,
+                                "Unified history failed (%s); falling back to per-network aggregation",
+                                apiError?.toString() ?: "unknown"
+                            )
+                        }
+                        loadLegacy(isAll, normalizedNetwork, normalizedAddress, cacheKey, refreshingIds)
+
+                        // فالبک هم چیزی نیاورد ⇒ حالا خطای اصلیِ unified را نشان بده. متنِ حالتِ خالیِ
+                        // خودِ لیست سطحِ نمایش است؛ اسنک‌بار روی آن فقط نویز می‌شد.
+                        // `_errorMessage` را فقط اگر فالبک خودش پیامِ دقیق‌تری نگذاشته باشد پر می‌کنیم.
+                        if (_transactions.value.isEmpty() &&
+                            _errorMessage.value == null &&
+                            apiError != ApiError.UnsupportedOperation
+                        ) {
                             _errorMessage.value = userMessageFor(
                                 unified.exception,
                                 "دریافت تاریخچه تراکنش‌ها ناموفق بود"
@@ -340,7 +363,7 @@ class TransactionHistoryViewModel @Inject constructor(
                     }
 
                     null -> {
-                        // No resolvable proxy pairs — use per-network aggregation.
+                        // حالتِ DIRECT، یا هیچ جفتِ (شبکه، آدرس) قابلِ حلی نبود.
                         unifiedActive = false
                         loadLegacy(isAll, normalizedNetwork, normalizedAddress, cacheKey, refreshingIds)
                     }
@@ -468,7 +491,8 @@ class TransactionHistoryViewModel @Inject constructor(
                 _errorMessage.value = "No active wallet selected"
                 return
             }
-            val keys = wallet.keys.distinctBy { key -> key.networkId to key.address.lowercase(Locale.US) }
+            val keys = expandWalletKeysToNetworksUseCase(wallet.keys)
+                .distinctBy { key -> key.networkId to key.address.lowercase(Locale.US) }
             val aggregatedResults = mutableListOf<TransactionRecord>()
             val resultMutex = Mutex()
 
@@ -535,7 +559,7 @@ class TransactionHistoryViewModel @Inject constructor(
                 if (wallet != null) {
                     val walletChanged = wallet.id != observedWalletId
                     observedWalletId = wallet.id
-                    rebuildNetworkOptions(wallet.keys)
+                    rebuildNetworkOptions(expandWalletKeysToNetworksUseCase(wallet.keys))
 
                     if (walletChanged) {
                         // A switch: drop the previous wallet's data + filter and reset the load key so
@@ -1072,7 +1096,6 @@ class TransactionHistoryViewModel @Inject constructor(
     fun networkId(transaction: TransactionRecord): String =
         displayFormatter.networkId(transaction)
 
-    /** TASK-53 — آیکونِ شبکه از کانفیگ؛ جایگزینِ نگاشتِ هاردکدِ networkId→drawable در UI. */
     fun networkIconUrl(transaction: TransactionRecord): String? =
         displayFormatter.networkIconUrl(transaction)
 }

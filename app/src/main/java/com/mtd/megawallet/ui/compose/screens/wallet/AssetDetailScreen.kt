@@ -85,8 +85,8 @@ import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.FiatCurrency
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
-import com.mtd.megawallet.ui.compose.components.AssetIcon
-import com.mtd.megawallet.ui.compose.components.NetworkIcon
+import com.mtd.common_ui.theme.AssetIcon
+import com.mtd.common_ui.theme.NetworkIcon
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.ChooseBalanceBottomSheet
 import com.mtd.megawallet.viewmodel.HomeViewModel

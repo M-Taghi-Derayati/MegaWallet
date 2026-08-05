@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.AssetIcon
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.FiatCurrency
@@ -53,6 +54,7 @@ import com.mtd.common_ui.theme.InterRegularMedium
 import com.mtd.common_ui.theme.IranSansBoldBold
 import com.mtd.common_ui.theme.IranSansRegularBold
 import com.mtd.common_ui.theme.MegaWalletTheme
+import com.mtd.common_ui.theme.NetworkIcon
 
 /**
  * لیست دارایی‌های قابل ارسال با ورود مرحله‌ای (staggered) هر آیتم.

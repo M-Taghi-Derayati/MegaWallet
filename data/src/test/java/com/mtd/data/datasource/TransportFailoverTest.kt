@@ -159,6 +159,31 @@ class TransportFailoverTest {
     }
 
     @Test
+    fun `open circuit still falls back to the preferred on a business error from the alternate`() = runTest {
+        val preferred = mockk<IChainDataSource>()
+        val alternate = mockk<IChainDataSource>()
+        val health = TransportHealthTracker(failureThreshold = 1, cooldownMs = 60_000L)
+        val preferredOk = ResultResponse.Success(BigDecimal.TEN)
+        // First call fails transiently to open the circuit, then the preferred recovers.
+        coEvery { preferred.getBalance(any()) } returnsMany listOf(
+            ResultResponse.Error(ApiException(ApiError.UpstreamUnavailable)),
+            preferredOk,
+            preferredOk
+        )
+        // The alternate answers with a NON-failover-worthy error. Before the fix this dead-ended
+        // there and the user's own transport was never consulted at all.
+        coEvery { alternate.getBalance(any()) } returns
+            ResultResponse.Error(ApiException(ApiError.ValidationError))
+        val sut = decorator(preferred, alternate, health)
+
+        sut.getBalance("addr")                       // opens the circuit
+        val second = sut.getBalance("addr")          // circuit open → alternate first, then preferred
+
+        assertSame(preferredOk, second)
+        coVerify(exactly = 2) { preferred.getBalance(any()) }
+    }
+
+    @Test
     fun `unused param keeps Asset import honest`() {
         // getBalanceAssets path returns List<Asset>; ensure the type is referenced (compile guard).
         val asset: Asset? = null

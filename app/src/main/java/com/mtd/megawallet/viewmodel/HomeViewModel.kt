@@ -285,7 +285,8 @@ class HomeViewModel @Inject constructor(
                     priceChange24h = cached.priceChange24h,
                     decimals = config.decimals,
                     contractAddress = config.contractAddress,
-                    isNativeToken = config.contractAddress == null
+                    isNativeToken = config.contractAddress == null,
+                    isUserAdded = config.isUserAdded
                 )
             } else {
                 AssetItem(
@@ -304,7 +305,8 @@ class HomeViewModel @Inject constructor(
                     priceUsdRaw = BigDecimal.ZERO,
                     decimals = config.decimals,
                     contractAddress = config.contractAddress,
-                    isNativeToken = config.contractAddress == null
+                    isNativeToken = config.contractAddress == null,
+                    isUserAdded = config.isUserAdded
                 )
             }
         }.toMutableList()
@@ -621,7 +623,8 @@ class HomeViewModel @Inject constructor(
                     priceChange24h = currentChange,
                     decimals = assetConfig.decimals,
                     contractAddress = assetConfig.contractAddress,
-                    isNativeToken = assetConfig.contractAddress == null
+                    isNativeToken = assetConfig.contractAddress == null,
+                    isUserAdded = assetConfig.isUserAdded
                 ))
                 fullRawAssets.add(newAsset)
             }
@@ -699,7 +702,10 @@ class HomeViewModel @Inject constructor(
         val mustShow = setOf("BTC", "ETH", "USDT")
         return rawList.groupBy { it.symbol.uppercase() }.mapNotNull { (symbol, assets) ->
             val totalBal = assets.sumOf { it.balanceRaw }
-            if (totalBal > BigDecimal.ZERO || mustShow.contains(symbol)) {
+            // توکنی که کاربر خودش اضافه کرده با موجودیِ صفر هم می‌ماند: او صریحاً خواسته ببیندش، و
+            // پنهان‌شدنِ خاموشِ چیزی که همین حالا اضافه شده مثل این است که افزودن کار نکرده باشد.
+            // (حذفش راهِ خودش را دارد — پنهان‌سازی از صفحهٔ مدیریتِ توکن‌ها.)
+            if (totalBal > BigDecimal.ZERO || mustShow.contains(symbol) || assets.any { it.isUserAdded }) {
                 if (assets.size > 1) {
                     val first = assets.first()
                     val activeAssets = assets.filter { it.balanceRaw > BigDecimal.ZERO }
@@ -739,7 +745,11 @@ class HomeViewModel @Inject constructor(
                         balance = BalanceFormatter.formatBalance(totalBal, first.decimals),
                         balanceRaw = totalBal, priceUsdRaw = first.priceUsdRaw, priceChange24h = first.priceChange24h,
                         balanceUsdt = first.balanceUsdt,
-                        decimals = first.decimals, isNativeToken = first.isNativeToken, isGroupHeader = true,
+                        decimals = first.decimals, isNativeToken = first.isNativeToken,
+                        // `any` و نه `first`: اگر حتی یکی از شبکه‌های این گروه توکنِ افزودهٔ کاربر
+                        // باشد، سرتیترِ گروه هم نباید gasless پیشنهاد بدهد. جهتِ امنِ خطا.
+                        isUserAdded = assets.any { it.isUserAdded },
+                        isGroupHeader = true,
                         // زیرمجموعه‌های گروه هم وقتی باز می‌شوند باید همان ترتیبِ ارزش را داشته باشند.
                         groupAssets = assets.sortedByDescending { it.balanceRaw * it.priceUsdRaw },
                         networkDistribution = dist

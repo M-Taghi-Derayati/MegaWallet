@@ -31,8 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,8 +39,8 @@ import com.mtd.common_ui.theme.IranSansBold
 import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.domain.model.AssetItem
-import com.mtd.megawallet.ui.compose.components.AssetIcon
-import com.mtd.megawallet.ui.compose.components.NetworkIcon
+import com.mtd.common_ui.theme.AssetIcon
+import com.mtd.common_ui.theme.NetworkIcon
 
 /**
  * آواتار گیرنده در صفحهٔ تأیید تراکنش (آیکون ارز + نشانِ تأیید).

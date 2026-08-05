@@ -60,6 +60,13 @@ data class AssetItem(
     val decimals: Int=0, // تعداد ارقام اعشار
     val contractAddress: String?=null, // آدرس قرارداد (برای توکن‌ها)
     val isNativeToken: Boolean=false, // مشخص می‌کند که آیا توکن اصلی شبکه است یا خیر
+    /**
+     * از [AssetConfig.isUserAdded] می‌آید — یعنی این توکن را خودِ کاربر اضافه کرده و در باندل نیست.
+     *
+     * دو مصرف دارد: (۱) با موجودیِ صفر هم در لیست می‌ماند، چون کاربر صریحاً خواسته باشدش؛
+     * (۲) مسیرِ کارمزدِ gasless برایش پیشنهاد نمی‌شود.
+     */
+    val isUserAdded: Boolean = false,
 
     // --- فیلدهای مربوط به گروه‌بندی (Aggregation) ---
     val isGroupHeader: Boolean = false, // آیا این آیتم نماینده یک گروه است؟

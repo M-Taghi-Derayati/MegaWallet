@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
         const val SWAP = 1700f                  // swap flow
         const val SEND = 1800f                  // send flow
         const val HISTORY_DETAIL_SHEET = 1900f  // transaction-details bottom sheet (history tab)
+        const val MANAGE_TOKENS = 1950f         // token-management sheet (header search icon)
         const val RECEIVE = 2000f               // receive flow
         const val MULTI_WALLET = 3000f          // wallet switcher
         const val ADD_EXISTING_WALLET = 4000f   // import existing wallet

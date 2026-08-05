@@ -15,6 +15,7 @@ import com.mtd.data.config.ConfigCatalogBootstrapper
 import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
 import com.mtd.data.datasource.DefaultTestnetVisibilityProvider
 import com.mtd.data.di.ForImageLoading
+import com.mtd.domain.interfaceRepository.IUserTokenRepository
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +38,10 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
 
     // TASK-53 — ترجیحِ نمایشِ شبکه‌های تست؛ مثل حالتِ اتصال، خارج از ترد اصلی hydrate می‌شود.
     @Inject lateinit var testnetVisibilityProvider: DefaultTestnetVisibilityProvider
+
+    // فهرستِ توکنِ کاربر. منبعِ ادغام‌شده آن را **همگام** می‌خواند، پس باید پیش از اولین ساختِ لیست
+    // از دیسک بالا آمده باشد؛ وگرنه اولین فریم فقط باندل را نشان می‌دهد تا اولین تغییرِ استیت.
+    @Inject lateinit var userTokenRepository: IUserTokenRepository
 
     // Lazy است چون newImageLoader ممکن است پیش از آماده‌شدنِ کاملِ گراف صدا زده شود و ساختنِ
     // کلاینت زنجیرهٔ tokenStore/authenticator را هم می‌کشد؛ با Lazy تا اولین درخواستِ تصویر عقب می‌افتد.
@@ -85,6 +90,8 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
                 .onFailure { Timber.w(it, "Connection-mode prime failed; defaulting to DIRECT") }
             runCatching { testnetVisibilityProvider.prime() }
                 .onFailure { Timber.w(it, "Testnet-visibility prime failed; using the build default") }
+            runCatching { userTokenRepository.prime() }
+                .onFailure { Timber.w(it, "User-token prime failed; showing the bundle catalog only") }
 
             runCatching { configCatalogBootstrapper.bootstrap() }
                 .onSuccess { Timber.i("Catalog bootstrap finished (appliedFromBundle=$it)") }

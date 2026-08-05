@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -56,23 +58,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.imageLoader
 import com.mtd.common_ui.R
 import com.mtd.domain.model.HistoryNetworkOption
 import com.mtd.domain.model.HistoryRow
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetailsBottomSheet
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryEmptyState
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryItem
+import com.mtd.megawallet.ui.compose.components.SearchInputField
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryShimmer
-import com.mtd.megawallet.ui.compose.components.NetworkIcon
+import com.mtd.common_ui.theme.NetworkIcon
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.megawallet.viewmodel.HomeViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -401,6 +401,28 @@ private fun ChooseHistoryNetworkBottomSheet(
     onDismiss: () -> Unit,
     onNetworkSelected: (HistoryNetworkOption) -> Unit
 ) {
+    var query by remember { mutableStateOf("") }
+
+    // شیت هیچ‌وقت از درخت خارج نمی‌شود (فقط AnimatedVisibility)، پس متنِ جست‌وجو بین بازشدن‌ها
+    // باقی می‌ماند و دفعهٔ بعد لیستِ از قبل فیلترشده باز می‌شود.
+    LaunchedEffect(visible) { if (!visible) query = "" }
+
+    val filteredOptions = remember(options, query) {
+        val q = query.trim()
+        if (q.isEmpty()) {
+            options
+        } else {
+            // «همهٔ شبکه‌ها» همیشه می‌ماند: راهِ برگشتن از فیلتر است، نه یک شبکه که جست‌وجو شود.
+            options.filter { option ->
+                option.isAllNetworks ||
+                    option.networkName.contains(q, ignoreCase = true) ||
+                    option.networkFaName?.contains(q, ignoreCase = true) == true ||
+                    option.symbol.contains(q, ignoreCase = true) ||
+                    option.networkId.contains(q, ignoreCase = true)
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -436,6 +458,8 @@ private fun ChooseHistoryNetworkBottomSheet(
         ) {
             Column(
                 modifier = Modifier
+                    // شیت به پایینِ صفحه چسبیده و حالا فیلد ورودی دارد؛ بدون این، کیبورد رویش می‌نشست.
+                    .imePadding()
                     .padding(horizontal = 24.dp, vertical = 5.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(28.dp))
@@ -470,16 +494,43 @@ private fun ChooseHistoryNetworkBottomSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                options.forEachIndexed { index, option ->
-                    ChooseHistoryNetworkRow(
-                        option = option,
-                        onClick = { onNetworkSelected(option) }
-                    )
-                    if (index < options.lastIndex) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                SearchInputField(
+                    value = query,
+                    label = "جست‌وجو",
+                    placeholder = "نام شبکه یا نماد",
+                    onValueChange = { query = it }
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // قبلاً یک `forEachIndexed` داخل Column بود: با چند کیف‌پول و چند شبکه، شیت از
+                // ارتفاع صفحه بلندتر می‌شد و ردیف‌های پایینی اصلاً دست‌یافتنی نبودند. حالا لیست
+                // سقفِ ارتفاع دارد و خودش اسکرول می‌شود.
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(filteredOptions, key = { it.id }) { option ->
+                        ChooseHistoryNetworkRow(
+                            option = option,
+                            onClick = { onNetworkSelected(option) }
+                        )
                     }
+                }
+
+                if (query.isNotBlank() && filteredOptions.none { !it.isAllNetworks }) {
+                    Text(
+                        text = "شبکه‌ای با این نام پیدا نشد",
+                        color = MaterialTheme.colorScheme.onTertiary,
+                        fontFamily = IranSansRegular,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp, bottom = 8.dp)
+                    )
                 }
             }
         }

@@ -51,8 +51,8 @@ class SwapRepositoryImpl @Inject constructor(
             fromToken = request.fromToken,
             toToken = request.toToken,
             amountRaw = request.amountRaw.toString(),
-            slippage = request.slippage,
-            userAddress = request.userAddress
+            userAddress = request.userAddress,
+            slippage = request.slippage
         )
         val body = response.body()
         if (!response.isSuccessful || body == null) throw relayApiError(response, "swap quote failed (${response.code()})")
@@ -86,6 +86,7 @@ class SwapRepositoryImpl @Inject constructor(
     private fun SwapProvidersDto.toDomain() = SwapProviders(
         providers = providers.orEmpty(),
         platformFeeBps = platformFeeBps,
+        platformFeeCollected = platformFeeCollected,
         quoteTtlMs = quoteTtlMs
     )
 
@@ -94,6 +95,7 @@ class SwapRepositoryImpl @Inject constructor(
         routes = routes.orEmpty().map { it.toDomain() },
         bestRoute = bestRoute?.toDomain(),
         platformFeeBps = platformFeeBps,
+        platformFeeCollected = platformFeeCollected,
         expiresAt = expiresAt,
         ttlMs = ttlMs
     )
@@ -115,9 +117,12 @@ class SwapRepositoryImpl @Inject constructor(
         min = min ?: BigInteger.ZERO
     )
 
+    // `collected` absent ⇒ false: an older/partial payload must never be read as "we charged you".
     private fun SwapFeesDto.toDomain() = SwapFees(
         platformBps = platformBps,
+        collected = collected ?: false,
         platformCommission = platformCommission,
+        uncollectedCommission = uncollectedCommission,
         grossOutput = grossOutput,
         netOutput = netOutput
     )

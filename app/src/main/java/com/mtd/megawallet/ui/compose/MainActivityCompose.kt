@@ -188,9 +188,6 @@ class MainActivityCompose : FragmentActivity() {
                                 onNavigateToWalletManagement = {
                                     // TODO: Navigate to wallet management screen
                                 },
-                                onSearchClick = {
-                                    // TODO: Open search
-                                },
                                 onMoreOptionsClick = {
                                     appLockViewModel.refreshSnapshot()
                                     showSecuritySettings = true

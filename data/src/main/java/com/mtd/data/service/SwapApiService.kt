@@ -19,6 +19,10 @@ interface SwapApiService {
     @GET("api/v1/swap/providers")
     suspend fun getProviders(): Response<SwapProvidersDto>
 
+    /**
+     * [userAddress] is required — omitting it returns `400 SWAP_VALIDATION_ERROR`, and the route's
+     * `tx.data` is built for exactly that wallet.
+     */
     @GET("api/v1/swap/quote")
     suspend fun getQuote(
         @Query("fromNetwork") fromNetwork: String,
@@ -26,8 +30,8 @@ interface SwapApiService {
         @Query("fromToken") fromToken: String,
         @Query("toToken") toToken: String,
         @Query("amountRaw") amountRaw: String,
-        @Query("slippage") slippage: Double? = null,
-        @Query("userAddress") userAddress: String? = null
+        @Query("userAddress") userAddress: String,
+        @Query("slippage") slippage: Double? = null
     ): Response<SwapQuoteResponseDto>
 
     @POST("api/v1/swap/prepare")

@@ -26,6 +26,9 @@ import com.mtd.data.repository.WalletRepositoryImpl
 import com.mtd.data.device.PlayIntegrityTokenProvider
 import com.mtd.data.device.ResilientDeviceIdProvider
 import com.mtd.data.device.UnavailablePlayIntegrityTokenProvider
+import com.mtd.data.repository.assets.MergedAssetCatalog
+import com.mtd.data.repository.assets.TokenDiscoveryRepositoryImpl
+import com.mtd.data.repository.assets.UserTokenRepositoryImpl
 import com.mtd.data.repository.auth.AuthRepositoryImpl
 import com.mtd.data.repository.auth.EvmAuthMessageSigner
 import com.mtd.data.repository.auth.SecureTokenStore
@@ -37,6 +40,7 @@ import com.mtd.data.repository.growth.GrowthRepositoryImpl
 import com.mtd.data.repository.notification.NotificationRepositoryImpl
 import com.mtd.data.repository.swap.SwapRepositoryImpl
 import com.mtd.data.repository.transfer.UnifiedTransferCoordinator
+import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.IAuthManager
 import com.mtd.domain.interfaceRepository.IAuthMessageSigner
 import com.mtd.domain.interfaceRepository.IAuthRepository
@@ -53,11 +57,13 @@ import com.mtd.domain.interfaceRepository.IGaslessChainReader
 import com.mtd.domain.interfaceRepository.IGaslessEvmRepository
 import com.mtd.domain.interfaceRepository.IGaslessTronRepository
 import com.mtd.domain.interfaceRepository.IGrowthRepository
+import com.mtd.domain.interfaceRepository.IManageableAssetCatalog
 import com.mtd.domain.interfaceRepository.IMarketDataRepository
 import com.mtd.domain.interfaceRepository.INotificationRepository
 import com.mtd.domain.interfaceRepository.IMonitoringRepository
 import com.mtd.domain.interfaceRepository.ISwapRepository
 import com.mtd.domain.interfaceRepository.ISendAssetDataSource
+import com.mtd.domain.interfaceRepository.ITokenDiscoveryRepository
 import com.mtd.domain.interfaceRepository.ITokenStore
 import com.mtd.domain.interfaceRepository.ITransactionStatusRepository
 import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
@@ -66,6 +72,7 @@ import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IUserTokenRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -292,6 +299,34 @@ abstract class DataModule {
     abstract fun bindNotificationRepository(
         impl: NotificationRepositoryImpl
     ): INotificationRepository
+
+    /**
+     * تنها بایندِ [IAssetCatalog] در کلِ برنامه.
+     *
+     * قبلاً `core/di/ManagerModule` مستقیم [com.mtd.core.registry.AssetRegistry] را بایند می‌کرد؛
+     * حالا رجیستری فقط نیمهٔ باندلِ امضاشده است و [MergedAssetCatalog] آن را با فهرستِ توکنِ کاربر
+     * ادغام می‌کند. اگر روزی دو بایند هم‌زمان وجود داشته باشد، نیمی از برنامه فهرستِ ناقص می‌بیند.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindAssetCatalog(impl: MergedAssetCatalog): IAssetCatalog
+
+    /** همان singletonِ بالا از زاویهٔ صفحهٔ مدیریت — یک کلاس، دو نما، یک منبعِ دانشِ ادغام. */
+    @Binds
+    @Singleton
+    abstract fun bindManageableAssetCatalog(impl: MergedAssetCatalog): IManageableAssetCatalog
+
+    @Binds
+    @Singleton
+    abstract fun bindUserTokenRepository(
+        impl: UserTokenRepositoryImpl
+    ): IUserTokenRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTokenDiscoveryRepository(
+        impl: TokenDiscoveryRepositoryImpl
+    ): ITokenDiscoveryRepository
 
 
     companion object {

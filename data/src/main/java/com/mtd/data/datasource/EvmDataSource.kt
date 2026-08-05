@@ -1,7 +1,7 @@
 package com.mtd.data.datasource
 
 import com.mtd.core.network.BlockchainNetwork
-import com.mtd.core.registry.AssetRegistry
+import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.core.utils.AddressRegexUtils
 import com.mtd.data.dto.EVMTokenTransferDto
 import com.mtd.data.dto.EVMTransactionDto
@@ -18,7 +18,6 @@ import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.domain.model.assets.AssetConfig
-import com.mtd.domain.model.core.NetworkConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -51,7 +50,12 @@ import java.time.Instant
 class EvmDataSource(
     private val network: BlockchainNetwork,
     private val retrofitBuilder: Retrofit.Builder,
-    private val assetRegistry: AssetRegistry,
+    /**
+     * فهرستِ ادغام‌شده، نه رجیستریِ باندل: این‌جا تصمیم گرفته می‌شود موجودیِ **کدام قراردادهایی**
+     * خوانده شود، پس توکنی که کاربر اضافه کرده باید در همین فهرست باشد وگرنه در حالتِ DIRECT اصلاً
+     * برایش `balanceOf` صدا زده نمی‌شود.
+     */
+    private val assetCatalog: IAssetCatalog,
     private val okHttpClient: OkHttpClient
 ) : IChainDataSource {
 
@@ -97,16 +101,15 @@ class EvmDataSource(
     }
 
     override suspend fun getTransactionHistory(address: String): ResultResponse<List<TransactionRecord>> {
-        // علتِ واقعی باید تا بالا برسد. «All explorers failed» هر خطایی را دور می‌ریخت و لایهٔ ریپازیتوری
-        // هم رویش یک Exception عمومی می‌گذاشت، پس تنها ردِ باقی‌مانده یک Timber.w بود.
+
         var lastError: Throwable? = null
         for (explorer in network.explorers) {
             try {
-                // TASK-53 — گویشِ اکسپلورر داده است، نه کد. قبلاً این یک `when (network.name)` بود و
-                // شاخهٔ `else` آن یعنی هر زنجیرهٔ EVM جدیدی که سرور اضافه می‌کرد اصلاً تاریخچه نداشت.
-                val result = when (network.explorerApi ?: NetworkConfig.DEFAULT_EXPLORER_API) {
-                    NetworkConfig.EXPLORER_API_BSCSCAN -> fetchBscScanTransactions(explorer, address)
-                    else -> fetchEVMTransactions(explorer, address)
+
+                val result =  if (network.id.contains("bsc")){
+                    fetchBscScanTransactions(explorer, address)
+                }else{
+                    fetchEVMTransactions(explorer, address)
                 }
                 if (result is ResultResponse.Success) return result
                 lastError = (result as ResultResponse.Error).exception
@@ -120,12 +123,6 @@ class EvmDataSource(
         )
     }
 
-    /**
-     * یک ردیفِ خراب نباید کلِ صفحهٔ تاریخچه را از بین ببرد. Gson با Unsafe نمونه می‌سازد و چکِ
-     * nullability کاتلین را دور می‌زند، پس هر فیلدِ «non-null»ِ DTO می‌تواند در زمان اجرا null باشد و
-     * اولین جایی که سر باز می‌کند سازندهٔ مدلِ دامنه است. قبلاً یک NFTِ اسپم بدون symbol کافی بود تا
-     * ۳۰ تراکنشِ سالمِ کنارش هم دیده نشوند و کاربر «تاریخچهٔ خالی» ببیند.
-     */
     private fun mapRowOrNull(what: String?, block: () -> TransactionRecord): TransactionRecord? = try {
         block()
     } catch (e: Exception) {
@@ -271,7 +268,7 @@ class EvmDataSource(
     override suspend fun getBalanceAssets(address: String): ResultResponse<List<Asset>> {
         return withContext(Dispatchers.IO) {
             try {
-                val supportedAssets = assetRegistry.getAssetsForNetwork(network.id)
+                val supportedAssets = assetCatalog.getAssetConfigsForNetwork(network.id)
                 if (supportedAssets.isEmpty()) return@withContext ResultResponse.Success(emptyList())
 
                 val assetDeferreds = supportedAssets.map { assetConfig ->
@@ -313,7 +310,7 @@ class EvmDataSource(
         return withContext(Dispatchers.IO) {
             executeWithFailover { web3j ->
                 try {
-                    val supportedAssets = assetRegistry.getAssetsForNetwork(network.id)
+                    val supportedAssets = assetCatalog.getAssetConfigsForNetwork(network.id)
                     if (supportedAssets.isEmpty()) return@executeWithFailover ResultResponse.Success(
                         emptyMap()
                     )

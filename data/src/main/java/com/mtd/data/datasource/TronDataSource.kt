@@ -4,7 +4,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.network.tron.TronUtils
-import com.mtd.core.registry.AssetRegistry
+import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.core.utils.AddressRegexUtils
 import com.mtd.core.utils.TronAddressConverter
 import com.mtd.data.dto.AccountRequest
@@ -50,7 +50,8 @@ import java.security.MessageDigest
 class TronDataSource(
     private val network: BlockchainNetwork,
     private val retrofitBuilder: Retrofit.Builder,
-    private val assetRegistry: AssetRegistry,
+    /** فهرستِ ادغام‌شده — به همان دلیلِ [EvmDataSource]: این‌جا تعیین می‌شود موجودیِ کدام قراردادها خوانده شود. */
+    private val assetCatalog: IAssetCatalog,
     private val okHttpClient: OkHttpClient
 ) : IChainDataSource {
 
@@ -135,7 +136,7 @@ class TronDataSource(
     override suspend fun getBalanceAssets(address: String): ResultResponse<List<Asset>> {
         return withContext(Dispatchers.IO) {
             try {
-                val supportedAssets = assetRegistry.getAssetsForNetwork(network.id)
+                val supportedAssets = assetCatalog.getAssetConfigsForNetwork(network.id)
                 if (supportedAssets.isEmpty()) return@withContext ResultResponse.Success(emptyList())
                 val tronAddress = toEvmAddressOrThrow(address)
                 val assetDeferreds = supportedAssets.map { assetConfig ->
@@ -472,7 +473,7 @@ class TronDataSource(
 
             executeWithFailover { web3j ->
                 try {
-                    val supportedAssets = assetRegistry.getAssetsForNetwork(network.id)
+                    val supportedAssets = assetCatalog.getAssetConfigsForNetwork(network.id)
                     if (supportedAssets.isEmpty()) return@executeWithFailover ResultResponse.Success(
                         emptyMap()
                     )

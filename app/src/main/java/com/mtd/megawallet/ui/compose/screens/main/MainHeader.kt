@@ -1,7 +1,9 @@
 package com.mtd.megawallet.ui.compose.screens.main
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -40,13 +42,17 @@ import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
  * Header صفحه اصلی - شبیه عکس اول
  * شامل: emoji در دایره صورتی، نام کیف، و سه آیکون در سمت راست
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun MainHeader(
     walletName: String,
     walletColor: Color,
     onWalletClick: () -> Unit,
     onScanClick: () -> Unit,
+    /** ضربه روی ذره‌بین — بازکردنِ شیتِ مدیریتِ توکن. */
     onSearchClick: () -> Unit,
+    /** نگه‌داشتنِ ذره‌بین — تعویضِ DIRECT/PROXY (ابزارِ توسعه). */
+    onToggleConnectionMode: () -> Unit,
     onMoreOptionsClick: () -> Unit,
     onCurrencyToggle: () -> Unit,
     connectionMode: BlockchainConnectionMode,
@@ -119,18 +125,33 @@ internal fun MainHeader(
                         modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
                     )
                 }
-                // آیکون سرچ — تغییر حالت اتصال (PROXY سبز / DIRECT خاکستری)
+                // آیکون سرچ — ضربه: مدیریت توکن‌ها. نگه‌داشتن: تعویضِ حالتِ اتصال.
+                //
+                // این آیکون قبلاً فقط حالتِ اتصال را عوض می‌کرد؛ کارِ اصلی‌اش حالا جست‌وجو/مدیریتِ
+                // توکن است که همان چیزی است که شکلش وعده می‌دهد. تعویضِ DIRECT/PROXY یک ابزارِ
+                // توسعه است و روی نگه‌داشتن منتقل شده تا از دست نرود — رنگِ آیکون هنوز حالتِ فعال
+                // را نشان می‌دهد (سبز = PROXY).
                 val searchTint = when (connectionMode) {
                     BlockchainConnectionMode.PROXY -> Color(0xFF2E7D32) // green = relayer/proxy active
                     BlockchainConnectionMode.DIRECT -> MaterialTheme.colorScheme.tertiary
                 }
-                IconButton(
-                    onClick = onSearchClick,
-                    modifier = Modifier.size(MainScreenConstants.HEADER_ICON_SIZE)
+                Box(
+                    modifier = Modifier
+                        .size(MainScreenConstants.HEADER_ICON_SIZE)
+                        .clip(CircleShape)
+                        .combinedClickable(
+                            onClick = onSearchClick,
+                            onLongClick = onToggleConnectionMode
+                        )
+                        .semantics {
+                            contentDescription =
+                                "مدیریت توکن‌ها — برای تغییر حالت اتصال (${connectionMode.name}) نگه دارید"
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_search),
-                        contentDescription = "Toggle connection mode (${connectionMode.name})",
+                        contentDescription = null,
                         tint = searchTint,
                         modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
                     )
@@ -190,6 +211,7 @@ private fun MainHeaderLightPreview() {
             onWalletClick = {},
             onScanClick = {},
             onSearchClick = {},
+            onToggleConnectionMode = {},
             onMoreOptionsClick = {},
             onCurrencyToggle = {},
             connectionMode = BlockchainConnectionMode.DIRECT,
@@ -208,6 +230,7 @@ private fun MainHeaderDarkPreview() {
             onWalletClick = {},
             onScanClick = {},
             onSearchClick = {},
+            onToggleConnectionMode = {},
             onMoreOptionsClick = {},
             onCurrencyToggle = {},
             connectionMode = BlockchainConnectionMode.PROXY,

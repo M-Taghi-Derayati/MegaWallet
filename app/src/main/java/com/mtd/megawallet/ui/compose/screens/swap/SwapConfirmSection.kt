@@ -228,13 +228,18 @@ private fun SwapExpandableDetails(
                         iconUrl = null
                     )
                 }
-                SwapDetailRow(
-                    label = "کارمزد پلتفرم",
-                    value = state.platformFeeBps
-                        ?.let { SwapFormat.percentFromBps(it) }
-                        ?: FiatConversion.UNKNOWN_PLACEHOLDER,
-                    iconUrl = null
-                )
+                // فقط وقتی کارمزد واقعاً برداشته شده. تا وقتی `collected=false` است سرور چیزی
+                // کم نمی‌کند و `net == gross`؛ نشان‌دادنِ نرخ در آن حالت یعنی ادعای هزینه‌ای که
+                // وجود ندارد.
+                state.collectedPlatformFee?.let { fees ->
+                    SwapDetailRow(
+                        label = "کارمزد پلتفرم",
+                        value = fees.platformBps
+                            ?.let { SwapFormat.percentFromBps(it) }
+                            ?: FiatConversion.UNKNOWN_PLACEHOLDER,
+                        iconUrl = null
+                    )
+                }
                 state.readyRoute?.provider?.let { provider ->
                     SwapDetailRow(label = "مسیر", value = provider, iconUrl = null)
                 }

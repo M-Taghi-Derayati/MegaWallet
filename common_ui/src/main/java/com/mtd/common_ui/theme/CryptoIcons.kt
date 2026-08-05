@@ -1,4 +1,4 @@
-package com.mtd.megawallet.ui.compose.components
+package com.mtd.common_ui.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -8,25 +8,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
 import coil.imageLoader
-import com.mtd.megawallet.R
+import com.mtd.common_ui.R
 
-/**
- * تنها خانهٔ آیکونِ ارز و شبکه در کل اپ.
- *
- * پیش از این [NetworkIcon]/[AssetIcon] داخل `WalletScreen.kt` بودند و ده فایل از پکیج‌های دیگر
- * (send، swap، history، components) از یک *صفحه* import می‌کردند. نتیجه‌اش این بود که هر تغییرِ
- * رفتارِ آیکون — اولویتِ URL بر drawable، placeholder، ImageLoader — باید در چند جا تکرار می‌شد و
- * عملاً هم نمی‌شد؛ همان چیزی که باعث شد آیکونِ باندلِ سرور در بعضی صفحه‌ها هرگز دیده نشود.
- *
- * قاعده در هر دو: **URL مسیرِ اصلی است، drawableِ لوکال فقط placeholder/fallback.** هر آیکونی که
- * سرور در باندلِ امضاشده اضافه کند بدون آپدیتِ اپ نمایش داده می‌شود.
- *
- * `LocalContext.current.imageLoader` عمداً استفاده شده تا لودرِ پیکربندی‌شدهٔ
- * `MegaWalletApplication` بیاید (کلاینتِ OkHttp اپ + SvgDecoder + disk cache). ساختنِ
- * `ImageLoader(context)` محلی این‌ها را از دست می‌دهد و آیکون‌های SVG بی‌صدا شکست می‌خورند.
- */
 
-/** drawableِ لوکالِ نماد، یا `0` اگر نداشته باشیم. هرگز مستقیم به `painterResource` نده. */
 fun getLocalIconResId(symbol: String): Int {
     return when (symbol.uppercase()) {
         "BTC" -> R.drawable.ic_btc

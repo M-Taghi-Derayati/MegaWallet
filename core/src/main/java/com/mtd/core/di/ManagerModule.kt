@@ -9,14 +9,12 @@ import com.mtd.core.manager.NetworkManager
 import com.mtd.core.manager.PerformanceManager
 import com.mtd.core.manager.ResourceManager
 import com.mtd.domain.model.error.ErrorMapper
-import com.mtd.core.registry.AssetRegistry
 import com.mtd.core.registry.BlockchainRegistry
 import com.mtd.core.utils.PendingHistoryActivityObserver
 import com.mtd.core.wallet.ActiveWalletManager
 import com.mtd.domain.interfaceRepository.IActiveWalletProvider
 import com.mtd.domain.interfaceRepository.IAppCacheStore
 import com.mtd.domain.interfaceRepository.IAppEventBus
-import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.IPendingHistoryActivityObserver
 import dagger.Module
@@ -100,11 +98,10 @@ object ManagerModule {
         return blockchainRegistry
     }
 
-    @Provides
-    @Singleton
-    fun provideAssetCatalog(assetRegistry: AssetRegistry): IAssetCatalog {
-        return assetRegistry
-    }
+    // `IAssetCatalog` عمداً این‌جا بایند **نمی‌شود**. [AssetRegistry] فقط نیمهٔ باندلِ امضاشده است؛
+    // چیزی که برنامه مصرف می‌کند فهرستِ ادغام‌شده با توکن‌های خودِ کاربر است و آن در
+    // `data/.../repository/assets/MergedAssetCatalog` ساخته و در DataModule بایند می‌شود. `core`
+    // به ترجیحاتِ کاربر دسترسی ندارد، و دو بایندِ هم‌زمان یعنی نیمی از برنامه فهرستِ ناقص ببیند.
 
     @Provides
     @Singleton

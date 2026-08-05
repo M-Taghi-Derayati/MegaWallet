@@ -15,6 +15,7 @@ data class SwapProvidersDto(
     @SerializedName("ok") val ok: Boolean = true,
     @SerializedName("providers") val providers: List<String>? = null,
     @SerializedName("platformFeeBps") val platformFeeBps: Int? = null,
+    @SerializedName("platformFeeCollected") val platformFeeCollected: Boolean? = null,
     @SerializedName("quoteTtlMs") val quoteTtlMs: Long? = null
 )
 
@@ -25,6 +26,8 @@ data class SwapQuoteResponseDto(
     @SerializedName("routes") val routes: List<SwapRouteDto>? = null,
     @SerializedName("bestRoute") val bestRoute: SwapRouteDto? = null,
     @SerializedName("platformFeeBps") val platformFeeBps: Int? = null,
+    /** Whether the commission on the best route was really withheld on-chain. */
+    @SerializedName("platformFeeCollected") val platformFeeCollected: Boolean? = null,
     @SerializedName("expiresAt") val expiresAt: String? = null,
     @SerializedName("ttlMs") val ttlMs: Long? = null
 )
@@ -46,9 +49,18 @@ data class SwapToAmountDto(
     @SerializedName("min") val min: BigInteger? = null
 )
 
+/**
+ * ⚠️ [platformBps] is the *configured* rate, not proof that anything was charged — it is
+ * operator-changeable at runtime and can differ between two quotes. Only [collected] says the
+ * commission was really withheld on-chain; while it is `false`, [platformCommission] is `"0"` and
+ * `toAmount.net == toAmount.gross`. [uncollectedCommission] is informational and must never be
+ * subtracted from anything shown to the user.
+ */
 data class SwapFeesDto(
     @SerializedName("platformBps") val platformBps: Int? = null,
+    @SerializedName("collected") val collected: Boolean? = null,
     @SerializedName("platformCommission") val platformCommission: BigInteger? = null,
+    @SerializedName("uncollectedCommission") val uncollectedCommission: BigInteger? = null,
     @SerializedName("grossOutput") val grossOutput: BigInteger? = null,
     @SerializedName("netOutput") val netOutput: BigInteger? = null
 )
@@ -73,7 +85,7 @@ data class SwapPrepareRequestDto(
     @SerializedName("toToken") val toToken: String,
     @SerializedName("amountRaw") val amountRaw: BigInteger,
     @SerializedName("slippage") val slippage: Double? = null,
-    @SerializedName("userAddress") val userAddress: String? = null,
+    @SerializedName("userAddress") val userAddress: String,
     @SerializedName("provider") val provider: String? = null
 )
 

@@ -195,15 +195,22 @@ internal class TransportFailoverChainDataSource(
         }
         val firstError = (firstResult as ResultResponse.Error).exception
         if (firstIsPreferred) health.recordFailure(healthKey)
-        if (!TransportErrorClassifier.isFailoverWorthy(firstError)) return firstResult
+
+        // وقتی مدار باز است، ترنسپورتِ اول *حدس* ماست نه انتخابِ کاربر. پس هر شکستی آن‌جا — چه
+        // گذرا چه نه — باید به ترجیحِ خودِ کاربر برگردد، چون هنوز اصلاً از او نپرسیده‌ایم.
+        // قبلاً طبقه‌بندی روی خطای همان اولی اعمال می‌شد: کاربری که DIRECT انتخاب کرده بود، بعد از
+        // سه شکستِ متوالی مدارش باز می‌شد، همه‌چیز اول به پراکسی می‌رفت و یک خطای غیرگذرای پراکسی
+        // (مثلاً ۴۰۱) بن‌بست می‌شد بدون این‌که حتی یک بار DIRECT امتحان شود.
+        if (firstIsPreferred && !TransportErrorClassifier.isFailoverWorthy(firstError)) return firstResult
 
         val secondIsPreferred = circuitOpen
         val secondSrc = if (secondIsPreferred) preferred else alternate
         Timber.w(
             firstError,
-            "[Failover] %s: %s transport failed (transient) -> retrying on the other",
+            "[Failover] %s: %s transport failed (%s) -> retrying on the other",
             op,
-            if (firstIsPreferred) preferredMode.name else "ALTERNATE"
+            if (firstIsPreferred) preferredMode.name else "ALTERNATE(circuit-open)",
+            if (firstIsPreferred) "transient" else "circuit-open guess"
         )
 
         val secondResult = attempt(secondSrc, call)

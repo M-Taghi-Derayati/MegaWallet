@@ -36,9 +36,9 @@ import com.mtd.common_ui.R
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
-import com.mtd.megawallet.ui.compose.components.AssetIcon
-import com.mtd.megawallet.ui.compose.components.getLocalIconResId
-import com.mtd.megawallet.ui.compose.components.NetworkIcon
+import com.mtd.common_ui.theme.AssetIcon
+import com.mtd.common_ui.theme.getLocalIconResId
+import com.mtd.common_ui.theme.NetworkIcon
 import com.mtd.common_ui.theme.Green
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.common_ui.theme.InterMedium

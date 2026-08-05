@@ -32,6 +32,8 @@ import com.mtd.domain.usecase.swap.ExecuteSwapBundleUseCase
 import com.mtd.domain.usecase.swap.GetSwapProvidersUseCase
 import com.mtd.domain.usecase.swap.GetSwapQuoteUseCase
 import com.mtd.domain.usecase.swap.PrepareSwapUseCase
+import com.mtd.domain.usecase.wallet.ExpandWalletKeysToNetworksUseCase
+import com.mtd.domain.usecase.wallet.GetActiveAddressForNetworkUseCase
 import com.mtd.domain.usecase.wallet.GetActiveWalletUseCase
 import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -68,6 +70,8 @@ class SwapViewModel @Inject constructor(
     private val executeSwapBundleUseCase: ExecuteSwapBundleUseCase,
     private val estimateSendFeesUseCase: EstimateSendFeesUseCase,
     private val getActiveWalletUseCase: GetActiveWalletUseCase,
+    private val getActiveAddressForNetworkUseCase: GetActiveAddressForNetworkUseCase,
+    private val expandWalletKeysToNetworksUseCase: ExpandWalletKeysToNetworksUseCase,
     private val appEventBus: IAppEventBus,
     errorManager: ErrorManager
 ) : BaseViewModel(errorManager) {
@@ -250,7 +254,6 @@ class SwapViewModel @Inject constructor(
                 payTokens = it.payTokens,
                 receiveTokens = it.receiveTokens,
                 providers = it.providers,
-                platformFeeBps = it.platformFeeBps,
                 quoteTtlMs = it.quoteTtlMs,
                 fiatCurrency = it.fiatCurrency,
                 usdToTomanRate = it.usdToTomanRate
@@ -270,11 +273,22 @@ class SwapViewModel @Inject constructor(
             return
         }
 
-        val request = state.toQuoteRequest() ?: return
         _uiState.update { it.copy(quoteState = SwapQuoteState.Loading) }
 
         quoteJob = launchSafe(connectivitySurface = ErrorSurface.SILENT) {
             if (!immediate) delay(QUOTE_DEBOUNCE_MS)
+
+            // آدرس بعد از debounce حل می‌شود چون مشتق‌کردنش I/O دارد و روی هر ضربهٔ کلید لازم نیست.
+            val request = _uiState.value.toQuoteRequest()
+            if (request == null) {
+                _uiState.update {
+                    it.copy(
+                        quoteState = SwapQuoteState.Failed(NO_ADDRESS_MESSAGE, isRetryable = false),
+                        quoteExpiresAtElapsed = null
+                    )
+                }
+                return@launchSafe
+            }
 
             when (val result = getSwapQuoteUseCase(request)) {
                 is ResultResponse.Success -> {
@@ -298,8 +312,7 @@ class SwapViewModel @Inject constructor(
                         it.copy(
                             quoteState = SwapQuoteState.Ready(quote, route),
                             quoteTtlMs = ttl,
-                            quoteExpiresAtElapsed = SystemClock.elapsedRealtime() + ttl,
-                            platformFeeBps = quote.platformFeeBps ?: it.platformFeeBps
+                            quoteExpiresAtElapsed = SystemClock.elapsedRealtime() + ttl
                         )
                     }
                     scheduleRequoteOnExpiry(ttl)
@@ -356,7 +369,9 @@ class SwapViewModel @Inject constructor(
         val state = _uiState.value
         val asset = state.payToken?.option?.id?.let { payAssets[it] } ?: return
         val wallet = getActiveWalletUseCase() ?: return
-        val ownAddress = wallet.keys.firstOrNull { it.networkId == asset.networkId }?.address ?: return
+        // مثل SendViewModel: کلیدهای ذخیره‌شده منجمدند، کاتالوگ نه.
+        val ownAddress = expandWalletKeysToNetworksUseCase(wallet.keys)
+            .firstOrNull { it.networkId == asset.networkId }?.address ?: return
         val target = state.readyRoute?.tx?.to ?: state.readyRoute?.allowanceTarget ?: ownAddress
 
         feeJob = launchSafe(connectivitySurface = ErrorSurface.SILENT) {
@@ -403,7 +418,6 @@ class SwapViewModel @Inject constructor(
             return
         }
 
-        val request = state.toQuoteRequest() ?: return
         val route = state.readyRoute ?: return
         val gasPrice = state.fee.selected?.gasPrice ?: return
         val networkId = state.payToken?.option?.networkId ?: return
@@ -411,6 +425,16 @@ class SwapViewModel @Inject constructor(
         _uiState.update { it.copy(prepareState = SwapPrepareState.Loading) }
 
         executionJob = launchSafe {
+            // همان درخواستی که استعلام با آن گرفته شد — شبیه‌سازیِ سمتِ سرور روی ورودیِ دیگری
+            // نتیجهٔ دیگری می‌دهد.
+            val request = state.toQuoteRequest()
+            if (request == null) {
+                _uiState.update {
+                    it.copy(prepareState = SwapPrepareState.Failed(NO_ADDRESS_MESSAGE))
+                }
+                return@launchSafe
+            }
+
             val prepared = when (val result = prepareSwapUseCase(request, route.provider)) {
                 is ResultResponse.Success -> result.data
                 is ResultResponse.Error -> {
@@ -611,12 +635,15 @@ class SwapViewModel @Inject constructor(
 
     private fun loadProviders() {
         launchSafe(connectivitySurface = ErrorSurface.SILENT) {
-            // غنی‌سازیِ اختیاری (کارمزد پلتفرم + TTL واقعی). طبق TASK-57 شکستش SILENT است.
+            // غنی‌سازیِ اختیاری (فهرست ارائه‌دهنده‌ها + TTL واقعی). طبق TASK-57 شکستش SILENT است.
+            //
+            // `platformFeeBps` عمداً از این‌جا برداشته نمی‌شود: نرخ در زمانِ اجرا قابلِ تغییر است و
+            // نگه‌داشتنِ نسخهٔ زمانِ استارت یعنی نمایشِ نرخی که دیگر معتبر نیست. کارمزد فقط از
+            // `fees` همان مسیرِ استعلام‌شده خوانده می‌شود.
             when (val result = getSwapProvidersUseCase()) {
                 is ResultResponse.Success -> _uiState.update {
                     it.copy(
                         providers = result.data.providers,
-                        platformFeeBps = result.data.platformFeeBps ?: it.platformFeeBps,
                         quoteTtlMs = result.data.quoteTtlMs?.takeIf { ttl -> ttl > 0 } ?: it.quoteTtlMs
                     )
                 }
@@ -647,14 +674,21 @@ class SwapViewModel @Inject constructor(
             ?.priceUsdRaw
             ?: BigDecimal.ZERO
 
-    private fun SwapUiState.toQuoteRequest(): SwapQuoteRequest? {
+    /**
+     * `null` یعنی «استعلام نگیر». آدرس اجباری است: سرور مسیر را برای همان کیف‌پول می‌سازد و
+     * `tx.data`ی برگشتی به همان آدرس پرداخت می‌کند، پس فرستادنِ یک آدرسِ جای‌گزین یعنی ساختنِ
+     * تراکنشی که پولِ کاربر را به جای دیگری می‌ریزد.
+     *
+     * منبعِ آدرس عمداً `wallet.keys` نیست: آن فهرست عکسِ لحظهٔ ساختِ کیف‌پول است و برای شبکه‌ای که
+     * بعداً از باندل آمده خالی است — دقیقاً همان شبکه‌های mainnetی که سوآپ روی‌شان کار می‌کند.
+     */
+    private suspend fun SwapUiState.toQuoteRequest(): SwapQuoteRequest? {
         val pay = payToken?.option ?: return null
         val receive = receiveToken ?: return null
         val amount = amountRaw.takeIf { it.signum() > 0 } ?: return null
-        val address = getActiveWalletUseCase()
-            ?.keys
-            ?.firstOrNull { it.networkId == pay.networkId }
-            ?.address
+        val address = getActiveAddressForNetworkUseCase(pay.networkId)
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
 
         return SwapQuoteRequest(
             fromNetwork = pay.networkId,
@@ -662,9 +696,9 @@ class SwapViewModel @Inject constructor(
             fromToken = swapTokenRef(pay.contractAddress),
             toToken = swapTokenRef(receive.contractAddress),
             amountRaw = amount,
+            userAddress = address,
             // قرارداد، واحدِ این فیلد را مشخص نکرده؛ درصد فرستاده می‌شود (۵۰bps ⇒ ۰٫۵).
-            slippage = slippageBps.toDouble() / 100.0,
-            userAddress = address
+            slippage = slippageBps.toDouble() / 100.0
         )
     }
 
@@ -717,6 +751,9 @@ class SwapViewModel @Inject constructor(
     companion object {
         private const val QUOTE_DEBOUNCE_MS = 350L
         private const val MAX_AMOUNT_DIGITS = 20
+
+        private const val NO_ADDRESS_MESSAGE =
+            "آدرس کیف پول روی این شبکه در دسترس نیست؛ تبدیل انجام نمی‌شود."
 
         /** همان کفی که مسیرِ approveِ گس‌لس استفاده می‌کند. */
         private val MIN_APPROVE_GAS_LIMIT = BigInteger.valueOf(120_000L)

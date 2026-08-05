@@ -28,6 +28,7 @@ import com.mtd.domain.model.error.ApiError
 import com.mtd.domain.model.error.ApiException
 import org.web3j.utils.Numeric
 import javax.inject.Inject
+import timber.log.Timber
 import kotlin.collections.find
 import kotlin.collections.isNotEmpty
 import kotlin.collections.map
@@ -550,15 +551,42 @@ class WalletRepositoryImpl @Inject constructor(
         }
 
 
+        /**
+         * آدرسِ کیف‌پولِ فعال روی یک شبکه.
+         *
+         * اول از کلیدهای ذخیره‌شده خوانده می‌شود (مسیرِ سریع و رفتارِ قبلی، بدون تماس با
+         * SecureStorage). اگر نبود، آدرس همان‌جا از روی سکرت مشتق می‌شود: `wallet.keys` لحظهٔ ساختِ
+         * کیف‌پول تولید شده و برای شبکه‌هایی که بعداً از باندلِ امضاشده آمده‌اند ورودی ندارد. بدون
+         * این fallback، `null` برمی‌گشت و ارسال/تبدیل روی آن شبکه اصلاً شروع نمی‌شد —
+         * [com.mtd.data.repository.transfer.UnifiedTransferCoordinator] و هر دو هماهنگ‌کنندهٔ
+         * gasless از همین‌جا آدرس می‌گیرند.
+         *
+         * مشتق‌کردن با `networkId` انجام می‌شود نه `NetworkType`: دوج‌کوین و لایت‌کوین هر دو `UTXO`
+         * هستند و آدرسشان یکی نیست.
+         */
         override suspend fun getActiveAddressForNetwork(networkId: String): String? {
-            // دریافت کیف پول فعال
             val activeWallet = activeWalletManager.activeWallet.value ?: return null
-
-            // پیدا کردن آبجکت شبکه از روی ID
             val networkInfo = blockchainRegistry.getNetworkById(networkId) ?: return null
 
-            // پیدا کردن آدرس کیف پول در شبکه مورد نظر از لیست کلیدها
-            return activeWallet.keys.find { it.networkId == networkInfo.id }?.address
+            activeWallet.keys.find { it.networkId == networkInfo.id }?.address?.let { return it }
+
+            return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val metadata = getWalletsMetadata().find { it.id == activeWallet.id }
+                        ?: return@runCatching null
+                    val secret = secureStorage.getDecrypted(getSecretKey(activeWallet.id))
+                        ?: return@runCatching null
+
+                    if (metadata.isMnemonic) {
+                        keyManager.generateKeyForNetworkId(secret, networkInfo.id)?.address
+                    } else {
+                        keyManager.generateWalletKeysFromPrivateKey(secret)
+                            .find { it.networkId == networkInfo.id }?.address
+                    }
+                }.onFailure {
+                    Timber.w(it, "Could not derive an address for %s", networkInfo.id)
+                }.getOrNull()
+            }
         }
 
         override suspend fun getBalancesForMultipleWallets(
@@ -583,10 +611,7 @@ class WalletRepositoryImpl @Inject constructor(
 
                         val address = if (metadata.isMnemonic) {
                             // تولید آدرس از کلمات بازیابی برای شبکه خاص
-                            keyManager.generateKeyForNetwork(
-                                secret,
-                                chainConfig.networkType
-                            )?.address
+                            keyManager.generateKeyForNetworkId(secret, chainConfig.id)?.address
                         } else {
                             // تولید از کلید خصوصی
                             keyManager.generateWalletKeysFromPrivateKey(secret)

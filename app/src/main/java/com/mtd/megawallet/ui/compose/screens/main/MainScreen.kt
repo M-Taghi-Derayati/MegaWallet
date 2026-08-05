@@ -66,6 +66,7 @@ import com.mtd.megawallet.ui.compose.screens.history.TransactionHistoryScreen
 import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetailsBottomSheet
 import com.mtd.megawallet.ui.compose.screens.send.SendScreen
 import com.mtd.megawallet.ui.compose.screens.swap.SwapFlowScreen
+import com.mtd.megawallet.ui.compose.screens.tokens.ManageTokensSheet
 import com.mtd.megawallet.ui.compose.screens.wallet.AssetDetailScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.MultiWalletScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.ReceiveScreen
@@ -92,7 +93,6 @@ fun MainScreen(
     mainViewModel: MainScreenViewModel = hiltViewModel(),
     homeViewModel: HomeViewModel = hiltViewModel(),
     onNavigateToWalletManagement: () -> Unit = {},
-    onSearchClick: () -> Unit = {},
     onMoreOptionsClick: () -> Unit = {},
     onFabClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {},
@@ -118,7 +118,6 @@ fun MainScreen(
         walletColor = activeWallet?.color?.let { Color(it) }
             ?: MaterialTheme.colorScheme.primary,
         onNavigateToWalletManagement = onNavigateToWalletManagement,
-        onSearchClick = { mainViewModel.toggleConnectionMode() },
         onMoreOptionsClick = onMoreOptionsClick,
         onHistoryClick = onHistoryClick,
         onExploreClick = onExploreClick,
@@ -142,7 +141,6 @@ private fun MainDashboardContent(
     walletName: String,
     walletColor: Color,
     onNavigateToWalletManagement: () -> Unit,
-    onSearchClick: () -> Unit,
     onMoreOptionsClick: () -> Unit,
     onHistoryClick: () -> Unit,
     onExploreClick: () -> Unit,
@@ -207,6 +205,8 @@ private fun MainDashboardContent(
     var showReceiveScreen by rememberSaveable { mutableStateOf(false) }
     var showSwapScreen by rememberSaveable { mutableStateOf(false) }
     var showMultiWalletScreen by rememberSaveable { mutableStateOf(false) }
+    // شیتِ مدیریتِ توکن (ذره‌بینِ هدر). مثل بقیهٔ اورلی‌ها ناوبری است، پس از مرگِ پروسه جان می‌برد.
+    var showManageTokens by rememberSaveable { mutableStateOf(false) }
 
     // Item 6 — اورلیِ اسکنرِ QR (transient، پس remember ساده کافی است).
     var showScanner by remember { mutableStateOf(false) }
@@ -247,8 +247,10 @@ private fun MainDashboardContent(
     }
 
     // مدیریت دکمه Back برای بستن لایه‌های مختلف
-    BackHandler(enabled = showSendScreen || showSwapScreen || showMultiWalletScreen || showReceiveScreen || showCreateWalletScreen || showImportWalletScreen || selectedAssetId != null) {
+    BackHandler(enabled = showManageTokens || showSendScreen || showSwapScreen || showMultiWalletScreen || showReceiveScreen || showCreateWalletScreen || showImportWalletScreen || selectedAssetId != null) {
         when {
+            // بالاترین اولویت: شیت روی همه‌چیز باز می‌شود، پس Back باید اول همان را ببندد.
+            showManageTokens -> showManageTokens = false
             showSendScreen -> showSendScreen = false
             // پشتیبان: تا وقتی فلوی تبدیل کامپوز است، BackHandlerِ خودش (که بین فازها عقب می‌رود)
             // اولویت دارد؛ این شاخه فقط برای بازهٔ انیمیشنِ خروج است.
@@ -381,7 +383,10 @@ private fun MainDashboardContent(
                         walletColor = walletColor,
                         onWalletClick = { showMultiWalletScreen = true },
                         onScanClick = { showScanner = true },
-                        onSearchClick = onSearchClick,
+                        // ضربه: مدیریت توکن. نگه‌داشتن: تعویضِ DIRECT/PROXY — که کارِ قبلیِ همین
+                        // آیکون بود و حذف نشده، فقط از ضربه به نگه‌داشتن منتقل شده.
+                        onSearchClick = { showManageTokens = true },
+                        onToggleConnectionMode = { mainViewModel.toggleConnectionMode() },
                         onMoreOptionsClick = onMoreOptionsClick,
                         onCurrencyToggle = onCurrencyToggle,
                         connectionMode = connectionMode,
@@ -586,6 +591,14 @@ private fun MainDashboardContent(
                 }
             )
         }
+
+        // --- لایه ۳.۶: شیتِ مدیریتِ توکن (root-level) ---
+        // مثل شیتِ جزئیاتِ تراکنش بیرون از Scaffold رندر می‌شود تا scrim و ارتفاعش نویگیشنِ پایین
+        // را هم بپوشاند؛ داخل innerPadding بالای نوار قیچی می‌شد.
+        ManageTokensSheet(
+            visible = showManageTokens,
+            onDismiss = { showManageTokens = false }
+        )
 
         // --- لایه ۳.۵: History Transaction Details Sheet (root-level, full-screen overlay) ---
         // Rendered here — outside the Scaffold — so its full-screen scrim covers the bottom navigation

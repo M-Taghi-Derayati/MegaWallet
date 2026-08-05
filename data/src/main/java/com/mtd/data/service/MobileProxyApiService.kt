@@ -7,6 +7,7 @@ import com.mtd.data.dto.BatchNetworkBalanceDto
 import com.mtd.data.dto.BroadcastDto
 import com.mtd.data.dto.BroadcastRequestDto
 import com.mtd.data.dto.FeeOptionsDto
+import com.mtd.data.dto.HeldTokensRequestDto
 import com.mtd.data.dto.HistoryRequestDto
 import com.mtd.data.dto.HistoryResponseDto
 import com.mtd.data.dto.MonitoringSubscribeRequestDto
@@ -16,6 +17,7 @@ import com.mtd.data.dto.PrepareTxDto
 import com.mtd.data.dto.PrepareContractCallRequestDto
 import com.mtd.data.dto.PrepareTxRequestDto
 import com.mtd.data.dto.ProxyEnvelope
+import com.mtd.data.dto.TokenListDto
 import com.mtd.data.dto.TxDetailDto
 import com.mtd.data.dto.TxStatusDto
 import retrofit2.Response
@@ -58,6 +60,25 @@ interface MobileProxyApiService {
     suspend fun monitoringSubscribe(
         @Body body: MonitoringSubscribeRequestDto
     ): Response<MonitoringSubscribeResponseDto>
+
+    // §5 — کشفِ توکن. باندلِ امضاشده فقط مجموعهٔ curated را می‌آورد؛ بقیهٔ جهانِ توکن‌ها سمتِ سرور
+    // است و کلاینت به‌درخواست کشفشان می‌کند. توکنی که `id: null` برمی‌گردد در کاتالوگِ ما نیست و
+    // فقط با `contractAddress` قابلِ استفاده است — و هرگز از مسیرِ gasless (فهرستِ جداگانه و curated).
+
+    /** توکن‌هایی که این آدرس قبلاً با آن‌ها تراکنش داشته — از تاریخچهٔ ایندکس‌شده، بدونِ تماسِ زنجیره‌ای. */
+    @POST("api/mobile/v1/networks/{networkId}/tokens/held")
+    suspend fun heldTokens(
+        @Path("networkId") networkId: String,
+        @Body body: HeldTokensRequestDto
+    ): Response<ProxyEnvelope<TokenListDto>>
+
+    /** جست‌وجو در کلِ جهانِ توکن‌ها با نماد / نام / آدرسِ دقیقِ قرارداد. */
+    @GET("api/mobile/v1/networks/{networkId}/tokens/search")
+    suspend fun searchTokens(
+        @Path("networkId") networkId: String,
+        @Query("q") query: String,
+        @Query("limit") limit: Int? = null
+    ): Response<ProxyEnvelope<TokenListDto>>
 
     @GET("api/mobile/v1/networks/{networkId}/fees/options")
     suspend fun feeOptions(
