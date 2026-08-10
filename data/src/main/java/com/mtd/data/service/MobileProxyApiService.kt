@@ -18,6 +18,9 @@ import com.mtd.data.dto.PrepareContractCallRequestDto
 import com.mtd.data.dto.PrepareTxRequestDto
 import com.mtd.data.dto.ProxyEnvelope
 import com.mtd.data.dto.TokenListDto
+import com.mtd.data.dto.TokenPricesDto
+import com.mtd.data.dto.TokenPricesRequestDto
+import com.mtd.data.dto.TokenResolveDto
 import com.mtd.data.dto.TxDetailDto
 import com.mtd.data.dto.TxStatusDto
 import retrofit2.Response
@@ -65,6 +68,20 @@ interface MobileProxyApiService {
     // است و کلاینت به‌درخواست کشفشان می‌کند. توکنی که `id: null` برمی‌گردد در کاتالوگِ ما نیست و
     // فقط با `contractAddress` قابلِ استفاده است — و هرگز از مسیرِ gasless (فهرستِ جداگانه و curated).
 
+    /**
+     * **فهرستِ پیش‌فرضِ** یک شبکه با یک فراخوانی: کاتالوگِ امضاشده + رتبهٔ ارزشِ بازارِ همان زنجیره
+     * + توکن‌های واقعاً داشتهٔ [address]، یکتاشده و مرتب‌شده.
+     *
+     * ترتیبِ آرایه حفظ شود — verified اول، بعد رتبه. جایگزینِ فهرستی است که خودمان از باندل +
+     * held سرِ هم می‌کردیم.
+     */
+    @GET("api/mobile/v1/networks/{networkId}/tokens")
+    suspend fun defaultTokens(
+        @Path("networkId") networkId: String,
+        @Query("address") address: String? = null,
+        @Query("limit") limit: Int? = null
+    ): Response<ProxyEnvelope<TokenListDto>>
+
     /** توکن‌هایی که این آدرس قبلاً با آن‌ها تراکنش داشته — از تاریخچهٔ ایندکس‌شده، بدونِ تماسِ زنجیره‌ای. */
     @POST("api/mobile/v1/networks/{networkId}/tokens/held")
     suspend fun heldTokens(
@@ -79,6 +96,55 @@ interface MobileProxyApiService {
         @Query("q") query: String,
         @Query("limit") limit: Int? = null
     ): Response<ProxyEnvelope<TokenListDto>>
+
+    /**
+     * همان جست‌وجو، ولی روی همهٔ زنجیره‌ها. هر عنصرِ نتیجه `networkId` خودش را همراه دارد —
+     * برخلافِ مسیرِ per-network، این‌جا فراخوان شبکه را از قبل نمی‌داند.
+     */
+    @GET("api/mobile/v1/tokens/search")
+    suspend fun searchTokensAllNetworks(
+        @Query("q") query: String,
+        @Query("limit") limit: Int? = null
+    ): Response<ProxyEnvelope<TokenListDto>>
+
+    /**
+     * یافتنِ یک آدرسِ قرارداد روی هر زنجیره‌ای که می‌شناسد.
+     *
+     * می‌تواند **چند** نتیجه بدهد: همان آدرس روی چند زنجیرهٔ EVM مستقر می‌شود و این حالت نادر
+     * نیست. انتخاب با کاربر است، نه اولین عنصر.
+     */
+    @GET("api/mobile/v1/tokens/resolve/{address}")
+    suspend fun resolveToken(
+        @Path("address") address: String
+    ): Response<ProxyEnvelope<TokenListDto>>
+
+    /**
+     * همان resolve وقتی شبکه از قبل معلوم است: catalog → فهرستِ آینه‌ای → `eth_call` روی خودِ
+     * قرارداد. یعنی هر ERC-20ِ واقعی import می‌شود، نه فقط فهرست‌شده‌ها.
+     *
+     * `404 ASSET_NOT_FOUND` یعنی در آن آدرس توکنِ خواندنی نیست — import باید رد شود، نه اینکه
+     * `decimals` حدس زده شود. [walletAddress] در همین فراخوانی برای مانیتورینگ ثبت می‌شود.
+     *
+     * ⚠️ آدرس عیناً پاس داده می‌شود؛ `@Path` را encode نکنید و lowercase هم نکنید — base58ِ ترون
+     * حساس به حروف است و شکلِ lowercase آن قابلِ بازسازی نیست.
+     */
+    @GET("api/mobile/v1/networks/{networkId}/tokens/resolve/{contractAddress}")
+    suspend fun resolveTokenOnNetwork(
+        @Path("networkId") networkId: String,
+        @Path("contractAddress") contractAddress: String,
+        @Query("address") walletAddress: String? = null
+    ): Response<ProxyEnvelope<TokenResolveDto>>
+
+    /**
+     * قیمت بر اساسِ **آدرسِ قرارداد** — تنها مسیری که به توکنِ افزودهٔ کاربر (و به کلِ ترون) قیمت
+     * می‌دهد؛ `GET /api/v1/prices` با نماد کار می‌کند و فقط ارزهای اصلی را می‌شناسد.
+     *
+     * پاسخِ ناقص عادی است: `missing`ِ ناخالی شکستِ درخواست نیست.
+     */
+    @POST("api/mobile/v1/tokens/prices")
+    suspend fun tokenPrices(
+        @Body body: TokenPricesRequestDto
+    ): Response<ProxyEnvelope<TokenPricesDto>>
 
     @GET("api/mobile/v1/networks/{networkId}/fees/options")
     suspend fun feeOptions(

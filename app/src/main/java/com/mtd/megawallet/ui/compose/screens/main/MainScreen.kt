@@ -45,7 +45,6 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
@@ -53,11 +52,10 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.domain.model.BlockchainConnectionMode
-import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.CloudWalletItem
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.ImportData
-import com.mtd.megawallet.ui.compose.TestTags
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWalletScreen
 import com.mtd.megawallet.ui.compose.screens.createwallet.CreateWalletScreen
@@ -71,10 +69,10 @@ import com.mtd.megawallet.ui.compose.screens.wallet.AssetDetailScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.MultiWalletScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.ReceiveScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.WalletScreens
-import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.megawallet.viewmodel.CreateWalletViewModel
 import com.mtd.megawallet.viewmodel.HomeViewModel
 import com.mtd.megawallet.viewmodel.MainScreenViewModel
+import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
@@ -362,7 +360,6 @@ private fun MainDashboardContent(
         modifier = Modifier
             .fillMaxSize()
             .semantics { testTagsAsResourceId = true } // expose Compose testTags to UiAutomator (PERF-10)
-            .testTag(TestTags.MAIN_ROOT)
             .onGloballyPositioned { fullScreenRect = it.boundsInWindow() }
             .onSizeChanged { fullHeightPx = it.height } // اندازه‌گیری ارتفاع فیزیکی
     ) {
@@ -636,7 +633,7 @@ private fun MainDashboardContent(
                    androidx.compose.animation.scaleOut(targetScale = 0.9f, animationSpec = tween(300)),
             modifier = Modifier.zIndex(MainScreenConstants.ZLayer.MULTI_WALLET)
         ) {
-           MultiWalletScreen(
+            MultiWalletScreen(
                 onNavigateBack = { showMultiWalletScreen = false },
                 onAddNewWallet = {
                     // دیگر مولتی‌ولت را فورا نمی‌بندیم تا در پس‌زمینه بماند

@@ -34,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -95,6 +97,40 @@ internal fun TokenList(
 }
 
 
+
+/**
+ * نشانِ **منشأ** کنارِ نامِ توکن.
+ *
+ * ⚠️ `true` فقط یعنی «فهرستی که به آن اتکا می‌کنیم این قرارداد را روی این شبکه منتشر کرده» — نه
+ * ممیزی، نه تأییدِ مالی، نه توصیهٔ سرمایه‌گذاری؛ متنِ دسترس‌پذیری هم عمداً همین را می‌گوید و از
+ * «تأییدشده» پرهیز می‌کند.
+ *
+ * `false` فقط یک هشدارِ خنثاست و هیچ‌وقت ردیف را پنهان یا غیرفعال نمی‌کند: یک توکنِ واقعیِ تازه
+ * دقیقاً همین‌طور به نظر می‌رسد. `null` (همهٔ دارایی‌های باندل و صفحهٔ ارسال) یعنی چیزی اعلام نشده
+ * و هیچ نشانی گرفته نمی‌شود.
+ */
+@Composable
+private fun AssetProvenanceMark(verified: Boolean?) {
+    if (verified == null) return
+    Spacer(modifier = Modifier.width(4.dp))
+    Text(
+        text = if (verified) "•" else "!",
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = if (verified) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.error
+        },
+        modifier = Modifier.semantics {
+            contentDescription = if (verified) {
+                "ثبت‌شده در فهرست‌های معتبر"
+            } else {
+                "در فهرست‌های معتبر ثبت نشده"
+            }
+        }
+    )
+}
 
 @Composable
 private fun AssetListItems(
@@ -169,14 +205,17 @@ private fun AssetListItems(
         Column(
             modifier = Modifier.weight(1f)
         ) {
-            Text(
-                text = asset.faName ?: asset.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                fontFamily = IranSansBoldBold,
-                color = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = asset.faName ?: asset.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = IranSansBoldBold,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier
+                )
+                AssetProvenanceMark(verified = asset.verified)
+            }
 
             // انیمیشن موجودی: عدد خارج می‌شود، نماد جای آن را می‌گیرد
             Row(

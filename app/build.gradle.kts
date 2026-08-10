@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.android.hilt)
-
     alias(libs.plugins.android.ksp)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.google.services)
@@ -21,12 +20,10 @@ val hasReleaseSigningConfig = listOf(
 
 
 composeCompiler {
-    // PERF-02 — مدل‌های لیست‌شده در compose_stability.conf را stable در نظر بگیر
     stabilityConfigurationFiles.add(
         rootProject.layout.projectDirectory.file("compose_stability.conf")
     )
 
-    // PERF-01 — گزارشِ skippability هر composable + stability هر class (فقط دیباگ)
     metricsDestination = layout.buildDirectory.dir("compose_compiler")
     reportsDestination = layout.buildDirectory.dir("compose_compiler")
 }
@@ -77,16 +74,6 @@ android {
             )
         }
 
-        // PERF-10 — a non-debuggable, non-minified, debug-signed variant the :baselineprofile module
-        // benchmarks against (Macrobenchmark/BaselineProfileRule reject debuggable builds). Non-minified
-        // keeps the generated profile mapping clean; debug signing lets it install without release keys.
-        create("benchmark") {
-            initWith(getByName("debug"))
-            isMinifyEnabled = false
-            isShrinkResources = false
-            isDebuggable = false
-            signingConfig = signingConfigs.getByName("debug")
-        }
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -196,10 +183,6 @@ dependencies {
     implementation(libs.viewModel)
     implementation(libs.bundles.coroutines)
 
-
-    // PERF-10 — Baseline Profile: runtime installer (loads app/src/main/baseline-prof.txt at runtime;
-    // AGP bundles that file automatically once you drop the generated profile there).
-    implementation(libs.profileinstaller)
 
     // Item 6 — QR address scanner: CameraX preview + ML Kit barcode decoding
     implementation(libs.camera.core)

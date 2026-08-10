@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.ui.platform.testTag
-import com.mtd.megawallet.ui.compose.TestTags
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,7 +36,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,17 +60,9 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.R
-import com.mtd.domain.model.AssetItem
-import com.mtd.domain.model.FiatCurrency
-import com.mtd.domain.model.HomeUiState
-import com.mtd.domain.model.NetworkShare
-import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
-import com.mtd.megawallet.ui.compose.components.AnimatedCounter
 import com.mtd.common_ui.theme.AssetIcon
-import com.mtd.common_ui.theme.NetworkIcon
-import com.mtd.megawallet.viewmodel.HomeViewModel
-import java.math.BigDecimal
 import com.mtd.common_ui.theme.InterBoldBold
 import com.mtd.common_ui.theme.InterRegularMedium
 import com.mtd.common_ui.theme.IranSansBoldBold
@@ -81,6 +70,15 @@ import com.mtd.common_ui.theme.IranSansLight
 import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.common_ui.theme.IranSansRegularBold
 import com.mtd.common_ui.theme.IranSansRegularMedium
+import com.mtd.common_ui.theme.NetworkIcon
+import com.mtd.domain.model.AssetItem
+import com.mtd.domain.model.FiatCurrency
+import com.mtd.domain.model.HomeUiState
+import com.mtd.domain.model.NetworkShare
+import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
+import com.mtd.megawallet.ui.compose.components.AnimatedCounter
+import com.mtd.megawallet.viewmodel.HomeViewModel
+import java.math.BigDecimal
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -128,7 +126,7 @@ fun WalletScreens(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize().testTag(TestTags.WALLET_LIST),
+                            modifier = Modifier.fillMaxSize(),
                             userScrollEnabled = userScrollEnabled
                         ) {
                             // بخش موجودی کل
@@ -145,7 +143,6 @@ fun WalletScreens(
                                 )
                             }
 
-                            // تب‌ها و قیمت تتر
                             // تب‌ها و قیمت تتر
                             item {
                                 Row(

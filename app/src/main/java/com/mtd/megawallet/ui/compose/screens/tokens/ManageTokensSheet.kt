@@ -63,8 +63,9 @@ import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.components.SearchInputField
 import com.mtd.megawallet.viewmodel.tokens.ManageTokensViewModel
 import com.mtd.megawallet.viewmodel.tokens.NetworkOption
-import com.mtd.megawallet.viewmodel.tokens.TokenRowSource
 import com.mtd.megawallet.viewmodel.tokens.TokenRowUi
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 /**
  * شیتِ مدیریتِ توکن — از آیکونِ ذره‌بینِ هدر باز می‌شود.
@@ -148,15 +149,20 @@ fun ManageTokensSheet(
                 SearchInputField(
                     value = state.query,
                     label = "جست‌وجو",
-                    placeholder = "نماد، نام یا آدرس قرارداد",
+                    placeholder = "نماد، نام یا آدرس قرارداد — در همهٔ شبکه‌ها",
                     onValueChange = viewModel::onQueryChange
                 )
 
                 if (state.isContractQuery) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "آدرس قرارداد شناسایی شد — نتیجه را از فهرست انتخاب کنید",
-                        color = MaterialTheme.colorScheme.onTertiary,
+                        text = if (state.hasMultipleResolveMatches) {
+                            "این آدرس روی چند شبکه پیدا شد — شبکهٔ درست را خودتان انتخاب کنید"
+                        } else {
+                            "آدرس قرارداد شناسایی شد — نتیجه را از فهرست انتخاب کنید"
+                        },
+                        color = if (state.hasMultipleResolveMatches) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onTertiary,
                         fontFamily = IranSansLight,
                         fontSize = 12.sp
                     )
@@ -239,43 +245,115 @@ private fun SheetHeader(onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * چیپِ اولِ فهرست «همهٔ شبکه‌ها» است و پیش‌فرض هم همان است — انتخابِ شبکه یک باریک‌کننده است،
+ * نه قدمی که کاربر قبل از جست‌وجو مجبور به برداشتنش باشد.
+ */
 @Composable
 private fun NetworkChips(
     networks: List<NetworkOption>,
     selectedNetworkId: String?,
-    onSelect: (String) -> Unit
+    onSelect: (String?) -> Unit
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        item(key = "__all__") {
+            NetworkChip(
+                label = "همهٔ شبکه‌ها",
+                iconUrl = null,
+                selected = selectedNetworkId == null,
+                onClick = { onSelect(null) }
+            )
+        }
         items(items = networks, key = { it.id }) { network ->
-            val selected = network.id == selectedNetworkId
-            Row(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                    )
-                    .clickable { onSelect(network.id) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                NetworkIcon(
-                    iconUrl = network.iconUrl,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = network.label,
-                    color = if (selected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.tertiary,
-                    fontFamily = IranSansRegular,
-                    fontSize = 13.sp,
-                    maxLines = 1
-                )
-            }
+            NetworkChip(
+                label = network.label,
+                iconUrl = network.iconUrl,
+                selected = network.id == selectedNetworkId,
+                onClick = { onSelect(network.id) }
+            )
         }
     }
+}
+
+@Composable
+private fun NetworkChip(
+    label: String,
+    iconUrl: String?,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (iconUrl != null) {
+            NetworkIcon(
+                iconUrl = iconUrl,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Text(
+            text = label,
+            color = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.tertiary,
+            fontFamily = IranSansRegular,
+            fontSize = 13.sp,
+            maxLines = 1
+        )
+    }
+}
+
+/** قیمتِ نامعلوم. `$0` نیست و نباید بشود — «نمی‌دانیم» با «بی‌ارزش» یکی نیست. */
+private const val PRICE_UNKNOWN = "—"
+
+/**
+ * نشانِ **منشأ**، نه نشانِ ایمنی.
+ *
+ * `true` ⇒ «ثبت‌شده در فهرست‌های معتبر». عمداً «تأییدشده» نوشته نمی‌شود: آن کلمه در بافتِ مالی
+ * یعنی ممیزی یا توصیه، و این فقط یعنی «فهرستی که به آن اتکا می‌کنیم این قرارداد را منتشر کرده».
+ * یک توکن می‌تواند ثبت‌شده باشد و تمامِ ارزشش را از دست بدهد.
+ *
+ * `false` ⇒ هشدارِ **خنثی**، نه اتهام: یک توکنِ واقعیِ تازه یا کم‌مخاطب هم دقیقاً همین‌طور است.
+ * هیچ‌وقت باعثِ پنهان‌شدن یا غیرفعال‌شدنِ کلیدِ افزودن نمی‌شود.
+ *
+ * `null` ⇒ سرور چیزی نگفته (همهٔ ردیف‌های باندل)، پس نه نشان و نه هشدار.
+ */
+@Composable
+private fun VerifiedLabel(verified: Boolean?) {
+    if (verified == null) return
+
+    Spacer(modifier = Modifier.height(3.dp))
+    Text(
+        text = if (verified) {
+            "ثبت‌شده در فهرست‌های معتبر"
+        } else {
+            "این توکن در فهرست‌های معتبر ثبت نشده — قبل از افزودن آدرس کانترکت را بررسی کنید"
+        },
+        color = if (verified) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onTertiary,
+        fontFamily = IranSansLight,
+        fontSize = 10.sp,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis
+    )
+}
+
+/**
+ * قیمتِ یک توکن. توکن‌های بی‌ارزش قیمتشان چند رقم بعد از اعشار صفر است، پس دو رقمِ ثابت همه را
+ * `$0.00` نشان می‌داد — که از «بی‌قیمت» قابلِ تشخیص نیست، دقیقاً همان اشتباهی که `—` برای رفعش هست.
+ */
+private fun formatTokenPrice(price: BigDecimal): String {
+    val scale = if (price < BigDecimal("0.01")) 6 else 2
+    return price.setScale(scale, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
 }
 
 @Composable
@@ -309,24 +387,37 @@ private fun TokenManageRow(
                         fontFamily = InterRegular,
                         fontSize = 16.sp
                     )
-                    if (row.source == TokenRowSource.HELD) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "دارایی شما",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontFamily = IranSansLight,
-                            fontSize = 10.sp
-                        )
-                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    // قیمتِ نامعلوم «—» است و نه `$0`؛ سرور قیمت‌های ساختگیِ استخرهای بی‌نقدینگی را
+                    // عمداً حذف می‌کند و صفر گرفتنِ آن یعنی دارایی کاربر بی‌صدا آب می‌رود.
+                    Text(
+                        text = row.priceUsd?.let { "$${formatTokenPrice(it)}" } ?: PRICE_UNKNOWN,
+                        color = MaterialTheme.colorScheme.onTertiary,
+                        fontFamily = InterRegular,
+                        fontSize = 12.sp,
+                        maxLines = 1
+                    )
                 }
-                Text(
-                    text = row.name,
-                    color = MaterialTheme.colorScheme.onTertiary,
-                    fontFamily = IranSansLight,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // نامِ شبکه در نمای cross-network تزیین نیست: دو ردیفِ «USDT» فقط با همین از هم
+                // تشخیص داده می‌شوند، و انتخابِ زنجیرهٔ اشتباه یعنی توکنی بدونِ موجودی.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    NetworkIcon(
+                        iconUrl = row.networkIconUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${row.networkLabel} · ${row.name}",
+                        color = MaterialTheme.colorScheme.onTertiary,
+                        fontFamily = IranSansLight,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                VerifiedLabel(verified = row.verified)
             }
         }
 
@@ -354,7 +445,10 @@ private fun TokenManageRow(
             } else {
                 Icon(
                     imageVector = if (added) Icons.Default.Check else Icons.Default.Add,
-                    contentDescription = if (added) "پنهان کردن ${row.symbol}" else "افزودن ${row.symbol}",
+                    // شبکه در توضیح می‌آید چون در نمای cross-network چند ردیفِ هم‌نماد وجود دارد
+                    // و بدونِ آن دو کلیدِ متفاوت برای screen reader یکسان اعلام می‌شوند.
+                    contentDescription = if (added) "پنهان کردن ${row.symbol} روی ${row.networkLabel}"
+                    else "افزودن ${row.symbol} روی ${row.networkLabel}",
                     tint = if (added) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.tertiary,
                     modifier = Modifier.size(18.dp)

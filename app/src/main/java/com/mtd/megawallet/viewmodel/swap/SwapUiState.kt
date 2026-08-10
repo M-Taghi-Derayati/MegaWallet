@@ -8,10 +8,15 @@ import com.mtd.domain.model.FeeOption
 import com.mtd.domain.model.SwapFees
 import com.mtd.domain.model.SwapQuote
 import com.mtd.domain.model.SwapRoute
+import com.mtd.domain.model.core.NetworkType
+import com.mtd.domain.model.swap.SwapExecutionOutcome
 import com.mtd.domain.model.swap.SwapExecutionProgress
+import com.mtd.domain.model.swap.isCrossAddressFamily
+import com.mtd.domain.model.swap.sameSwapAddress
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
+import java.util.Locale
 
 /**
  * فازهای فلوی تبدیل. یک ستونِ واحد است که بینِ این فازها morph می‌شود، نه چند صفحهٔ جدا.
@@ -35,8 +40,40 @@ data class SwapTokenOption(
     val iconUrl: String?,
     val networkIconUrl: String?,
     val decimals: Int,
-    val contractAddress: String?
-)
+    val contractAddress: String?,
+    /**
+     * ⚠️ توکنی که در باندلِ کیوریت‌شده نیست (`SwapToken.id == null`) قابلِ تبدیل هست ولی کارمزدش
+     * اسپانسر نمی‌شود. این پرچم تا لحظهٔ ساختِ تراکنش حمل می‌شود تا مسیرِ گس‌لس برایش پیشنهاد نشود.
+     */
+    val isSponsorable: Boolean = true,
+    /**
+     * نشانِ **منشأ** (`SwapToken.verified`) — نه ایمنی و نه ممیزی، و هرگز مانعِ تبدیل نیست.
+     * `null` یعنی منبع چیزی اعلام نکرده.
+     */
+    val verified: Boolean? = null
+) {
+    /**
+     * آیا این دقیقاً همان توکن روی همان شبکه است. با [id] مقایسه نمی‌شود: سمتِ پرداخت شناسه‌اش
+     * از کاتالوگِ اپ می‌آید و سمتِ دریافت از فهرستِ سرور، پس دو رشتهٔ متفاوت برای یک توکن.
+     */
+    fun isSameTokenAs(other: SwapTokenOption): Boolean =
+        networkId.equals(other.networkId, ignoreCase = true) &&
+            (contractAddress ?: "").equals(other.contractAddress ?: "", ignoreCase = true)
+}
+
+/** وضعیتِ جست‌وجو در جهانِ قابل‌تبدیل. خالی‌بودنِ نتیجه با «هنوز نرسیده» یکی نیست. */
+sealed interface SwapTokenSearchState {
+    data object Idle : SwapTokenSearchState
+    data object Loading : SwapTokenSearchState
+    data class Failed(val message: String) : SwapTokenSearchState
+}
+
+/** وضعیتِ «افزودن با چسباندن آدرس». */
+sealed interface SwapImportState {
+    data object Idle : SwapImportState
+    data object Loading : SwapImportState
+    data class Failed(val message: String) : SwapImportState
+}
 
 /** یک توکنِ قابلِ پرداخت، همراه با موجودیِ واقعیِ کاربر در **کوچک‌ترین واحد**. */
 data class SwapPayToken(
@@ -105,8 +142,50 @@ data class SwapUiState(
     // ── انتخاب توکن دریافت ──
     val receiveSheetVisible: Boolean = false,
     val receiveQuery: String = "",
-    val receiveTokens: List<SwapTokenOption> = emptyList(),
+    /**
+     * یک ردیف به ازای هر **توکن** (نه هر جفتِ توکن-شبکه)؛ سرگروه‌ها `groupAssets` دارند و انتخابِ
+     * شبکه در شیتِ بعدی انجام می‌شود. همان نوعی که فهرستِ صفحهٔ ارسال مصرف می‌کند.
+     */
+    val receiveTokens: List<AssetItem> = emptyList(),
+    val receiveSearchState: SwapTokenSearchState = SwapTokenSearchState.Idle,
     val receiveToken: SwapTokenOption? = null,
+    /**
+     * فهرستِ پیش‌فرض از آینهٔ سرور نیامد (۵۰۳ یا قطعی) و به دارایی‌های کاربر + باندل عقب‌نشینی شد.
+     * فقط برای گفتنِ همین به کاربر است؛ خودِ فهرست همچنان قابل استفاده است.
+     */
+    val receiveListFellBack: Boolean = false,
+
+    // ── افزودن با آدرس ──
+    val importQuery: String = "",
+    val importState: SwapImportState = SwapImportState.Idle,
+
+    // ── آدرسِ مقصد (گیرندهٔ خروجی) ──
+    /**
+     * خانوادهٔ آدرسِ دو سر. وقتی فرق دارند (TRON ↔ EVM) آدرسِ مقصد **اجباری** است، چون آدرسِ
+     * فرستنده روی زنجیرهٔ مقصد اصلاً آدرس نیست.
+     */
+    val payNetworkType: NetworkType? = null,
+    val receiveNetworkType: NetworkType? = null,
+    /** متنِ قابلِ ویرایشِ آدرسِ مقصد. پیش‌فرض آدرسِ خودِ کاربر روی شبکهٔ مقصد است. */
+    val destinationInput: String = "",
+    /** آدرسِ خودِ کیف‌پول روی شبکهٔ مقصد، اگر داشته باشد. مبنای «به کیف‌پول خودم». */
+    val destinationOwnAddress: String? = null,
+    /** خطای اعتبارسنجیِ **سمتِ کلاینت**. `null` یعنی آدرس برای شبکهٔ مقصد معتبر است. */
+    val destinationError: String? = null,
+    val destinationEditing: Boolean = false,
+    /** آدرسِ مبدأ که استعلام با آن گرفته شد؛ برای تشخیصِ «گیرنده کسِ دیگری است». */
+    val senderAddress: String? = null,
+
+    /**
+     * شبکه‌هایی که تبدیل/پل رویشان کار می‌کند (`GET /api/v1/swap/chains`).
+     *
+     * [swapChainsLoaded] عمداً جداست: مجموعهٔ خالی وقتی هنوز پاسخی نیامده یعنی «نمی‌دانیم»، نه
+     * «هیچ‌جا کار نمی‌کند». گِیت‌کردن بر مبنای ندانستن، فهرستِ خالی به کاربر نشان می‌دهد.
+     *
+     * این محدودیت فقط ورودیِ تبدیل را می‌بندد؛ تست‌نت‌ها در بقیهٔ اپ دست‌نخورده‌اند.
+     */
+    val swappableNetworkIds: Set<String> = emptySet(),
+    val swapChainsLoaded: Boolean = false,
 
     // ── استعلام ──
     val slippageBps: Int = DEFAULT_SLIPPAGE_BPS,
@@ -133,15 +212,80 @@ data class SwapUiState(
 ) {
 
     /**
-     * جفتِ بین‌شبکه‌ای. `SwapQuoteRequest` دو شبکه را جدا می‌گیرد، ولی ریلِ اجرا
-     * (`TransactionParams.Evm`) فقط یک `networkId` دارد؛ پس این حالت در UI صریحاً رد می‌شود.
+     * پل: مبدأ و مقصد روی دو شبکهٔ متفاوت.
+     *
+     * درخواست و پاسخِ `/quote` دقیقاً همان تبدیلِ درون‌زنجیره‌ای است و ریلِ اجرا هم مشکلی ندارد،
+     * چون تراکنشِ امضاشده فقط روی **شبکهٔ مبدأ** ارسال می‌شود. فرقِ واقعی در تسویه است و در
+     * [isBridgeSettlementPending] توضیح داده شده.
      */
-    val isCrossNetwork: Boolean
+    val isBridge: Boolean
         get() {
+            // اولویت با چیزی است که خودِ مسیر اعلام کرده؛ اگر سرور شبکه‌ها را برنگرداند، انتخابِ
+            // کاربر همان اطلاعات را دارد.
+            readyRoute?.let { route ->
+                if (route.fromNetwork != null && route.toNetwork != null) return route.isBridge
+            }
             val from = payToken?.option?.networkId ?: return false
             val to = receiveToken?.networkId ?: return false
-            return from != to
+            return !from.equals(to, ignoreCase = true)
         }
+
+    /** نامِ پلِ زیرین برای نمایش (`lifiIntents`، `near`، …). */
+    val bridgeTool: String?
+        get() = readyRoute?.tool?.takeIf { isBridge && it.isNotBlank() }
+
+    // ── آدرسِ مقصد ────────────────────────────────────────────────────────────
+
+    /**
+     * آیا برای این جفت، آدرسِ مقصد **اجباری** است.
+     *
+     * فقط وقتی دو سر دو قالبِ آدرسِ متفاوت دارند: آدرسِ EVM هگز است و آدرسِ ترون base58، پس
+     * پیش‌فرض‌گرفتنِ آدرسِ فرستنده روی زنجیرهٔ مقصد یعنی فرستادنِ پول به جایی که هیچ کلیدی
+     * نمی‌تواند خرجش کند. برای EVM→EVM همان رفتارِ قبلی برقرار است و چیزی لازم نیست.
+     */
+    val requiresDestinationAddress: Boolean
+        get() = isCrossAddressFamily(payNetworkType, receiveNetworkType)
+
+    /** آدرسِ مقصدی که می‌شود به سرور فرستاد: خالی نیست و اعتبارسنجیِ محلی را رد کرده. */
+    val usableDestinationAddress: String?
+        get() = destinationInput.trim()
+            .takeIf { it.isNotEmpty() && destinationError == null }
+
+    /** آیا مقصد همان کیف‌پولِ خودِ کاربر است (پیش‌فرضِ امن). */
+    val destinationIsOwnWallet: Boolean
+        get() = sameSwapAddress(usableDestinationAddress, destinationOwnAddress)
+
+    /**
+     * گیرنده‌ای که **سرور** اعلام کرده مسیر به آن پرداخت می‌کند — نه چیزی که کلاینت فرستاده.
+     * اولویت با خودِ مسیر است، چون `tx` مالِ همان است.
+     */
+    val quotedRecipient: String?
+        get() = readyRoute?.toAddress
+            ?: (quoteState as? SwapQuoteState.Ready)?.quote?.quotedToAddress
+
+    /**
+     * ⚠️ خروجی به کیف‌پولِ دیگری می‌رود. باید **قبل از** امضا دیده شود؛ این تنها موقعیتی است که
+     * کاربر دارایی‌اش را جایی می‌فرستد که خودش انتخابش کرده و ممکن است اشتباه باشد.
+     */
+    val recipientIsElsewhere: Boolean
+        get() {
+            val recipient = quotedRecipient ?: usableDestinationAddress ?: return false
+            val self = destinationOwnAddress
+            // مبدأ و مقصد وقتی هم‌خانواده‌اند با آدرسِ فرستنده مقایسه می‌شوند؛ در حالتِ بین‌خانوادگی
+            // آدرسِ فرستنده اصلاً قابلِ مقایسه نیست و ملاک، آدرسِ خودِ کاربر روی شبکهٔ مقصد است.
+            if (self != null) return !sameSwapAddress(recipient, self)
+            return !sameSwapAddress(recipient, senderAddress)
+        }
+
+    val destinationNetworkName: String?
+        get() = receiveToken?.networkName?.takeIf { it.isNotBlank() }
+
+    /**
+     * آیا شبکه‌ای که کاربر انتخاب کرده اصلاً تبدیل‌پذیر است. تا وقتی [swapChainsLoaded] نشده
+     * `true` برمی‌گرداند — نبودِ پاسخ دلیلِ بستنِ فلو نیست.
+     */
+    fun isNetworkSwappable(networkId: String): Boolean =
+        !swapChainsLoaded || swappableNetworkIds.contains(networkId.lowercase(Locale.US))
 
     /** مبلغِ پرداخت در کوچک‌ترین واحدِ توکنِ پرداخت. تنها مبلغی که به سرور می‌رود. */
     val amountRaw: BigInteger
@@ -190,12 +334,20 @@ data class SwapUiState(
     val collectedPlatformFee: SwapFees?
         get() = readyRoute?.fees?.takeIf { it.collected }
 
+    /**
+     * جفتِ بین‌خانوادگی بدونِ آدرسِ مقصدِ معتبر اصلاً استعلام نمی‌شود: سرور آن را با ۴۰۰ِ نام‌دار
+     * رد می‌کند، و مهم‌تر این‌که آدرسِ مقصد باید **قبل از** استعلام جمع شود — کشِ ۱۵ ثانیه‌ای
+     * سرور به ازای هر مقصد جداست.
+     */
+    val destinationReady: Boolean
+        get() = !requiresDestinationAddress || usableDestinationAddress != null
+
     val canRequestQuote: Boolean
         get() = payToken != null &&
             receiveToken != null &&
-            !isCrossNetwork &&
             amountRaw.signum() > 0 &&
-            !exceedsBalance
+            !exceedsBalance &&
+            destinationReady
 
     val canContinueFromAmount: Boolean
         get() = canRequestQuote && quoteState is SwapQuoteState.Ready
@@ -205,8 +357,13 @@ data class SwapUiState(
             prepareState !is SwapPrepareState.Loading &&
             fee.selected?.gasPrice != null
 
-    val visibleReceiveTokens: List<SwapTokenOption>
-        get() = receiveTokens.filter { it.matches(receiveQuery) }
+    /**
+     * ⚠️ پل در **دو پا** تسویه می‌شود: پای مبدأ در چند ثانیه تأیید می‌شود، پای مقصد چند دقیقه بعد
+     * می‌نشیند. سرور هنوز پای مقصد را دنبال نمی‌کند، پس تأییدِ تراکنشِ مبدأ **به معنیِ رسیدنِ پول
+     * نیست** و نباید «انجام شد» نمایش داده شود.
+     */
+    val isBridgeSettlementPending: Boolean
+        get() = isBridge && execution?.outcome is SwapExecutionOutcome.Completed
 
     companion object {
         /** ۰٫۵٪ — همان پیش‌فرضی که سرور برای مسیریابی استفاده می‌کند. */
@@ -214,15 +371,6 @@ data class SwapUiState(
         val SLIPPAGE_CHOICES = listOf(10, 50, 100, 300)
         const val DEFAULT_QUOTE_TTL_MS = 15_000L
     }
-}
-
-private fun SwapTokenOption.matches(query: String): Boolean {
-    val q = query.trim()
-    if (q.isEmpty()) return true
-    return symbol.contains(q, ignoreCase = true) ||
-        name.contains(q, ignoreCase = true) ||
-        faName?.contains(q, ignoreCase = true) == true ||
-        networkName.contains(q, ignoreCase = true)
 }
 
 private fun String.toBigDecimalOrZero(): BigDecimal =
@@ -246,7 +394,21 @@ sealed interface SwapEvent {
     data object OpenReceiveSheet : SwapEvent
     data object DismissReceiveSheet : SwapEvent
     data class ReceiveQueryChanged(val query: String) : SwapEvent
-    data class ReceiveTokenSelected(val token: SwapTokenOption) : SwapEvent
+
+    /**
+     * انتخاب از فهرستِ دریافت. ورودی `AssetItem` است چون همان کامپوننتِ مشترکِ ارسال آن را
+     * منتشر می‌کند؛ سرگروه‌ها قبل از رسیدن به این‌جا در شیتِ شبکه باز شده‌اند.
+     */
+    data class ReceiveAssetSelected(val asset: AssetItem) : SwapEvent
+
+    data class ImportQueryChanged(val query: String) : SwapEvent
+    data object ImportSubmitted : SwapEvent
+
+    /** آدرسِ گیرندهٔ خروجی. متن دست‌نخورده می‌رسد: base58 ترون به حروف حساس است. */
+    data class DestinationAddressChanged(val address: String) : SwapEvent
+    data object DestinationEditorToggled : SwapEvent
+    /** برگشت به آدرسِ خودِ کیف‌پول روی شبکهٔ مقصد. */
+    data object DestinationResetToOwnWallet : SwapEvent
 
     data class SlippageChanged(val bps: Int) : SwapEvent
     data class FeeLevelSelected(val level: String) : SwapEvent

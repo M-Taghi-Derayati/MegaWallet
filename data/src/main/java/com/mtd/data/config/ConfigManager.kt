@@ -120,8 +120,9 @@ class ConfigManager @Inject constructor(
         /**
          * Lowest bundle version whose catalog is safe to use. Bump this only for a correctness fix
          * that a normal version check would not force onto an already-cached client — v1.0.41 fixed
-         * Base USDC's decimals (18 → 6).
+         * Base USDC's decimals (18 → 6), and v1.0.43 added USDC as a curated asset on 9 mainnet
+         * chains, which the swap picker relies on for its default (no-search) list.
          */
-        const val MIN_BUNDLE_VERSION = "1.0.41"
+        const val MIN_BUNDLE_VERSION = "1.0.43"
     }
 }

@@ -22,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mtd.common_ui.theme.MegaWalletTheme
@@ -30,7 +29,6 @@ import com.mtd.common_ui.theme.icons.AnimatedApertureIcon
 import com.mtd.common_ui.theme.icons.AnimatedClockIcon
 import com.mtd.common_ui.theme.icons.AnimatedWalletIcon
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
-import com.mtd.megawallet.ui.compose.TestTags
 
 /**
  * Navigation Bottom Sheet - طراحی شده دقیقاً بر اساس عکس ارسالی
@@ -70,14 +68,14 @@ fun MainBottomNavigation(
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
-                Box(modifier = Modifier.testTag(TestTags.NAV_EXPLORE)) {
+                Box(modifier = Modifier) {
                     AnimatedApertureIcon(
                         isFilled = selectedTab == MainTab.EXPLORE,
                         iconSize = MainScreenConstants.BOTTOM_NAV_ICON_SIZE,
                         onClick = onExploreClick
                     )
                 }
-                Box(modifier = Modifier.testTag(TestTags.NAV_WALLET)) {
+                Box(modifier = Modifier) {
                     AnimatedWalletIcon(
                         isFilled = selectedTab == MainTab.WALLET,
                         iconSize = MainScreenConstants.BOTTOM_NAV_ICON_SIZE,
@@ -89,7 +87,7 @@ fun MainBottomNavigation(
 
                 Box(
                     modifier = Modifier
-                        .testTag(TestTags.NAV_HISTORY)
+
                         .size(MainScreenConstants.BOTTOM_NAV_ITEM_SIZE)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },

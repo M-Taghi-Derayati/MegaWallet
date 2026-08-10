@@ -67,6 +67,25 @@ fun SwapPaySection(
     }
 }
 
+/**
+ * حذفِ شبکه‌هایی که سرویسِ تبدیل رویشان کار نمی‌کند، **قبل از** گروه‌بندی — تا سرگروهی که فقط
+ * زیرمجموعه‌های پشتیبانی‌نشده دارد اصلاً ساخته نشود.
+ *
+ * تا وقتی `/swap/chains` نیامده هیچ فیلتری اعمال نمی‌شود: نشان‌دادنِ فهرستِ خالی به‌خاطرِ پاسخی که
+ * هنوز نرسیده بدتر از نشان‌دادنِ گزینه‌ای است که ممکن است رد شود.
+ */
+internal fun List<AssetItem>.retainSwappableNetworks(state: SwapUiState): List<AssetItem> {
+    if (!state.swapChainsLoaded) return this
+    return mapNotNull { asset ->
+        if (asset.isGroupHeader) {
+            val kept = asset.groupAssets.filter { state.isNetworkSwappable(it.networkId) }
+            if (kept.isEmpty()) null else asset.copy(groupAssets = kept)
+        } else {
+            asset.takeIf { state.isNetworkSwappable(it.networkId) }
+        }
+    }
+}
+
 /** فیلترِ متنیِ فهرستِ پرداخت. گروه‌ها با نامِ خودشان پیدا می‌شوند، نه با نامِ زیرمجموعه‌ها. */
 internal fun List<AssetItem>.filterByPayQuery(query: String): List<AssetItem> {
     val q = query.trim()

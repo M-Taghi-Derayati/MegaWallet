@@ -7,7 +7,9 @@ plugins {
 
 val deviceAttestSecretTestnet = providers.gradleProperty("DEVICE_ATTEST_HMAC_SECRET_TESTNET").orNull
     ?: "6a15371d3f05309c9e8a52b893f23f3cb58027d1f2db70d58a0b57ad1c204533"
-val deviceAttestSecretMainnet = providers.gradleProperty("DEVICE_ATTEST_HMAC_SECRET_MAINNET").orNull ?: ""
+//TODO change this code for mainnet
+val deviceAttestSecretMainnet = providers.gradleProperty("DEVICE_ATTEST_HMAC_SECRET_MAINNET").orNull
+    ?: "6a15371d3f05309c9e8a52b893f23f3cb58027d1f2db70d58a0b57ad1c204533"
 
 android {
     namespace = "com.mtd.data"
@@ -19,16 +21,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
 
-        // TODO(TASK-11): pin the cert / public key (GET /api/v1/config/public-key) before Beta.
         buildConfigField("String", "RELAYER_BASE_URL", "\"https://wallet.intexchange.ir/\"")
         buildConfigField("String", "RELAYER_HOST", "\"wallet.intexchange.ir\"")
         buildConfigField("String", "RELAYER_WS_URL", "\"wss://wallet.intexchange.ir/ws\"")
 
-        // TASK-53 — kill switch for applying the signed config bundle to the network/asset
-        // registries. Flip to false to fall back to today's behaviour: the registries are seeded
-        // from the APK-bundled networks.json/assets.json and the server bundle is ignored.
-        // The registries feed key derivation and address validation, so this stays flippable
-        // without a code change to the wiring itself.
         buildConfigField("boolean", "CONFIG_BUNDLE_APPLY_ENABLED", "true")
 
     }
@@ -44,16 +40,9 @@ android {
         release {
             isMinifyEnabled = false
             buildConfigField("String", "DEVICE_ATTEST_HMAC_SECRET", "\"$deviceAttestSecretMainnet\"")
-            /*proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )*/
         }
 
-        create("benchmark") {
-            initWith(getByName("debug"))
-            isMinifyEnabled = false
-        }
+
     }
 
     compileOptions {
@@ -106,7 +95,6 @@ dependencies {
     implementation(libs.bitcoin.jni)
 
     implementation("org.bouncycastle:bcprov-jdk18on:1.73")
-/*    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")*/
     implementation(libs.bundles.google.auth)
 
     implementation(libs.dagger.hilt)

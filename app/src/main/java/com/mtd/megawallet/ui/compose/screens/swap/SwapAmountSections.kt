@@ -37,6 +37,7 @@ import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.IranSansBoldMedium
 import com.mtd.common_ui.theme.IranSansLightLight
 import com.mtd.megawallet.ui.compose.components.AmountDisplaySection
+import com.mtd.megawallet.ui.compose.components.SearchInputField
 import com.mtd.megawallet.ui.compose.components.normalizeAmountForCalculation
 import com.mtd.megawallet.viewmodel.swap.SwapQuoteState
 import com.mtd.megawallet.viewmodel.swap.SwapUiState
@@ -174,6 +175,11 @@ fun SwapReceiveCardSection(
             SwapReceiveAmountText(state)
         }
 
+        SwapProvenanceNotice(
+            verified = state.receiveToken?.verified,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+
         SwapQuoteStatusLine(
             state = state,
             modifier = Modifier
@@ -190,7 +196,6 @@ private fun SwapReceiveAmountText(state: SwapUiState) {
 
     val text = when {
         receive == null -> "0"
-        state.isCrossNetwork -> "—"
         state.quoteState is SwapQuoteState.Loading -> "…"
         net != null -> SwapFormat.amount(net, receive.decimals)
         else -> "0"
@@ -216,16 +221,6 @@ fun SwapQuoteStatusLine(
 ) {
     val receive = state.receiveToken
 
-    if (state.isCrossNetwork) {
-        SwapNotice(
-            text = "تبدیل بین دو شبکهٔ متفاوت در این نسخه پشتیبانی نمی‌شود. " +
-                "ارزی روی «${state.payToken?.option?.networkName ?: ""}» انتخاب کنید.",
-            isError = true,
-            modifier = modifier
-        )
-        return
-    }
-
     when (val quote = state.quoteState) {
         is SwapQuoteState.Failed -> SwapNotice(
             text = quote.message,
@@ -235,8 +230,12 @@ fun SwapQuoteStatusLine(
 
         is SwapQuoteState.Ready -> if (receive != null) {
             val min = quote.route.toAmount.min
+            val minText =
+                "حداقل دریافتی: ${SwapFormat.amountWithSymbol(min, receive.decimals, receive.symbol)}"
             SwapNotice(
-                text = "حداقل دریافتی: ${SwapFormat.amountWithSymbol(min, receive.decimals, receive.symbol)}",
+                // مسیرِ بین‌زنجیره‌ای باید قبل از تأیید معلوم باشد، نه بعد از ارسال: زمانِ رسیدنش
+                // با تبدیلِ درون‌زنجیره‌ای فرق دارد.
+                text = if (state.isBridge) "$minText · ${state.bridgeLabel()}" else minText,
                 isError = false,
                 modifier = modifier
             )
@@ -244,6 +243,129 @@ fun SwapQuoteStatusLine(
 
         SwapQuoteState.Idle, SwapQuoteState.Loading -> Spacer(modifier.height(0.dp))
     }
+}
+
+/**
+ * آدرسِ گیرندهٔ خروجی.
+ *
+ * دو حالتِ کاملاً متفاوت که عمداً یک شکل نیستند:
+ *  - **هم‌خانواده** (تبدیلِ درون‌زنجیره‌ای یا پلِ EVM→EVM): آدرس اختیاری است و پیش‌فرض همان
+ *    کیف‌پولِ خودِ کاربر. فقط یک سطرِ جمع‌وجور با «تغییر» نشان داده می‌شود تا فلوی رایج شلوغ نشود.
+ *  - **بین‌خانوادگی** (TRON ↔ EVM): آدرس **اجباری** است و ورودی از همان اول باز است. آدرسِ
+ *    اتریومی روی ترون (و برعکس) اصلاً آدرس نیست، پس چیزی برای پیش‌فرض‌گرفتن از سمتِ مبدأ وجود
+ *    ندارد و کیف‌پولِ خودِ کاربر روی زنجیرهٔ مقصد جای آن را می‌گیرد.
+ */
+@Composable
+fun SwapDestinationSection(
+    state: SwapUiState,
+    onAddressChange: (String) -> Unit,
+    onToggleEditor: () -> Unit,
+    onResetToOwnWallet: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val receive = state.receiveToken ?: return
+    val required = state.requiresDestinationAddress
+    val expanded = required || state.destinationEditing
+
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "دریافت‌کننده",
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 13.sp,
+                    fontFamily = IranSansBoldMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = when {
+                        required && state.usableDestinationAddress == null ->
+                            "آدرس ${receive.networkName} را وارد کنید"
+                        state.destinationIsOwnWallet -> "کیف پول شما روی ${receive.networkName}"
+                        state.usableDestinationAddress != null -> "آدرس دلخواه روی ${receive.networkName}"
+                        else -> "کیف پول شما"
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontFamily = IranSansLightLight
+                )
+            }
+
+            if (!required) {
+                SwapPillButton(
+                    text = if (state.destinationEditing) "بستن" else "تغییر",
+                    onClick = onToggleEditor
+                )
+            } else if (state.destinationOwnAddress != null && !state.destinationIsOwnWallet) {
+                SwapPillButton(text = "کیف پول خودم", onClick = onResetToOwnWallet)
+            }
+        }
+
+        if (expanded) {
+            Spacer(Modifier.height(10.dp))
+            SearchInputField(
+                value = state.destinationInput,
+                label = "آدرس مقصد",
+                placeholder = "آدرس روی ${receive.networkName}",
+                onValueChange = onAddressChange
+            )
+        } else {
+            state.usableDestinationAddress?.let { address ->
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = address,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    fontFamily = InterMedium
+                )
+            }
+        }
+
+        state.destinationError?.let { error ->
+            Spacer(Modifier.height(6.dp))
+            SwapNotice(text = error, isError = true)
+        }
+
+        // ⚠️ پول به کیف‌پولی غیر از کیف‌پولِ خودِ کاربر می‌رود. پل‌زدن به آدرسی که هیچ کلیدی روی
+        // آن زنجیره ندارد یعنی سوختنِ دارایی، و هیچ‌کس آن را برنمی‌گرداند.
+        if (state.destinationError == null && state.recipientIsElsewhere) {
+            Spacer(Modifier.height(6.dp))
+            SwapNotice(
+                text = "این دارایی به کیف پول شما واریز نمی‌شود. آدرس مقصد را دقیق بررسی کنید؛ " +
+                    "ارسال به آدرس اشتباه برگشت‌پذیر نیست.",
+                isError = true
+            )
+        }
+    }
+}
+
+/**
+ * هشدارِ خنثی برای توکنی که در هیچ فهرستِ معتبری ثبت نشده.
+ *
+ * ⚠️ این «ناامن» نیست و هرگز نباید مانعِ تبدیل شود: یک توکنِ واقعیِ تازه یا کم‌رونق هم دقیقاً
+ * همین‌طور به نظر می‌رسد. فقط دعوت به بررسیِ آدرسِ قرارداد است.
+ */
+@Composable
+fun SwapProvenanceNotice(
+    verified: Boolean?,
+    modifier: Modifier = Modifier
+) {
+    if (verified != false) return
+    SwapNotice(
+        text = "این توکن در فهرست‌های معتبر ثبت نشده — قبل از سواپ آدرس کانترکت را بررسی کنید.",
+        isError = false,
+        modifier = modifier
+    )
+}
+
+/** برچسبِ پل، با نامِ پلِ زیرین وقتی سرور اعلامش کرده. */
+internal fun SwapUiState.bridgeLabel(): String {
+    val destination = destinationNetworkName ?: "شبکهٔ مقصد"
+    val tool = bridgeTool
+    return if (tool != null) "انتقال به $destination از طریق $tool" else "انتقال به $destination"
 }
 
 @Composable

@@ -1,6 +1,7 @@
 ﻿package com.mtd.megawallet.ui.compose.screens.wallet
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -57,6 +59,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +79,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.theme.Green
@@ -83,9 +87,13 @@ import com.mtd.common_ui.theme.IranSansBold
 import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.common_ui.theme.IranSansRegularMedium
 import com.mtd.domain.model.ResultResponse
+import com.mtd.megawallet.security.BiometricAuthHelper
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudBackupPasswordScreen
 import com.mtd.megawallet.ui.compose.screens.addexistingwallet.CloudPasswordMode
+import com.mtd.megawallet.ui.compose.screens.security.PasscodeSetupSheet
+import com.mtd.megawallet.ui.compose.screens.security.SecuritySettingsSheet
+import com.mtd.megawallet.ui.compose.screens.settings.SettingsScreen
 import com.mtd.megawallet.ui.compose.screens.wallet.components.SecretRecoveryPromptBottomSheet
 import com.mtd.megawallet.ui.compose.screens.wallet.components.SecretRevealOverlay
 import com.mtd.megawallet.ui.compose.screens.wallet.components.WalletCard
@@ -119,10 +127,18 @@ fun MultiWalletScreen(
     onNavigateBack: () -> Unit,
     onAddNewWallet: () -> Unit,
     onImportExisting: () -> Unit,
+    modifier: Modifier = Modifier,
     viewModel: MultiWalletViewModel = hiltViewModel()
 ) {
     val appLockViewModel: AppLockViewModel = hiltViewModel()
     val appLockUiState by appLockViewModel.uiState.collectAsStateWithLifecycle()
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showSecuritySettings by remember { mutableStateOf(false) }
+    var showPasscodeSetup by remember { mutableStateOf(false) }
+    val activity = LocalActivity.current as? FragmentActivity
+    val biometricAvailable = remember(activity) {
+        activity?.let(BiometricAuthHelper::isBiometricAvailable) ?: false
+    }
     val wallets by viewModel.wallets.collectAsStateWithLifecycle()
     val activeWalletId by viewModel.activeWalletId.collectAsStateWithLifecycle()
 
@@ -214,21 +230,25 @@ fun MultiWalletScreen(
     }
 
     val handleBack = {
-        when{
-            backupFlowStep == BackupFlowStep.VerifyingManual -> backupFlowStep = BackupFlowStep.Revealing
-            backupFlowStep == BackupFlowStep.CloudPassword -> backupFlowStep = BackupFlowStep.Revealing
+        when {
+            backupFlowStep == BackupFlowStep.VerifyingManual -> backupFlowStep =
+                BackupFlowStep.Revealing
+
+            backupFlowStep == BackupFlowStep.CloudPassword -> backupFlowStep =
+                BackupFlowStep.Revealing
+
             backupFlowStep != BackupFlowStep.None -> backupFlowStep = BackupFlowStep.None
-            isShowingRecovery->isShowingRecovery=false
-            isEditingNickname->isEditingNickname=false
-            isPersonalizing->isPersonalizing=false
-            else->{
-                selectedWalletId=null
+            isShowingRecovery -> isShowingRecovery = false
+            isEditingNickname -> isEditingNickname = false
+            isPersonalizing -> isPersonalizing = false
+            else -> {
+                selectedWalletId = null
             }
         }
     }
 
-    BackHandler(enabled = isAnyCardExpanded || backupFlowStep != BackupFlowStep.None) {
-        handleBack()
+    BackHandler(enabled = showSettings || isAnyCardExpanded || backupFlowStep != BackupFlowStep.None) {
+        if (showSettings) showSettings = false else handleBack()
     }
 
     // نرم کردن تغییر آلفای اجزای صفحه
@@ -246,9 +266,17 @@ fun MultiWalletScreen(
     )
 
 
+    val settingsOffset by animateDpAsState(
+        targetValue = if (showSettings) 96.dp else 0.dp,
+        animationSpec = tween(420),
+        label = "multi_wallet_settings_offset"
+    )
+    Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .then(modifier)
+                .offset(y = settingsOffset)
                 .background(MaterialTheme.colorScheme.background)
                 .onGloballyPositioned { rootCoordinates = it }
         ) {
@@ -307,7 +335,8 @@ fun MultiWalletScreen(
                             rowWallets.forEach { item ->
                                 val isExpanded = selectedWalletId == item.wallet.id
                                 val isAnyOtherExpanded = isAnyCardExpanded && !isExpanded
-                                val keepRevealState = backupFlowStep == BackupFlowStep.Revealing || backupFlowStep == BackupFlowStep.VerifyingManual || backupFlowStep == BackupFlowStep.CloudPassword
+                                val keepRevealState =
+                                    backupFlowStep == BackupFlowStep.Revealing || backupFlowStep == BackupFlowStep.VerifyingManual || backupFlowStep == BackupFlowStep.CloudPassword
 
                                 Box(modifier = Modifier.weight(1f)) {
                                     WalletCard(
@@ -382,6 +411,10 @@ fun MultiWalletScreen(
                 MultiWalletHeader(
                     isExpanded = isAnyCardExpanded,
                     onBackClick = onNavigateBack,
+                    onSettingsClick = {
+                        selectedWalletId = null
+                        showSettings = true
+                    },
                     onAddClick = { showAddWalletSheet = true },
                     onCollapse = handleBack,
                     contentAlpha = contentAlpha
@@ -550,7 +583,8 @@ fun MultiWalletScreen(
                         backupFlowStep == BackupFlowStep.Success,
                 isMnemonic = selectedWalletUiItem?.wallet?.hasMnemonic == true,
                 methodType = revealMethod,
-                walletColor = selectedWalletUiItem?.wallet?.color?: MaterialTheme.colorScheme.primary.toArgb(),
+                walletColor = selectedWalletUiItem?.wallet?.color
+                    ?: MaterialTheme.colorScheme.primary.toArgb(),
                 isManualBackedUp = effectiveManualBackedUp,
                 isCloudBackedUp = effectiveCloudBackedUp,
                 isVerifyingBackup = backupFlowStep == BackupFlowStep.VerifyingManual,
@@ -614,7 +648,10 @@ fun MultiWalletScreen(
                         cloudPasswordError = null
                         backupFlowStep = BackupFlowStep.Revealing
                     },
-                    targetColor = Color(selectedWalletUiItem?.wallet?.color ?: MaterialTheme.colorScheme.primary.toArgb()),
+                    targetColor = Color(
+                        selectedWalletUiItem?.wallet?.color
+                            ?: MaterialTheme.colorScheme.primary.toArgb()
+                    ),
                     mode = if (isCloudRecoveryMode) {
                         CloudPasswordMode.APPEND_TO_EXISTING_BACKUP
                     } else {
@@ -627,7 +664,8 @@ fun MultiWalletScreen(
                             scope.launch {
                                 cloudPasswordError = null
                                 isCloudBackupLoading = true
-                                when (val result = viewModel.backupWalletToCloud(walletId, password)) {
+                                when (val result =
+                                    viewModel.backupWalletToCloud(walletId, password)) {
                                     is com.mtd.domain.model.ResultResponse.Success -> {
                                         viewModel.updateBackupStatus(walletId, cloud = true)
                                         backupFlowStep = BackupFlowStep.Success
@@ -635,7 +673,11 @@ fun MultiWalletScreen(
 
                                     is com.mtd.domain.model.ResultResponse.Error -> {
                                         val errorText = result.exception.message.orEmpty()
-                                        cloudPasswordError = if (errorText.contains("initialized", ignoreCase = true)) {
+                                        cloudPasswordError = if (errorText.contains(
+                                                "initialized",
+                                                ignoreCase = true
+                                            )
+                                        ) {
                                             "ابتدا اتصال گوگل درایو را فعال کنید."
                                         } else if (isCloudRecoveryMode) {
                                             "رمز عبور پشتیبان ابری اشتباه است."
@@ -652,14 +694,63 @@ fun MultiWalletScreen(
             }
         }
 
-}
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showSettings,
+            enter = androidx.compose.animation.fadeIn(animationSpec = tween(160)) +
+                slideInVertically(initialOffsetY = { -it }, animationSpec = tween(420)),
+            exit = androidx.compose.animation.fadeOut(animationSpec = tween(140)) +
+                slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(260)),
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(10_000f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                SettingsScreen(
+                    onSecurityClick = { showSecuritySettings = true },
+                    onClose = { showSettings = false },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+        SecuritySettingsSheet(
+            visible = showSecuritySettings,
+            snapshot = appLockUiState.snapshot,
+            biometricAvailable = biometricAvailable,
+            onClose = { showSecuritySettings = false },
+            onEnableAppLock = { showPasscodeSetup = true },
+            onDisableAppLock = { appLockViewModel.disableAppLock() },
+            onChangePasscode = { showPasscodeSetup = true },
+            onBiometricToggle = { appLockViewModel.setBiometricEnabled(it) },
+            onTimeoutSelect = { appLockViewModel.setTimeoutSeconds(it) }
+        )
+        PasscodeSetupSheet(
+            visible = showPasscodeSetup,
+            biometricAvailable = biometricAvailable,
+            defaultBiometricEnabled = appLockUiState.snapshot.biometricEnabled,
+            onClose = { showPasscodeSetup = false },
+            onSubmit = { passcode, biometricEnabled ->
+                appLockViewModel.saveNewPasscode(passcode, biometricEnabled) { ok ->
+                    if (ok) {
+                        showPasscodeSetup = false
+                        showSecuritySettings = false
+                    }
+                }
+            }
+        )
 
+    }
+}
 
 
 @Composable
 private fun MultiWalletHeader(
     isExpanded: Boolean,
     onBackClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     onAddClick: () -> Unit,
     onCollapse: () -> Unit,
     contentAlpha: Float
@@ -693,7 +784,7 @@ private fun MultiWalletHeader(
                 color = contentColor,
                 fontFamily = IranSansBold
             )
-            IconButton(onClick = onBackClick, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onSettingsClick, modifier = Modifier.size(40.dp)) {
                 Icon(
                     Icons.Default.Settings,
                     contentDescription = "تنظیمات",
@@ -703,28 +794,32 @@ private fun MultiWalletHeader(
             }
         }
 
-        // حالت گسترده (فقط دکمه بازگشت در سمت چپ/End)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer { alpha = 1f - contentAlpha },
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onCollapse,
-                modifier = Modifier.size(40.dp)
+        // حالت گسترده فقط هنگام باز بودن کارت compose می‌شود؛ alpha صفر هنوز touch را می‌گیرد.
+        if (isExpanded) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBackIosNew,
-                    contentDescription = "Back",
-                    tint = contentColor,
-                    modifier = Modifier.size(28.dp)
-                )
+                IconButton(
+                    onClick = onCollapse,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBackIosNew,
+                        contentDescription = "Back",
+                        tint = contentColor,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
         }
     }
+
+
 }
+
+
 
 
 @Composable
@@ -908,5 +1003,3 @@ fun previewCard() {
 
     }
 }
-
-

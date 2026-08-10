@@ -31,6 +31,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.tooling.preview.Preview
 import com.mtd.megawallet.ui.compose.animations.constants.ShimmerConstants
+import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.animations.shimmerBackground
 
 @Composable
@@ -127,14 +128,13 @@ fun ShimmerWalletScreen(shimmerItemCount: Int = ShimmerConstants.DEFAULT_ITEM_CO
             )
         }
 
+
         HorizontalDivider(
-            modifier = Modifier.padding(
-                top = ShimmerConstants.DIVIDER_PADDING_TOP,
-                bottom = ShimmerConstants.DIVIDER_PADDING_BOTTOM
-            ),
-            thickness = ShimmerConstants.DIVIDER_THICKNESS,
-            color = MaterialTheme.colorScheme.onSurface
+            modifier = Modifier.padding(top = WalletScreenConstants.DIVIDER_SPACING_TOP),
+            thickness = WalletScreenConstants.DIVIDER_THICKNESS,
+            color =  MaterialTheme.colorScheme.surfaceVariant
         )
+
 
         // 3. Shimmer for Asset List Items
         Column(modifier = Modifier.padding(horizontal = ShimmerConstants.ASSET_LIST_PADDING_HORIZONTAL)) {

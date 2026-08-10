@@ -1,5 +1,6 @@
 package com.mtd.domain.model
 
+import java.math.BigDecimal
 import java.math.BigInteger
 
 /**
@@ -64,12 +65,39 @@ data class SwapRoute(
     val rank: Int?,
     val isBestReturn: Boolean,
     val provider: String?,
+    val fromNetwork: String?,
+    val toNetwork: String?,
+    /** نامِ پلِ زیرین (`lifiIntents`، `near`، …) برای نمایش. */
+    val tool: String?,
+    /**
+     * آدرسی که `tx`ِ **همین مسیر** خروجی را به آن می‌پردازد.
+     *
+     * وقتی با `userAddress` فرق دارد باید نمایش داده شود: یعنی پول به کیف‌پولِ دیگری می‌رود. در
+     * `prepare` هم اگر آدرسِ مقصد فرستاده شود باید دقیقاً همین باشد، وگرنه calldata برای گیرندهٔ
+     * دیگری ساخته شده است.
+     */
+    val toAddress: String?,
     val toAmount: SwapToAmount,
     val fees: SwapFees?,
     val estimatedGas: SwapEstimatedGas?,
     val allowanceTarget: String?,
     val tx: SwapTx?
-)
+) {
+    /**
+     * مسیرِ بین‌زنجیره‌ای (پل). درخواست و پاسخ دقیقاً همان `/quote` است؛ فرقش در **تسویه** است:
+     * پل دو پا دارد و سرور هنوز پای مقصد را دنبال نمی‌کند، پس تأییدِ تراکنشِ مبدأ به‌هیچ‌وجه به
+     * معنیِ رسیدنِ پول نیست.
+     *
+     * وقتی سرور شبکه‌ها را در پاسخ برنگردانده، مقایسه انجام نمی‌شود و `false` برمی‌گردد؛
+     * تشخیصِ نهایی در آن حالت به شبکه‌های خودِ درخواست واگذار می‌شود.
+     */
+    val isBridge: Boolean
+        get() {
+            val from = fromNetwork ?: return false
+            val to = toNetwork ?: return false
+            return !from.equals(to, ignoreCase = true)
+        }
+}
 
 /** `GET /api/v1/swap/quote` — ranked routes with a hard [ttlMs] expiry. */
 data class SwapQuote(
@@ -80,7 +108,16 @@ data class SwapQuote(
     /** Whether the commission on [bestRoute] was really withheld. Per-response; never cache it. */
     val platformFeeCollected: Boolean?,
     val expiresAt: String?,
-    val ttlMs: Long?
+    val ttlMs: Long?,
+    /** آدرسِ کیف‌پولی که سرور از آن استعلام گرفته (`request.userAddress`). */
+    val quotedUserAddress: String?,
+    /**
+     * گیرندهٔ خروجی طبق **پاسخِ سرور** (`request.toAddress`) — نه چیزی که کلاینت فرستاده.
+     *
+     * سرور ممکن است آن را به `userAddress` پیش‌فرض کرده باشد. خواندنش از پاسخ یعنی آدرسی که به
+     * کاربر نشان می‌دهیم همانی است که مسیر واقعاً برایش ساخته شده.
+     */
+    val quotedToAddress: String?
 )
 
 /**
@@ -98,6 +135,15 @@ data class SwapQuoteRequest(
     val toToken: String,
     val amountRaw: BigInteger,
     val userAddress: String,
+    /**
+     * آدرسی که خروجی به آن پرداخت می‌شود؛ جدا از [userAddress] که مبدأ است.
+     *
+     * برای تبدیلِ درون‌زنجیره‌ای و پلِ EVM→EVM اختیاری است و سرور آن را [userAddress] می‌گیرد. برای
+     * TRON↔EVM **اجباری** است: قالبِ دو طرف فرق دارد (`0x…` در برابر base58ِ `T…`)، پس آدرسِ مبدأ
+     * روی زنجیرهٔ مقصد اصلاً آدرس نیست و چیزی برای پیش‌فرض‌گرفتن وجود ندارد. پل‌زدن به آدرسی که
+     * هیچ کلیدی نمی‌تواند خرجش کند یعنی سوختنِ دارایی، پس این مقدار حدس زده نمی‌شود.
+     */
+    val toAddress: String? = null,
     val slippage: Double? = null
 )
 
@@ -106,3 +152,57 @@ data class SwapPrepareResult(
     val requestId: String?,
     val transactions: List<SwapTx>
 )
+
+/**
+ * `GET /api/v1/swap/chains` — جایی که تبدیل/پل واقعاً کار می‌کند.
+ *
+ * هر شبکه‌ای که در این فهرست نیست نقدینگی ندارد (همهٔ تست‌نت‌ها این‌طورند) و استعلامش همیشه با
+ * ۴۲۲ برمی‌گردد. پس ورودیِ تبدیل برای آن شبکه اصلاً نمایش داده نمی‌شود — نه این‌که خطای خام
+ * نشان داده شود. این محدودیت **فقط** برای تبدیل است؛ تست‌نت‌ها در بقیهٔ اپ دست‌نخورده می‌مانند.
+ */
+data class SwapChain(
+    val networkId: String,
+    val chainId: Long?,
+    val name: String?,
+    val key: String?,
+    val tokenCount: Int?
+)
+
+/**
+ * یک توکن از جهانِ قابل‌تبدیل (`GET /api/v1/swap/tokens`) — نه از باندلِ امضاشده.
+ *
+ * باندل ~۲۷ دارایی **کیوریت‌شده** دارد (همان‌هایی که کارمزدشان اسپانسر می‌شود)؛ این فهرست ~۱۱۳۳۳
+ * توکن است. یعنی نبودنِ یک توکن در باندل هیچ ربطی به قابلِ‌تبدیل‌بودنش ندارد.
+ */
+data class SwapToken(
+    /** `null` یعنی کیوریت‌نشده. تنها سیگنالِ معتبر برای «اسپانسر نکن». */
+    val id: String?,
+    val symbol: String,
+    val name: String,
+    val decimals: Int,
+    val networkId: String,
+    /** `null` فقط برای ارزِ بومیِ شبکه. */
+    val contractAddress: String?,
+    val iconUrl: String?,
+    /** `null` عمدی است (قیمتِ نامعتبرِ upstream حذف شده) — صفر نیست. */
+    val priceUsd: BigDecimal?,
+    val imported: Boolean,
+    /**
+     * **نشانِ منشأ، نه نشانِ ایمنی.** `true` یعنی «فهرستی که به آن اتکا می‌کنیم این قرارداد را روی
+     * این شبکه منتشر کرده» — نه ممیزی، نه تأیید، نه توصیهٔ سرمایه‌گذاری، و هرگز نباید این‌طور
+     * نمایش داده شود.
+     *
+     * `null` با `false` یکی نیست: `null` یعنی سرور چیزی نگفته، پس نه نشان داده می‌شود نه هشدار.
+     * `false` یعنی هیچ فهرستی منتشرش نکرده — که برای یک توکنِ واقعیِ تازه هم دقیقاً همین‌طور است،
+     * پس فقط هشدارِ خنثی می‌گیرد و هیچ‌وقت پنهان یا مسدود نمی‌شود.
+     */
+    val verified: Boolean?,
+    /** رتبهٔ ارزشِ بازار؛ `0`/`null` یعنی بی‌رتبه. ترتیبِ فهرست خودش رتبه‌بندی‌شده است. */
+    val marketCapRank: Int?
+) {
+    /**
+     * ⚠️ قاعدهٔ سخت: توکنِ کیوریت‌نشده هرگز نباید مسیرِ گس‌لس/اسپانسر بگیرد. قابلِ تبدیل و انتقال
+     * هست، ولی کارمزدش را ما نمی‌دهیم — و پیشنهادِ اشتباهِ آن یعنی تراکنشی که سمتِ سرور رد می‌شود.
+     */
+    val isSponsorable: Boolean get() = id != null && !imported
+}

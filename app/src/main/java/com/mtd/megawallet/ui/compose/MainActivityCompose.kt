@@ -89,9 +89,11 @@ class MainActivityCompose : FragmentActivity() {
                     val biometricAvailable = remember {
                         BiometricAuthHelper.isBiometricAvailable(this@MainActivityCompose)
                     }
-                    val canUseBiometricUnlock = biometricAvailable && lockUiState.snapshot.biometricEnabled
+                    val canUseBiometricUnlock =
+                        biometricAvailable && lockUiState.snapshot.biometricEnabled
                     val overlayVisible = lockUiState.isInitialized && lockUiState.isLocked
-                    val showLockedFingerprint = overlayVisible && canUseBiometricUnlock && !showPasscodeUnlock
+                    val showLockedFingerprint =
+                        overlayVisible && canUseBiometricUnlock && !showPasscodeUnlock
                     // KAN-NEW-02: reduced blur radius (was 72.dp) to cut per-frame RenderEffect
                     // cost on mid-range devices; the 0.9-alpha scrim below already occludes content.
                     val blurRadius by animateDpAsState(
@@ -168,10 +170,10 @@ class MainActivityCompose : FragmentActivity() {
                     LaunchedEffect(lockUiState.isInitialized, lockUiState.isLocked) {
                         val unlocked = lockUiState.isInitialized && !lockUiState.isLocked
                         val needsRequest = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                            ContextCompat.checkSelfPermission(
-                                this@MainActivityCompose,
-                                Manifest.permission.POST_NOTIFICATIONS
-                            ) != PackageManager.PERMISSION_GRANTED
+                                ContextCompat.checkSelfPermission(
+                                    this@MainActivityCompose,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
                         if (unlocked && !notificationPermissionAsked && needsRequest) {
                             notificationPermissionAsked = true
                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -188,10 +190,7 @@ class MainActivityCompose : FragmentActivity() {
                                 onNavigateToWalletManagement = {
                                     // TODO: Navigate to wallet management screen
                                 },
-                                onMoreOptionsClick = {
-                                    appLockViewModel.refreshSnapshot()
-                                    showSecuritySettings = true
-                                },
+                                onMoreOptionsClick = {},
                                 onFabClick = {
                                     // TODO: Handle FAB click (e.g., show send/receive options)
                                 },
@@ -202,80 +201,84 @@ class MainActivityCompose : FragmentActivity() {
                                     // TODO: Navigate to explore screen
                                 }
                             )
-                        }
-                        if (overlayVisible) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .then(Modifier),
-                            ) {
-                                Surface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.9f)
-                                ) {}
-                            }
-                        }
 
-                        SecuritySettingsSheet(
-                            visible = showSecuritySettings,
-                            snapshot = lockUiState.snapshot,
-                            biometricAvailable = biometricAvailable,
-                            onClose = { showSecuritySettings = false },
-                            onEnableAppLock = { showPasscodeSetup = true },
-                            onDisableAppLock = { appLockViewModel.disableAppLock() },
-                            onChangePasscode = { showPasscodeSetup = true },
-                            onBiometricToggle = { appLockViewModel.setBiometricEnabled(it) },
-                            onTimeoutSelect = { appLockViewModel.setTimeoutSeconds(it) }
-                        )
-
-                        PasscodeSetupSheet(
-                            visible = showPasscodeSetup,
-                            biometricAvailable = biometricAvailable,
-                            defaultBiometricEnabled = lockUiState.snapshot.biometricEnabled,
-                            onClose = { showPasscodeSetup = false },
-                            onSubmit = { passcode, biometricEnabled ->
-                                appLockViewModel.saveNewPasscode(passcode, biometricEnabled) { ok ->
-                                    if (ok) {
-                                        showPasscodeSetup = false
-                                        showSecuritySettings = false
-                                    }
+                            if (overlayVisible) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .then(Modifier),
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.fillMaxSize(),
+                                        color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.9f)
+                                    ) {}
                                 }
                             }
-                        )
 
-                        LockedFingerprintOverlay(
-                            visible = showLockedFingerprint,
-                            onFingerprintClick = { launchBiometricPrompt() }
-                        )
+                            SecuritySettingsSheet(
+                                visible = showSecuritySettings,
+                                snapshot = lockUiState.snapshot,
+                                biometricAvailable = biometricAvailable,
+                                onClose = { showSecuritySettings = false },
+                                onEnableAppLock = { showPasscodeSetup = true },
+                                onDisableAppLock = { appLockViewModel.disableAppLock() },
+                                onChangePasscode = { showPasscodeSetup = true },
+                                onBiometricToggle = { appLockViewModel.setBiometricEnabled(it) },
+                                onTimeoutSelect = { appLockViewModel.setTimeoutSeconds(it) }
+                            )
 
-                        PasscodeKeypadSheet(
-                            visible = overlayVisible && showPasscodeUnlock,
-                            title = "رمز عبور برنامه را وارد کنید",
-                            subtitle = "برای دسترسی به کیف پول نیاز به تایید هویت دارید",
-                            errorMessage = lockUiState.unlockError,
-                            remainingLockoutSeconds = lockUiState.lockoutRemainingSeconds,
-                            onSubmitPasscode = { passcode ->
-                                appLockViewModel.unlockWithPasscode(passcode)
-                            },
-                            onCancel = if (lockUiState.authPurpose == AuthPurpose.SENSITIVE_ACTION || canUseBiometricUnlock) {
-                                {
-                                    biometricFailedAttempts = 0
-                                    appLockViewModel.clearUnlockError()
-                                    if (lockUiState.authPurpose == AuthPurpose.SENSITIVE_ACTION) {
-                                        showPasscodeUnlock = false
-                                        appLockViewModel.cancelSensitiveAuthRequest()
-                                    } else {
-                                        showPasscodeUnlock = false
+                            PasscodeSetupSheet(
+                                visible = showPasscodeSetup,
+                                biometricAvailable = biometricAvailable,
+                                defaultBiometricEnabled = lockUiState.snapshot.biometricEnabled,
+                                onClose = { showPasscodeSetup = false },
+                                onSubmit = { passcode, biometricEnabled ->
+                                    appLockViewModel.saveNewPasscode(
+                                        passcode,
+                                        biometricEnabled
+                                    ) { ok ->
+                                        if (ok) {
+                                            showPasscodeSetup = false
+                                            showSecuritySettings = false
+                                        }
                                     }
                                 }
-                            } else null,
-                            cancelLabel = if (lockUiState.authPurpose == AuthPurpose.SENSITIVE_ACTION) "لغو عملیات" else "بازگشت",
-                            onExitApp = { finishAffinity() }
-                        )
+                            )
 
-                        // TASK-57 — single message host for the whole main app. Mounted last so the
-                        // snackbar/dialog draws above the sheets and the app-lock overlay.
-                        AppMessageHost(uiMessages = errorManager.uiMessages)
+                            LockedFingerprintOverlay(
+                                visible = showLockedFingerprint,
+                                onFingerprintClick = { launchBiometricPrompt() }
+                            )
+
+                            PasscodeKeypadSheet(
+                                visible = overlayVisible && showPasscodeUnlock,
+                                title = "رمز عبور برنامه را وارد کنید",
+                                subtitle = "برای دسترسی به کیف پول نیاز به تایید هویت دارید",
+                                errorMessage = lockUiState.unlockError,
+                                remainingLockoutSeconds = lockUiState.lockoutRemainingSeconds,
+                                onSubmitPasscode = { passcode ->
+                                    appLockViewModel.unlockWithPasscode(passcode)
+                                },
+                                onCancel = if (lockUiState.authPurpose == AuthPurpose.SENSITIVE_ACTION || canUseBiometricUnlock) {
+                                    {
+                                        biometricFailedAttempts = 0
+                                        appLockViewModel.clearUnlockError()
+                                        if (lockUiState.authPurpose == AuthPurpose.SENSITIVE_ACTION) {
+                                            showPasscodeUnlock = false
+                                            appLockViewModel.cancelSensitiveAuthRequest()
+                                        } else {
+                                            showPasscodeUnlock = false
+                                        }
+                                    }
+                                } else null,
+                                cancelLabel = if (lockUiState.authPurpose == AuthPurpose.SENSITIVE_ACTION) "لغو عملیات" else "بازگشت",
+                                onExitApp = { finishAffinity() }
+                            )
+
+                            // TASK-57 — single message host for the whole main app. Mounted last so the
+                            // snackbar/dialog draws above the sheets and the app-lock overlay.
+                            AppMessageHost(uiMessages = errorManager.uiMessages)
+                        }
                     }
                 }
             }

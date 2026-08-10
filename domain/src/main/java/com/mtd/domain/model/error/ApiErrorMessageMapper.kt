@@ -1,5 +1,8 @@
 package com.mtd.domain.model.error
 
+import com.mtd.domain.model.error.ApiErrorMessageMapper.farsiMessage
+
+
 /**
  * Phase 8 (KAN-20 / KAN-21) — centralized, user-facing error taxonomy.
  *
@@ -40,6 +43,7 @@ object ApiErrorMessageMapper {
         ApiError.SwapNoRoutes -> "مسیری برای این تبدیل پیدا نشد."
         ApiError.InternalError -> "خطایی در سرور رخ داد. لطفاً دوباره تلاش کنید."
         is ApiError.Unknown -> "خطای ناشناخته‌ای رخ داد. لطفاً دوباره تلاش کنید."
+        else -> "خطای ناشناخته‌ای رخ داد. لطفاً دوباره تلاش کنید."
     }
 
     /** English user-facing message for a typed [ApiError]. */
@@ -68,6 +72,7 @@ object ApiErrorMessageMapper {
         ApiError.SwapNoRoutes -> "No route was found for this swap."
         ApiError.InternalError -> "A server error occurred. Please try again."
         is ApiError.Unknown -> "An unexpected error occurred. Please try again."
+        else -> "An unexpected error occurred. Please try again."
     }
 
     /**

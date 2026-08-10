@@ -117,11 +117,67 @@ fun SwapConfirmSection(
                 iconUrl = receive.iconUrl
             )
             SwapDetailRow(
-                label = "شبکه",
+                label = if (state.isBridge) "شبکهٔ مبدأ" else "شبکه",
                 value = pay.option.networkName,
                 iconUrl = pay.option.networkIconUrl
             )
+            if (state.isBridge) {
+                SwapDetailRow(
+                    label = "شبکهٔ مقصد",
+                    value = receive.networkName,
+                    iconUrl = receive.networkIconUrl
+                )
+                state.bridgeTool?.let { tool ->
+                    SwapDetailRow(label = "پل", value = tool, iconUrl = null)
+                }
+            }
             SwapDetailRow(label = "کیف پول", value = walletName, iconUrl = null)
+
+            // گیرنده فقط وقتی نمایش داده می‌شود که همان کیف‌پولِ کاربر **نباشد** — و آن وقت کاملِ
+            // آدرس، در سطرِ خودش. کوتاه‌کردن به «0x1234…abcd» دقیقاً همان چیزی است که آدرسِ جعلی
+            // پشتش پنهان می‌شود؛ کاربر باید بتواند کاراکتربه‌کاراکتر مقایسه کند.
+            state.quotedRecipient?.takeIf { state.recipientIsElsewhere }?.let { recipient ->
+                Column {
+                    Text(
+                        text = "دریافت‌کننده",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp,
+                        fontFamily = IranSansLightLight
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = recipient,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = 13.sp,
+                        fontFamily = InterMedium
+                    )
+                }
+            }
+        }
+
+        if (state.recipientIsElsewhere) {
+            Spacer(Modifier.height(12.dp))
+            SwapNotice(
+                text = "دارایی به کیف پول شما واریز نمی‌شود؛ به آدرسی می‌رود که بالا نوشته شده. " +
+                    "پس از ارسال، برگشت‌پذیر نیست.",
+                isError = true
+            )
+        }
+
+        SwapProvenanceNotice(
+            verified = receive.verified,
+            modifier = Modifier.padding(top = 10.dp)
+        )
+
+        // ⚠️ پل در دو پا تسویه می‌شود و سرور پای مقصد را دنبال نمی‌کند. کاربر باید **قبل از**
+        // امضا بداند که پول بلافاصله آن‌طرف نیست، نه این‌که بعد از تأیید سرگردان شود.
+        if (state.isBridge) {
+            Spacer(Modifier.height(12.dp))
+            SwapNotice(
+                text = "این یک انتقال بین‌شبکه‌ای است: تراکنش روی ${pay.option.networkName} " +
+                    "ثبت می‌شود و دارایی شما چند دقیقه بعد روی ${receive.networkName} می‌نشیند.",
+                isError = false
+            )
         }
 
         Spacer(Modifier.height(14.dp))

@@ -13,6 +13,7 @@ import com.mtd.domain.interfaceRepository.IAssetCatalog
 import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.interfaceRepository.INetworkCatalog
+import com.mtd.domain.interfaceRepository.ITokenPriceRepository
 import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.model.AppEvent
 import com.mtd.domain.model.AssetItem
@@ -25,6 +26,7 @@ import com.mtd.domain.model.NetworkShare
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.assets.AssetConfig
 import com.mtd.domain.model.assets.AssetPriceDto
+import com.mtd.domain.model.assets.TokenPriceQuery
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.Wallet
 import com.mtd.domain.model.error.ErrorSurface
@@ -57,6 +59,12 @@ class HomeViewModel @Inject constructor(
     private val appEventBus: IAppEventBus,
     private val cacheStore: IAppCacheStore,
     private val getLatestAssetPricesUseCase: GetLatestAssetPricesUseCase,
+    /**
+     * قیمت بر اساسِ آدرسِ قرارداد. جدا از [getLatestAssetPricesUseCase] لازم است چون آن یکی با نماد
+     * پرس‌وجو می‌کند و فقط ارزهای اصلی را می‌شناسد — پس هر توکنی که کاربر اضافه کرده از آن مسیر
+     * بی‌قیمت می‌ماند.
+     */
+    private val tokenPriceRepository: ITokenPriceRepository,
     /** TASK-54 — shared observable Toman rate; replaces this VM's private cache. */
     private val usdToIrrRateProvider: IUsdToIrrRateProvider,
     /** TASK-56 — shared observable fiat currency; the header toggle and every screen read this one. */
@@ -385,7 +393,15 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * فقط رفرش قیمت ارزها از مارکت
+     * رفرشِ قیمت‌ها — **دو گذر**، چون یک منبع کافی نیست.
+     *
+     * گذرِ اول با **نماد** است (`/api/v1/prices`) و فقط به حدودِ ده‌ها ارزِ اصلی پاسخ می‌دهد. هر
+     * توکنی که کاربر خودش اضافه کرده — و تا امروز کلِ ترون — از آن مسیر بی‌قیمت برمی‌گشت و روی
+     * «...» می‌ماند. گذرِ دوم همان‌ها را با **آدرسِ قرارداد** می‌پرسد
+     * (`POST /tokens/prices`).
+     *
+     * در پایان همهٔ دارایی‌ها `priceLookupSettled` می‌گیرند، چه قیمت پیدا شده باشد چه نه: از این
+     * لحظه «قیمت نداریم» یک واقعیت است، نه یک انتظار، و باید «—» نشان داده شود.
      */
     private fun refreshPrices() {
         launchSafe {
@@ -399,6 +415,7 @@ class HomeViewModel @Inject constructor(
 
             val resultPair: Pair<List<String>, List<String>> = Pair(symbols, ids)
 
+            val pricedSymbols = mutableSetOf<String>()
             val result = getLatestAssetPricesUseCase(resultPair)
             if (result is ResultResponse.Success) {
                 val pricesMap = result.data.associateBy { it.assetId }
@@ -408,32 +425,111 @@ class HomeViewModel @Inject constructor(
                         val config = allAssets.find { it.id == assetItem.id }
                         val priceInfo = config?.symbol?.let { pricesMap[it] }
 
-                        if (priceInfo != null) {
-                            val currentPrice = priceInfo.priceUsd
-
-                            val updatedItem = withFiatStrings(
-                                assetItem.copy(
-                                    priceUsdRaw = currentPrice,
-                                    priceChange24h = priceInfo.priceChanges24h.toDouble()
-                                )
+                        if (priceInfo != null && priceInfo.priceUsd > BigDecimal.ZERO) {
+                            pricedSymbols += config.symbol.uppercase()
+                            fullRawAssets[index] = writePrice(
+                                item = assetItem,
+                                price = priceInfo.priceUsd,
+                                change24h = priceInfo.priceChanges24h.toDouble()
                             )
-                            fullRawAssets[index] = updatedItem
-
-                            // همگام‌سازی با کش دیسک برای استفاده در صفحات دیگر
-                            launchSafe {
-                                cacheStore.put(getAssetCacheKey(currentWalletId ?: "", updatedItem.id), CachedAssetBalance(
-                                    assetId = updatedItem.id, walletId = currentWalletId ?: "",
-                                    balanceRaw = updatedItem.balanceRaw,
-                                    priceUsdRaw = updatedItem.priceUsdRaw,
-                                    balance = updatedItem.balance, balanceUsdt = updatedItem.balanceUsdt,
-                                    balanceIrr = updatedItem.balanceIrr, priceChange24h = updatedItem.priceChange24h
-                                ), ttl = ASSETS_TTL)
-                            }
                         }
                     }
                 }
-                cacheStore.put(LAST_PRICE_SYNC_TIME_KEY, System.currentTimeMillis())
-                uiUpdateChannel.trySend(Unit)
+            }
+
+            refreshContractPrices(allAssets, pricedSymbols)
+            markPriceLookupSettled()
+
+            cacheStore.put(LAST_PRICE_SYNC_TIME_KEY, System.currentTimeMillis())
+            uiUpdateChannel.trySend(Unit)
+        }
+    }
+
+    /**
+     * گذرِ دوم: قیمت بر اساسِ **آدرسِ قرارداد** برای هر توکنی که مسیرِ نماد جوابش را نداد.
+     *
+     * فقط توکن‌ها (قرارداددارها) پرسیده می‌شوند؛ کوینِ بومیِ شبکه قرارداد ندارد و از همان مسیرِ
+     * نماد می‌آید.
+     *
+     * پاسخِ ناقص **عادی** است: هرچه سرور نتوانست قیمت‌گذاری کند در `missing` می‌آید و همان‌جا
+     * بی‌قیمت می‌ماند — که با قیمتِ صفر یکی نیست.
+     */
+    private suspend fun refreshContractPrices(
+        configs: List<AssetConfig>,
+        alreadyPriced: Set<String>
+    ) {
+        val queries = configs
+            .mapNotNull { config ->
+                val contract = config.contractAddress?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                if (config.symbol.uppercase() in alreadyPriced) return@mapNotNull null
+                TokenPriceQuery(
+                    networkId = config.networkId,
+                    // ⚠️ عیناً همان چیزی که در کاتالوگ است. lowercase کردنش برای EVM بی‌اثر است و
+                    // برای base58ِ ترون یعنی آدرسی که اصلاً معتبر نیست.
+                    address = contract,
+                    symbol = config.symbol
+                )
+            }
+
+        if (queries.isEmpty()) return
+
+        // این اندپوینت زیرِ `/api/mobile/v1` است و JWT می‌خواهد — مستقل از اینکه کاربر روی DIRECT
+        // است یا PROXY. بدونِ این، در حالتِ DIRECT همیشه ۴۰۱ می‌گرفتیم.
+        ensureAuthenticatedUseCase()
+
+        when (val result = tokenPriceRepository.getPricesByContract(queries)) {
+            is ResultResponse.Success -> synchronized(assetsLock) {
+                configs.forEach { config ->
+                    val contract = config.contractAddress?.takeIf { it.isNotBlank() } ?: return@forEach
+                    val price = result.data.priceFor(config.networkId, contract) ?: return@forEach
+                    val index = fullRawAssets.indexOfFirst { it.id == config.id }
+                    if (index == -1) return@forEach
+                    // تغییرِ ۲۴ساعته از این مسیر نمی‌آید؛ مقدارِ قبلی حفظ می‌شود، نه صفر شود.
+                    fullRawAssets[index] = writePrice(
+                        item = fullRawAssets[index],
+                        price = price,
+                        change24h = fullRawAssets[index].priceChange24h
+                    )
+                }
+            }
+
+            // بی‌قیمت‌ماندن یک نقصِ نمایشی است، نه شکستِ صفحه: ردیف «—» می‌گیرد و بقیهٔ کیف پول
+            // دست‌نخورده می‌ماند.
+            is ResultResponse.Error -> Timber.w(
+                result.exception, "Contract-address price lookup failed for %d tokens", queries.size
+            )
+        }
+    }
+
+    /** نوشتنِ قیمت روی یک آیتم + همگام‌سازی با کشِ دیسک برای بقیهٔ صفحات. */
+    private fun writePrice(item: AssetItem, price: BigDecimal, change24h: Double): AssetItem {
+        val updated = withFiatStrings(item.copy(priceUsdRaw = price, priceChange24h = change24h))
+        launchSafe {
+            cacheStore.put(
+                getAssetCacheKey(currentWalletId ?: "", updated.id),
+                CachedAssetBalance(
+                    assetId = updated.id, walletId = currentWalletId ?: "",
+                    balanceRaw = updated.balanceRaw,
+                    priceUsdRaw = updated.priceUsdRaw,
+                    balance = updated.balance, balanceUsdt = updated.balanceUsdt,
+                    balanceIrr = updated.balanceIrr, priceChange24h = updated.priceChange24h
+                ),
+                ttl = ASSETS_TTL
+            )
+        }
+        return updated
+    }
+
+    /**
+     * هر دو گذر تمام شد. از این به بعد `priceUsdRaw == 0` یعنی «قیمتی وجود ندارد» و نه «هنوز
+     * نرسیده»، پس [withFiatStrings] به‌جای «...» علامتِ «—» می‌گذارد.
+     */
+    private fun markPriceLookupSettled() {
+        synchronized(assetsLock) {
+            fullRawAssets.forEachIndexed { index, item ->
+                if (!item.priceLookupSettled) {
+                    fullRawAssets[index] = withFiatStrings(item.copy(priceLookupSettled = true))
+                }
             }
         }
     }
@@ -496,18 +592,12 @@ class HomeViewModel @Inject constructor(
         val wallet = getActiveWalletUseCase() ?: return
         val network = networkCatalog.getNetworkInfoById(event.networkId) ?: return
         val networkConfigs = assetCatalog.getAssetConfigsForNetwork(event.networkId)
-        // Match the invalidated asset by local id, by symbol (the server sends e.g. "usdt", never our
-        // composite "USDT-SEPOLIA" id), or by contract when the event carries one. The previous logic fell
-        // through to `contractAddress == null` whenever no contract was present, which silently refreshed the
-        // NATIVE asset instead of the token — so a token balance.invalidated never updated its balance.
         val targetConfigs = networkConfigs.filter { config ->
             config.id.equals(event.assetId, ignoreCase = true) ||
                 config.symbol.equals(event.assetId, ignoreCase = true) ||
                 (!event.contractAddress.isNullOrBlank() &&
                     config.contractAddress.equals(event.contractAddress, ignoreCase = true))
         }.ifEmpty {
-            // Unknown/blank assetId (vocabulary mismatch or a coarse signal) → refresh the whole network
-            // rather than guess; a missing assetId must never silently skip the balance update.
             networkConfigs
         }
 
@@ -649,10 +739,6 @@ class HomeViewModel @Inject constructor(
         _uiState.update { state ->
             val currentState = when {
                 state is HomeUiState.Success -> state
-
-                // موجودی/قیمت رسیده ولی صفحه هنوز روی Loading است. قبلاً این شاخه کلاً دور ریخته
-                // می‌شد: دیتا می‌آمد، در `fullRawAssets` می‌نشست، و کاربر همچنان shimmer می‌دید.
-                // از Error بالا نمی‌آییم — آن‌جا پیامِ خطا حقیقتِ فعلی است.
                 state is HomeUiState.Loading && currentRawAssets.isNotEmpty() -> HomeUiState.Success(
                     totalBalanceUsdt = "...",
                     totalBalanceIrr = "...",
@@ -702,33 +788,23 @@ class HomeViewModel @Inject constructor(
         val mustShow = setOf("BTC", "ETH", "USDT")
         return rawList.groupBy { it.symbol.uppercase() }.mapNotNull { (symbol, assets) ->
             val totalBal = assets.sumOf { it.balanceRaw }
-            // توکنی که کاربر خودش اضافه کرده با موجودیِ صفر هم می‌ماند: او صریحاً خواسته ببیندش، و
-            // پنهان‌شدنِ خاموشِ چیزی که همین حالا اضافه شده مثل این است که افزودن کار نکرده باشد.
-            // (حذفش راهِ خودش را دارد — پنهان‌سازی از صفحهٔ مدیریتِ توکن‌ها.)
+
             if (totalBal > BigDecimal.ZERO || mustShow.contains(symbol) || assets.any { it.isUserAdded }) {
                 if (assets.size > 1) {
                     val first = assets.first()
                     val activeAssets = assets.filter { it.balanceRaw > BigDecimal.ZERO }
-                    val finalNetworkId: String
-                    val finalNetworkName: String
 
-                    when {
-                        totalBal == BigDecimal.ZERO -> {
-                            val ethAsset = assets.find { it.networkId.contains("ethereum", true) || it.networkId.contains("sepolia", true) }
-                            val defaultAsset = ethAsset ?: assets.first()
-                            finalNetworkId = defaultAsset.networkId
-                            finalNetworkName = defaultAsset.networkName
-                        }
-                        activeAssets.size == 1 -> {
-                            val activeAsset = activeAssets.first()
-                            finalNetworkId = activeAsset.networkId
-                            finalNetworkName = activeAsset.networkName
-                        }
-                        else -> {
-                            finalNetworkId = "GROUP"
-                            finalNetworkName = ""
-                        }
+                    val representative = when {
+                        totalBal == BigDecimal.ZERO ->
+                            assets.find {
+                                it.networkId.contains("ethereum", true) ||
+                                    it.networkId.contains("sepolia", true)
+                            } ?: first
+                        activeAssets.size == 1 -> activeAssets.first()
+                        else -> null
                     }
+                    val finalNetworkId = representative?.networkId ?: "GROUP"
+                    val finalNetworkName = representative?.networkName.orEmpty()
 
                     val dist = assets.filter { it.balanceRaw > BigDecimal.ZERO }.map {
                         val pct = (it.balanceRaw.toFloat() / totalBal.toFloat()) * 100f
@@ -740,17 +816,18 @@ class HomeViewModel @Inject constructor(
 
                     AssetItem(
                         id = "GROUP_$symbol", networkId = finalNetworkId, name = first.name, faName = first.faName,
-                        symbol = symbol, networkName = finalNetworkName, iconUrl = first.iconUrl,
-                        networkIconUrl = first.networkIconUrl,
+                        symbol = symbol, networkName = finalNetworkName,
+                        iconUrl = (representative ?: first).iconUrl,
+                        networkIconUrl = representative?.networkIconUrl,
                         balance = BalanceFormatter.formatBalance(totalBal, first.decimals),
                         balanceRaw = totalBal, priceUsdRaw = first.priceUsdRaw, priceChange24h = first.priceChange24h,
                         balanceUsdt = first.balanceUsdt,
+                        // بدونِ این، سرگروه روی «...» می‌ماند در حالی که اعضایش «—» گرفته‌اند —
+                        // چون قیمت از `first` می‌آید ولی وضعیتِ «قیمت گرفته شد» نمی‌آمد.
+                        priceLookupSettled = assets.all { it.priceLookupSettled },
                         decimals = first.decimals, isNativeToken = first.isNativeToken,
-                        // `any` و نه `first`: اگر حتی یکی از شبکه‌های این گروه توکنِ افزودهٔ کاربر
-                        // باشد، سرتیترِ گروه هم نباید gasless پیشنهاد بدهد. جهتِ امنِ خطا.
                         isUserAdded = assets.any { it.isUserAdded },
                         isGroupHeader = true,
-                        // زیرمجموعه‌های گروه هم وقتی باز می‌شوند باید همان ترتیبِ ارزش را داشته باشند.
                         groupAssets = assets.sortedByDescending { it.balanceRaw * it.priceUsdRaw },
                         networkDistribution = dist
                     )

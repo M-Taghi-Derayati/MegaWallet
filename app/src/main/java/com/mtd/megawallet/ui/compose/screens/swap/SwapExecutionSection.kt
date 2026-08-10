@@ -242,11 +242,18 @@ fun SwapResultSection(
         }
     }
 
-    val isSuccess = outcome is SwapExecutionOutcome.Completed
-    val accent = when (outcome) {
-        is SwapExecutionOutcome.Completed -> MaterialTheme.colorScheme.primary
-        is SwapExecutionOutcome.Stalled -> MaterialTheme.colorScheme.onSurfaceVariant
-        is SwapExecutionOutcome.Failed -> MaterialTheme.colorScheme.error
+    /**
+     * ⚠️ برای پل، «تأیید شد» فقط دربارهٔ **پای مبدأ** است. سرور پای مقصد را دنبال نمی‌کند، پس
+     * تیکِ سبزِ «انجام شد» ادعایی است که هیچ‌کس تأییدش نکرده — و کاربر را می‌فرستد سراغِ کیف‌پولی
+     * که هنوز خالی است.
+     */
+    val bridgePending = state.isBridgeSettlementPending
+    val isSuccess = outcome is SwapExecutionOutcome.Completed && !bridgePending
+    val accent = when {
+        bridgePending -> MaterialTheme.colorScheme.onSurfaceVariant
+        outcome is SwapExecutionOutcome.Completed -> MaterialTheme.colorScheme.primary
+        outcome is SwapExecutionOutcome.Stalled -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.error
     }
 
     Column(
@@ -266,10 +273,11 @@ fun SwapResultSection(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = when (outcome) {
-                    is SwapExecutionOutcome.Completed -> Icons.Default.Check
-                    is SwapExecutionOutcome.Stalled -> Icons.Default.Warning
-                    is SwapExecutionOutcome.Failed -> Icons.Default.Close
+                imageVector = when {
+                    bridgePending -> Icons.Default.Warning
+                    outcome is SwapExecutionOutcome.Completed -> Icons.Default.Check
+                    outcome is SwapExecutionOutcome.Stalled -> Icons.Default.Warning
+                    else -> Icons.Default.Close
                 },
                 contentDescription = null,
                 tint = accent,
@@ -280,10 +288,11 @@ fun SwapResultSection(
         Spacer(Modifier.height(18.dp))
 
         Text(
-            text = when (outcome) {
-                is SwapExecutionOutcome.Completed -> "تبدیل انجام شد"
-                is SwapExecutionOutcome.Stalled -> "ارسال شد، در انتظار تأیید"
-                is SwapExecutionOutcome.Failed -> "تبدیل ناموفق بود"
+            text = when {
+                bridgePending -> "در حال انتقال بین شبکه‌ها"
+                outcome is SwapExecutionOutcome.Completed -> "تبدیل انجام شد"
+                outcome is SwapExecutionOutcome.Stalled -> "ارسال شد، در انتظار تأیید"
+                else -> "تبدیل ناموفق بود"
             },
             color = MaterialTheme.colorScheme.onBackground,
             fontSize = 20.sp,

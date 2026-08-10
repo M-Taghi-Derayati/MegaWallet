@@ -27,8 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.ui.platform.testTag
-import com.mtd.megawallet.ui.compose.TestTags
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -46,7 +44,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,21 +61,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.R
-import com.mtd.domain.model.HistoryNetworkOption
-import com.mtd.domain.model.HistoryRow
-import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetailsBottomSheet
-import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryEmptyState
-import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryItem
-import com.mtd.megawallet.ui.compose.components.SearchInputField
-import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryShimmer
-import com.mtd.common_ui.theme.NetworkIcon
-import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
-import com.mtd.megawallet.viewmodel.HomeViewModel
-import kotlinx.coroutines.flow.distinctUntilChanged
 import com.mtd.common_ui.theme.IranSansBold
 import com.mtd.common_ui.theme.IranSansBoldBold
 import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.common_ui.theme.NetworkIcon
+import com.mtd.domain.model.HistoryNetworkOption
+import com.mtd.domain.model.HistoryRow
+import com.mtd.megawallet.ui.compose.components.SearchInputField
+import com.mtd.megawallet.ui.compose.screens.history.components.TransactionDetailsBottomSheet
+import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryEmptyState
+import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryItem
+import com.mtd.megawallet.ui.compose.screens.history.components.TransactionHistoryShimmer
+import com.mtd.megawallet.viewmodel.HomeViewModel
+import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -155,7 +153,7 @@ fun TransactionHistoryScreen(
         ) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize().testTag(TestTags.HISTORY_LIST),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {

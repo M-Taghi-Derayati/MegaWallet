@@ -78,10 +78,19 @@
 -dontwarn tools.jackson.databind.json.JsonMapper
 
 # باز نگه داشتن کلاس‌های وب۳ و جکسون برای جلوگیری از حذف اشتباه کلاس‌های حیاتی
--keep class org.web3j.** { *; }
 -keep class tools.jackson.** { *; }
 
 # یک ترفند پروگارد برای بای‌پاس کردن خطای زمان اجرا در متدهای رفلکشن جکسون
 -assumenosideeffects class tools.jackson.databind.JavaType {
     public boolean isRecordType();
 }
+
+-keepattributes SourceFile,LineNumberTable
+# BouncyCastle & Bitcoin Libraries
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+-keep class org.bitcoinj.** { *; }
+-keep class org.bitcoin.** { *; }
+# ML Kit Barcode Scanning
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_barcode** { *; }

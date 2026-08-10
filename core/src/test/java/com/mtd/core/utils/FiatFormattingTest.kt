@@ -228,9 +228,21 @@ class FiatFormattingTest {
     }
 
     @Test
-    fun `withFiatBalances leaves an unpriced asset untouched`() {
+    fun `withFiatBalances leaves an asset untouched while its price is still being fetched`() {
         // Otherwise a not-yet-priced asset would render a confident "0.00" instead of its placeholder.
-        val unpriced = asset("2", "0")
-        assertSame(unpriced, unpriced.withFiatBalances(FiatCurrency.USD, toman("70000")))
+        val pending = asset("2", "0")
+        assertSame(pending, pending.withFiatBalances(FiatCurrency.USD, toman("70000")))
+    }
+
+    @Test
+    fun `withFiatBalances shows the placeholder once an asset is known to have no price`() {
+        // The server drops implausible prices for illiquid pools on purpose, so "no price" is a real
+        // permanent state. Rendering it as $0.00 makes the holding look worthless rather than unpriced.
+        val settled = asset("2", "0").copy(priceLookupSettled = true)
+            .withFiatBalances(FiatCurrency.USD, toman("70000"))
+
+        assertEquals("—", settled.balanceUsdt)
+        assertEquals("—", settled.balanceIrr)
+        assertEquals("—", settled.formattedDisplayBalance)
     }
 }

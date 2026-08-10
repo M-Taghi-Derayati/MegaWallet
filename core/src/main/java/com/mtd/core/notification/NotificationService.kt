@@ -134,7 +134,7 @@ class NotificationService @Inject constructor(
         }
 
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_logo)
+            .setSmallIcon(R.drawable.logo)
             .setContentTitle(title)
             .setContentText(message)
             // Expandable, so a long body (amount + network + counterparty) isn't truncated.
@@ -150,7 +150,7 @@ class NotificationService @Inject constructor(
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(
                 NotificationCompat.Builder(context, channelId)
-                    .setSmallIcon(R.drawable.ic_logo)
+                    .setSmallIcon(R.drawable.logo)
                     .setContentTitle(title)
                     .setContentText(REDACTED_LOCKSCREEN_TEXT)
                     .setAutoCancel(true)

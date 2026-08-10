@@ -28,6 +28,7 @@ import com.mtd.data.device.ResilientDeviceIdProvider
 import com.mtd.data.device.UnavailablePlayIntegrityTokenProvider
 import com.mtd.data.repository.assets.MergedAssetCatalog
 import com.mtd.data.repository.assets.TokenDiscoveryRepositoryImpl
+import com.mtd.data.repository.assets.TokenPriceRepositoryImpl
 import com.mtd.data.repository.assets.UserTokenRepositoryImpl
 import com.mtd.data.repository.auth.AuthRepositoryImpl
 import com.mtd.data.repository.auth.EvmAuthMessageSigner
@@ -64,6 +65,7 @@ import com.mtd.domain.interfaceRepository.IMonitoringRepository
 import com.mtd.domain.interfaceRepository.ISwapRepository
 import com.mtd.domain.interfaceRepository.ISendAssetDataSource
 import com.mtd.domain.interfaceRepository.ITokenDiscoveryRepository
+import com.mtd.domain.interfaceRepository.ITokenPriceRepository
 import com.mtd.domain.interfaceRepository.ITokenStore
 import com.mtd.domain.interfaceRepository.ITransactionStatusRepository
 import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
@@ -327,6 +329,16 @@ abstract class DataModule {
     abstract fun bindTokenDiscoveryRepository(
         impl: TokenDiscoveryRepositoryImpl
     ): ITokenDiscoveryRepository
+
+    /**
+     * جدا از [IMarketDataRepository] عمداً: آن یکی با **نماد** پرس‌وجو می‌کند و فقط ارزهای اصلی را
+     * می‌شناسد، پس هر توکنی که کاربر خودش اضافه کرده از آن مسیر بی‌قیمت می‌ماند.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTokenPriceRepository(
+        impl: TokenPriceRepositoryImpl
+    ): ITokenPriceRepository
 
 
     companion object {

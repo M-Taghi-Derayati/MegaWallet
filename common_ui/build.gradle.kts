@@ -16,16 +16,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            /*proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )*/
-        }
-        create("benchmark") {
-            initWith(getByName("debug"))
             isMinifyEnabled = false
         }
+
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true

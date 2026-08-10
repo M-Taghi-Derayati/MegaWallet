@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -24,12 +23,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,32 +46,41 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.core.Animatable
-import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.IranSansBoldMedium
 import com.mtd.common_ui.theme.IranSansLightLight
+import com.mtd.domain.model.AssetItem
 import com.mtd.megawallet.ui.compose.components.HintState
 import com.mtd.megawallet.ui.compose.components.SearchInputField
-import com.mtd.megawallet.viewmodel.swap.SwapTokenOption
+import com.mtd.megawallet.ui.compose.components.TokenList
+import com.mtd.megawallet.viewmodel.swap.SwapImportState
+import com.mtd.megawallet.viewmodel.swap.SwapTokenSearchState
+import com.mtd.megawallet.viewmodel.swap.SwapUiState
 import kotlinx.coroutines.launch
 
 /**
  * انتخابِ ارزِ دریافت.
  *
- * فهرست از کاتالوگِ داده‌محورِ اپ می‌آید (`assets.json` + باندلِ امضاشده)؛ `/api/v1/swap` سرویسی
- * برای فهرستِ توکنِ قابل‌تبدیل ندارد. توکن‌های شبکه‌های دیگر پنهان نمی‌شوند — انتخابشان صریحاً رد
- * می‌شود تا کاربر بفهمد چرا نمی‌شود، نه اینکه ارز را اصلاً پیدا نکند.
+ * فهرست **یک ردیف به ازای هر توکن** دارد، نه به ازای هر جفتِ توکن-شبکه؛ انتخابِ شبکه در شیتِ
+ * بعدی انجام می‌شود. ردیف‌ها همان [TokenList] صفحهٔ ارسال‌اند تا دو صفحه یک شکل بمانند.
+ *
+ * نمای پیش‌فرض (قبل از تایپ‌کردن) **فقط** مجموعهٔ رتبه‌بندی‌شدهٔ سرور است. جهانِ کاملِ ~۱۱ هزارتایی
+ * تنها با جست‌وجو ظاهر می‌شود، چون آرایهٔ خامِ aggregator هیچ سیگنالِ کیفیتی ندارد — روی ترون سرِ
+ * آن سه بدلِ تتر است که جلوتر از قراردادِ واقعی می‌نشینند. ریختنِ آن در نمای پیش‌فرض یعنی
+ * راه‌بردنِ کاربر مستقیم وسطِ همان‌ها.
+ *
+ * فهرست به موجودیِ کاربر محدود نمی‌شود: سمتِ دریافت معمولاً توکنی است که کاربر اصلاً ندارد.
  */
 @Composable
 fun SwapReceiveTokenSheet(
-    visible: Boolean,
-    tokens: List<SwapTokenOption>,
-    query: String,
-    payNetworkId: String?,
+    state: SwapUiState,
     onQueryChange: (String) -> Unit,
-    onTokenSelected: (SwapTokenOption) -> Unit,
+    onAssetSelected: (AssetItem) -> Unit,
+    onImportQueryChange: (String) -> Unit,
+    onImportSubmit: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val motion = LocalSwapMotion.current
+    val visible = state.receiveSheetVisible
 
     AnimatedVisibility(
         visible = visible,
@@ -131,32 +139,158 @@ fun SwapReceiveTokenSheet(
             Spacer(Modifier.height(14.dp))
 
             SearchInputField(
-                value = query,
+                value = state.receiveQuery,
                 label = "جست‌وجو",
-                placeholder = "جست‌وجوی ارز",
+                placeholder = "نام، نماد یا آدرس قرارداد",
                 onValueChange = onQueryChange,
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
 
+            SwapImportRow(
+                state = state,
+                onImportQueryChange = onImportQueryChange,
+                onImportSubmit = onImportSubmit
+            )
+
             Spacer(Modifier.height(10.dp))
 
-            if (tokens.isEmpty()) {
-                HintState("ارزی با این نام پیدا نشد", Modifier.padding(horizontal = 20.dp))
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    items(tokens, key = { it.id }) { token ->
-                        SwapReceiveTokenRow(
-                            token = token,
-                            crossNetwork = payNetworkId != null && token.networkId != payNetworkId,
-                            onClick = { onTokenSelected(token) }
-                        )
-                    }
+            val searchState = state.receiveSearchState
+            val searching = state.receiveQuery.isNotBlank()
+
+            // آینهٔ سرور خاموش بود (۵۰۳) و فهرست از باندل ساخته شده — همان چیزی که کاربر می‌بیند
+            // فقط بخشِ کوچکی از جهانِ قابلِ تبدیل است، و باید بداند.
+            if (!searching && state.receiveListFellBack && state.receiveTokens.isNotEmpty()) {
+                Text(
+                    text = "فهرست کامل ارزها در دسترس نیست؛ فعلاً فقط ارزهای اصلی نمایش داده می‌شوند.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontFamily = IranSansLightLight,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                )
+            }
+
+            when {
+                searchState is SwapTokenSearchState.Loading && state.receiveTokens.isEmpty() ->
+                    HintState(
+                        if (searching) "در حال جست‌وجو…" else "در حال آماده‌سازی فهرست ارزها…",
+                        Modifier.padding(horizontal = 20.dp)
+                    )
+
+                searchState is SwapTokenSearchState.Failed && state.receiveTokens.isEmpty() ->
+                    HintState(searchState.message, Modifier.padding(horizontal = 20.dp))
+
+                state.receiveTokens.isEmpty() ->
+                    HintState(
+                        if (searching) {
+                            "ارزی با این نام پیدا نشد"
+                        } else {
+                            "فهرست ارزها در دسترس نیست"
+                        },
+                        Modifier.padding(horizontal = 20.dp)
+                    )
+
+                else -> Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 20.dp)) {
+                    TokenList(
+                        fiatCurrency = state.fiatCurrency,
+                        assets = state.receiveTokens,
+                        selectedAssetId = state.receiveToken?.id,
+                        onTokenClick = onAssetSelected
+                    )
                 }
             }
+
+            // جست‌وجوی ناموفق وقتی فهرستِ محلی چیزی دارد، فهرست را پاک نمی‌کند — فقط گفته
+            // می‌شود که جست‌وجوی سراسری کار نکرده (۵۰۳ ⇒ عقب‌نشینی به فهرستِ باندل).
+            if (searchState is SwapTokenSearchState.Failed && state.receiveTokens.isNotEmpty()) {
+                Text(
+                    text = searchState.message,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontFamily = IranSansLightLight,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * «افزودن با آدرس قرارداد».
+ *
+ * آدرس دقیقاً همان‌طور که کاربر چسبانده فرستاده می‌شود — حروفِ base58 ترون حساس‌اند و
+ * کوچک‌کردنشان جست‌وجوی روی‌زنجیره را برای توکنِ خارج از فهرست خراب می‌کند.
+ */
+@Composable
+private fun SwapImportRow(
+    state: SwapUiState,
+    onImportQueryChange: (String) -> Unit,
+    onImportSubmit: () -> Unit
+) {
+    val importing = state.importState is SwapImportState.Loading
+
+    Column(Modifier.padding(horizontal = 20.dp)) {
+        Spacer(Modifier.height(8.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                SearchInputField(
+                    value = state.importQuery,
+                    label = "افزودن",
+                    placeholder = "آدرس قرارداد توکن",
+                    onValueChange = onImportQueryChange
+                )
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            val enabled = state.importQuery.isNotBlank() && !importing
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onBackground
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        }
+                    )
+                    .clickable(
+                        enabled = enabled,
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onImportSubmit() },
+                contentAlignment = Alignment.Center
+            ) {
+                if (importing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "افزودن توکن",
+                        tint = if (enabled) {
+                            MaterialTheme.colorScheme.background
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        (state.importState as? SwapImportState.Failed)?.let { failed ->
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = failed.message,
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp,
+                fontFamily = IranSansLightLight
+            )
         }
     }
 }
@@ -212,59 +346,6 @@ private fun SwapSheetSurface(
             )
             Spacer(Modifier.height(14.dp))
             content()
-        }
-    }
-}
-
-@Composable
-private fun SwapReceiveTokenRow(
-    token: SwapTokenOption,
-    crossNetwork: Boolean,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onClick() }
-            .padding(vertical = 10.dp)
-            // شبکهٔ متفاوت قابل انتخاب هست ولی کم‌رنگ: دلیلِ رد شدن روی کارتِ دریافت نوشته می‌شود.
-            .graphicsLayer { alpha = if (crossNetwork) 0.45f else 1f },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(contentAlignment = Alignment.BottomEnd) {
-            SwapTokenLogo(iconUrl = token.iconUrl, contentDescription = token.name, size = 40.dp)
-            SwapNetworkBadge(iconUrl = token.networkIconUrl)
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = token.faName ?: token.name,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 15.sp,
-                fontFamily = IranSansBoldMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "${token.symbol} · ${token.networkName}",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                fontFamily = InterMedium
-            )
-        }
-
-        if (crossNetwork) {
-            Text(
-                text = "شبکهٔ دیگر",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
-                fontFamily = IranSansLightLight
-            )
         }
     }
 }

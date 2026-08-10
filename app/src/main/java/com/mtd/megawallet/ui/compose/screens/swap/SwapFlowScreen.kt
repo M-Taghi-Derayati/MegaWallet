@@ -42,7 +42,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.theme.IranSansBoldMedium
 import com.mtd.domain.model.AssetItem
@@ -77,6 +80,17 @@ fun SwapFlowScreen(
 
     LaunchedEffect(homeState) {
         (homeState as? HomeUiState.Success)?.let { swapViewModel.onAssetsAvailable(it.assets) }
+    }
+
+    // فهرستِ شبکه‌های تبدیل‌پذیر موقعِ برگشت به اپ تازه می‌شود؛ ریپازیتوری خودش کش دارد، پس
+    // این فقط یک درخواست در هر resume است، نه در هر بازسازیِ ترکیب.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) swapViewModel.onResumed()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     DisposableEffect(Unit) {
@@ -169,8 +183,15 @@ fun SwapFlowScreen(
 
     var chooseBalanceAsset by remember { mutableStateOf<AssetItem?>(null) }
 
+    /**
+     * شیتِ انتخابِ شبکه برای سمتِ **دریافت**. جدا از [chooseBalanceAsset] است چون رفتارش فرق
+     * دارد: آن‌جا فقط شبکه‌های دارای موجودی معنی دارند، این‌جا شبکهٔ خالی هم مقصدِ معتبرِ پل است.
+     */
+    var chooseReceiveNetworkAsset by remember { mutableStateOf<AssetItem?>(null) }
+
     BackHandler {
         when {
+            chooseReceiveNetworkAsset != null -> chooseReceiveNetworkAsset = null
             state.receiveSheetVisible -> swapViewModel.onEvent(SwapEvent.DismissReceiveSheet)
             chooseBalanceAsset != null -> chooseBalanceAsset = null
             else -> handleBack()
@@ -179,11 +200,22 @@ fun SwapFlowScreen(
 
     // همان سازندهٔ فهرستِ صفحهٔ ارسال. فیلترِ نوعِ شبکه اینجا اعمال نمی‌شود چون تبدیل آدرسِ مقصدی
     // ندارد که فهرست باید با آن سازگار باشد؛ تنها معیار، موجودیِ بزرگ‌تر از صفر است.
-    val payAssets = remember(homeState, state.fiatCurrency, state.usdToTomanRate) {
+    //
+    // شبکه‌ای که سرور تبدیل‌پذیر اعلام نکرده اصلاً نمایش داده نمی‌شود: استعلامش همیشه ۴۲۲ برمی‌گردد
+    // و آن خطا برای کاربر مثلِ «الان نقدینگی نیست» خوانده می‌شود، نه «این شبکه اصلاً پشتیبانی
+    // نمی‌شود». این فقط ورودیِ تبدیل را می‌بندد؛ تست‌نت‌ها در بقیهٔ اپ سرِ جایشان هستند.
+    val payAssets = remember(
+        homeState,
+        state.fiatCurrency,
+        state.usdToTomanRate,
+        state.swappableNetworkIds,
+        state.swapChainsLoaded
+    ) {
         buildSendableAssetList(
             fiatCurrency = state.fiatCurrency,
             usdToIrrRate = state.usdToTomanRate,
-            source = (homeState as? HomeUiState.Success)?.assets ?: emptyList(),
+            source = ((homeState as? HomeUiState.Success)?.assets ?: emptyList())
+                .retainSwappableNetworks(state),
             networkType = null,
             networkTypeResolver = { homeViewModel.getNetworkTypeForNetworkId(it) }
         )
@@ -273,6 +305,28 @@ fun SwapFlowScreen(
                                                 size = 38.dp
                                             )
                                         }
+                                    }
+                                )
+                            }
+                        }
+
+                        // آدرسِ مقصد قبل از استعلام جمع می‌شود، نه بعدش: کشِ ۱۵ ثانیه‌ایِ سرور به
+                        // ازای هر مقصد جداست و جفتِ بین‌خانوادگی بدونِ آن اصلاً استعلام نمی‌شود.
+                        SwapMorphSection(
+                            visible = state.phase == SwapPhase.AMOUNT && state.receiveToken != null
+                        ) {
+                            Column {
+                                Spacer(Modifier.height(14.dp))
+                                SwapDestinationSection(
+                                    state = state,
+                                    onAddressChange = {
+                                        swapViewModel.onEvent(SwapEvent.DestinationAddressChanged(it))
+                                    },
+                                    onToggleEditor = {
+                                        swapViewModel.onEvent(SwapEvent.DestinationEditorToggled)
+                                    },
+                                    onResetToOwnWallet = {
+                                        swapViewModel.onEvent(SwapEvent.DestinationResetToOwnWallet)
                                     }
                                 )
                             }
@@ -370,13 +424,31 @@ fun SwapFlowScreen(
             )
 
             SwapReceiveTokenSheet(
-                visible = state.receiveSheetVisible,
-                tokens = state.visibleReceiveTokens,
-                query = state.receiveQuery,
-                payNetworkId = state.payToken?.option?.networkId,
+                state = state,
                 onQueryChange = { swapViewModel.onEvent(SwapEvent.ReceiveQueryChanged(it)) },
-                onTokenSelected = { swapViewModel.onEvent(SwapEvent.ReceiveTokenSelected(it)) },
+                onAssetSelected = { asset ->
+                    // یک ردیف = یک توکن. اگر روی چند شبکه قابلِ مسیریابی است، شبکه در شیتِ بعدی
+                    // انتخاب می‌شود؛ همان الگویی که صفحهٔ ارسال دارد.
+                    if (asset.isGroupHeader && asset.groupAssets.size > 1) {
+                        chooseReceiveNetworkAsset = asset
+                    } else {
+                        swapViewModel.onEvent(SwapEvent.ReceiveAssetSelected(asset))
+                    }
+                },
+                onImportQueryChange = { swapViewModel.onEvent(SwapEvent.ImportQueryChanged(it)) },
+                onImportSubmit = { swapViewModel.onEvent(SwapEvent.ImportSubmitted) },
                 onDismiss = { swapViewModel.onEvent(SwapEvent.DismissReceiveSheet) }
+            )
+
+            ChooseBalanceBottomSheet(
+                asset = chooseReceiveNetworkAsset,
+                onDismiss = { chooseReceiveNetworkAsset = null },
+                onNetworkSelected = { selected ->
+                    chooseReceiveNetworkAsset = null
+                    swapViewModel.onEvent(SwapEvent.ReceiveAssetSelected(selected))
+                },
+                // مقصدِ پل معمولاً همان شبکه‌ای است که کاربر رویش چیزی ندارد.
+                includeZeroBalance = true
             )
         }
     }

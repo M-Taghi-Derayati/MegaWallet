@@ -56,12 +56,17 @@ import com.mtd.common_ui.theme.NetworkIcon
 /**
  * شیت پایینی انتخاب موجودی برای دارایی‌های گروهیِ چند-شبکه‌ای.
  * با `asset != null` نمایان می‌شود و لیست زیرمجموعه‌ها را ارائه می‌دهد.
+ *
+ * [includeZeroBalance] پیش‌فرض `false` است تا رفتارِ صفحهٔ ارسال دقیقاً همان بماند: آن‌جا شبکه‌ای
+ * که موجودی ندارد گزینهٔ معتبری نیست. سمتِ **دریافتِ** تبدیل برعکس است — کاربر باید بتواند
+ * شبکه‌ای را انتخاب کند که هیچ موجودی‌ای رویش ندارد، وگرنه پل به مقصدی که خالی است ممکن نمی‌شود.
  */
 @Composable
 fun ChooseBalanceBottomSheet(
     asset: AssetItem?,
     onDismiss: () -> Unit,
-    onNetworkSelected: (AssetItem) -> Unit
+    onNetworkSelected: (AssetItem) -> Unit,
+    includeZeroBalance: Boolean = false
 ) {
     val visible = asset != null
 
@@ -103,9 +108,13 @@ fun ChooseBalanceBottomSheet(
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             val safeAsset = asset ?: return@AnimatedVisibility
-            val listToDisplay = remember(safeAsset) {
-                val withBalance = safeAsset.groupAssets.filter { it.balanceRaw > BigDecimal.ZERO }
-                withBalance.ifEmpty { safeAsset.groupAssets.ifEmpty { listOf(safeAsset) } }
+            val listToDisplay = remember(safeAsset, includeZeroBalance) {
+                val all = safeAsset.groupAssets.ifEmpty { listOf(safeAsset) }
+                if (includeZeroBalance) {
+                    all
+                } else {
+                    all.filter { it.balanceRaw > BigDecimal.ZERO }.ifEmpty { all }
+                }
             }
 
             Column(

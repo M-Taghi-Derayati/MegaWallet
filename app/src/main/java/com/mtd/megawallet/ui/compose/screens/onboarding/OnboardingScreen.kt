@@ -22,9 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mtd.megawallet.ui.compose.components.FloatingShapesBackground
-import com.mtd.common_ui.R as commonui
 import com.mtd.common_ui.theme.IranSansRegularMedium
 
 /**
@@ -71,8 +68,7 @@ fun OnboardingScreen(
                 this.alpha=alpha
             }
     ) {
-        // پس‌زمینه متحرک با اشکال مختلف (لایه پشتی)
-        FloatingShapesBackground()
+
         
         // محتوای اصلی (لایه جلویی)
         Column(

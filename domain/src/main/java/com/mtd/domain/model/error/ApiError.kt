@@ -42,6 +42,19 @@ sealed class ApiError {
     // ── Swap aggregator ─────────────────────────────────────────────────────
     data object SwapNoRoutes : ApiError()              // 422 SWAP_NO_ROUTES
 
+    /**
+     * 404 SWAP_CHAIN_UNSUPPORTED — no token list for that chain. Distinct from a transient
+     * failure: it means the swap entry point should have been gated off `/swap/chains` in the
+     * first place, so the caller hides the flow instead of showing a retryable error.
+     */
+    data object SwapChainUnsupported : ApiError()
+
+    /** 503 SWAP_TOKENS_UNAVAILABLE — token mirror off; fall back to the bundle's curated list. */
+    data object SwapTokensUnavailable : ApiError()
+
+    /** 503 SWAP_UNAVAILABLE — swap engine off entirely; nothing to fall back to. */
+    data object SwapUnavailable : ApiError()
+
     /** Anything we don't yet have a typed case for — carries the raw code for logging/telemetry. */
     data class Unknown(val code: String?, val rawMessage: String?) : ApiError()
 
@@ -76,6 +89,9 @@ sealed class ApiError {
                 "DEVICE_REQUIRED" -> DeviceRequired
                 "DEVICE_REWARD_LIMIT_EXCEEDED" -> DeviceRewardLimitExceeded
                 "SWAP_NO_ROUTES" -> SwapNoRoutes
+                "SWAP_CHAIN_UNSUPPORTED" -> SwapChainUnsupported
+                "SWAP_TOKENS_UNAVAILABLE" -> SwapTokensUnavailable
+                "SWAP_UNAVAILABLE" -> SwapUnavailable
                 "INTERNAL_ERROR", "SWAP_ENGINE_ERROR" -> InternalError
                 else -> when (httpStatus) {
                     409 -> RequoteRequired
