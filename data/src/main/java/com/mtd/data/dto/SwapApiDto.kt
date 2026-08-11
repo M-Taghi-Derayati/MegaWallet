@@ -1,5 +1,6 @@
 package com.mtd.data.dto
 
+import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 import java.math.BigInteger
 
@@ -91,10 +92,34 @@ data class SwapEstimatedGasDto(
     @SerializedName("costUsd") val costUsd: Double? = null
 )
 
+/**
+ * An unsigned transaction. **Branch on [family]**, never on `chainId`.
+ *
+ * The upstream aggregator reports every chain through an EVM-shaped envelope, TRON included — and
+ * on a TRON route `data` is not ABI calldata at all but a protobuf-serialised TRON `raw_data`.
+ * `family` is the only field that says which shape actually arrived.
+ *
+ * [rawData] is deliberately a raw [JsonObject] rather than a typed model: the TRON node validates
+ * the transaction against **exactly** these bytes, so a DTO that silently drops an unknown field
+ * (or re-serialises a number differently) invalidates the signature with no visible error.
+ */
 data class SwapTxDto(
+    @SerializedName("family") val family: String? = null,
+
+    // --- family: "EVM" ---
     @SerializedName("to") val to: String? = null,
     @SerializedName("data") val data: String? = null,
-    @SerializedName("value") val value: String? = null
+    @SerializedName("value") val value: String? = null,
+
+    // --- family: "TVM" ---
+    @SerializedName("txID") val txId: String? = null,
+    @SerializedName("raw_data") val rawData: JsonObject? = null,
+    @SerializedName("raw_data_hex") val rawDataHex: String? = null,
+    /** Addresses inside `raw_data` are 41-hex, not base58, when this is false. Echo it back as sent. */
+    @SerializedName("visible") val visible: Boolean? = null,
+    @SerializedName("from") val from: String? = null,
+    /** TVM's cost knob; `value`/`gasLimit` do not exist on a TRON transaction. */
+    @SerializedName("feeLimit") val feeLimit: Long? = null
 )
 
 // --- chains ---
@@ -173,8 +198,20 @@ data class SwapPrepareRequestDto(
     @SerializedName("provider") val provider: String? = null
 )
 
+/**
+ * The ordered bundle to sign. [transactions] is the documented field; [approveTx]/[swapTx] are
+ * accepted as a fallback because §1.5 refers to the legs by those names — reading only one shape
+ * would turn a naming difference into a silently empty bundle rather than a visible error.
+ */
 data class SwapPrepareResponseDto(
     @SerializedName("ok") val ok: Boolean = true,
     @SerializedName("requestId") val requestId: String? = null,
-    @SerializedName("transactions") val transactions: List<SwapTxDto>? = null
-)
+    @SerializedName("transactions") val transactions: List<SwapTxDto>? = null,
+    @SerializedName("approveTx") val approveTx: SwapTxDto? = null,
+    @SerializedName("swapTx") val swapTx: SwapTxDto? = null
+) {
+    /** Approve always precedes swap: the swap reverts on a zero allowance. */
+    val orderedTransactions: List<SwapTxDto>
+        get() = transactions?.takeIf { it.isNotEmpty() }
+            ?: listOfNotNull(approveTx, swapTx)
+}

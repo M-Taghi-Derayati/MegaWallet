@@ -2,6 +2,7 @@ package com.mtd.data.datasource
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.mtd.core.network.BlockchainNetwork
 import com.mtd.core.network.tron.TronUtils
 import com.mtd.domain.interfaceRepository.IAssetCatalog
@@ -284,6 +285,7 @@ class TronDataSource(
         params: TransactionParams,
         privateKeyHex: String
     ): ResultResponse<String> {
+        if (params is TransactionParams.TvmPrepared) return sendPreparedTron(params, privateKeyHex)
         if (params !is TransactionParams.Tvm) {
             return ResultResponse.Error(IllegalArgumentException("Invalid params"))
         }
@@ -321,6 +323,48 @@ class TronDataSource(
                 ResultResponse.Error(
                     IllegalStateException("Broadcast failed: ${broadcast.toString()}")
                 )
+            }
+        } catch (e: Exception) {
+            ResultResponse.Error(e)
+        }
+    }
+
+    /**
+     * ارسالِ یک تراکنشِ ترونِ **از پیش ساخته‌شده** (پای سوآپ/پل با `family: "TVM"`).
+     *
+     * عمداً از [createUnsignedTransaction] رد نمی‌شود: آن تراکنش را از روی امضای متنیِ تابع
+     * می‌سازد، ولی این‌جا تراکنش از قبل وجود دارد و ساختنِ دوباره یعنی امضای بایت‌هایی غیر از
+     * آن‌چه سرور شبیه‌سازی کرده.
+     *
+     * `raw_data` عیناً همان‌طور که آمده دوباره پارس و فرستاده می‌شود؛ نه بازسازی می‌شود نه
+     * نرمال‌سازی. `raw_data` و `raw_data_hex` **هر دو** لازم‌اند — نود در برابرِ همان بایت‌ها
+     * اعتبارسنجی می‌کند و هیچ‌کدام به‌تنهایی کافی نیست.
+     */
+    private suspend fun sendPreparedTron(
+        params: TransactionParams.TvmPrepared,
+        privateKeyHex: String
+    ): ResultResponse<String> {
+        return try {
+            val rawData = JsonParser.parseString(params.rawDataJson).asJsonObject
+            val signatureHex = Web3jTronTxSigner.signPreparedTronTx(
+                rawDataHex = params.rawDataHex,
+                expectedTxId = params.txId,
+                privateKeyHex = privateKeyHex.removePrefix("0x")
+            )
+
+            val signedTx = JsonObject().apply {
+                addProperty("txID", params.txId)
+                add("raw_data", rawData)
+                addProperty("raw_data_hex", params.rawDataHex)
+                addProperty("visible", params.visible)
+                add("signature", JsonArray().apply { add(signatureHex) })
+            }
+
+            val broadcast = broadcastSignedTransaction(signedTx)
+            if (broadcast["result"]?.asBoolean == true) {
+                ResultResponse.Success(broadcast["txid"]?.asString ?: params.txId)
+            } else {
+                ResultResponse.Error(IllegalStateException("Broadcast failed: $broadcast"))
             }
         } catch (e: Exception) {
             ResultResponse.Error(e)

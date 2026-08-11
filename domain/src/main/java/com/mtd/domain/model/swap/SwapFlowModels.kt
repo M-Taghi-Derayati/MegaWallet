@@ -52,18 +52,43 @@ data class SwapExecutionProgress(
     val isFinished: Boolean get() = outcome != null
 }
 
-/** یک پای آمادهٔ ارسال؛ `gasLimit` توسط لایهٔ بالاتر حل شده چون سرور آن را اعلام نمی‌کند. */
+/**
+ * محتوای یک پا، به تفکیکِ خانواده.
+ *
+ * پارامترهای هزینه عمداً **درونِ** پا نشسته‌اند و نه در [SwapExecutionRequest]: یک بسته می‌تواند
+ * پاهای EVM و TVM داشته باشد و `gasPrice` برای TVM اصلاً معنا ندارد (اهرمِ هزینه در ترون
+ * `feeLimit` است که خودِ سرور داخلِ تراکنش گذاشته).
+ */
+sealed interface SwapLegPayload {
+
+    /** `gasLimit` را لایهٔ بالاتر حل می‌کند چون سرور آن را اعلام نمی‌کند. */
+    data class Evm(
+        val to: String,
+        val data: String,
+        val value: BigInteger,
+        val gasLimit: BigInteger,
+        val gasPrice: BigInteger
+    ) : SwapLegPayload
+
+    /**
+     * تراکنشِ کاملِ ترون، همان‌طور که سرور ساخته. هیچ فیلدی این‌جا بازسازی یا نرمال‌سازی نمی‌شود؛
+     * امضا روی [txId] انجام می‌شود و هر سه فیلد عیناً به نود می‌روند.
+     */
+    data class Tvm(
+        val txId: String,
+        val rawDataJson: String,
+        val rawDataHex: String,
+        val visible: Boolean
+    ) : SwapLegPayload
+}
+
 data class SwapExecutionLeg(
     val kind: SwapLegKind,
-    val to: String,
-    val data: String,
-    val value: BigInteger,
-    val gasLimit: BigInteger
+    val payload: SwapLegPayload
 )
 
 data class SwapExecutionRequest(
     val networkId: String,
-    val gasPrice: BigInteger,
     /** به همان ترتیبی که `prepare` برگردانده است. */
     val legs: List<SwapExecutionLeg>
 )

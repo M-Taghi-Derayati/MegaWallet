@@ -20,6 +20,7 @@ import com.mtd.domain.model.SwapQuoteRequest
 import com.mtd.domain.model.SwapRoute
 import com.mtd.domain.model.SwapToken
 import com.mtd.domain.model.SwapTx
+import com.mtd.domain.model.swap.SwapLegPayload
 import com.mtd.domain.model.assets.AssetConfig
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.error.ApiError
@@ -625,8 +626,11 @@ class SwapViewModel @Inject constructor(
         }
 
         val route = state.readyRoute ?: return
-        val gasPrice = state.fee.selected?.gasPrice ?: return
         val networkId = state.payToken?.option?.networkId ?: return
+        // فقط پای EVM قیمتِ گس می‌خواهد. اهرمِ هزینه در ترون `feeLimit` است که سرور داخلِ خودِ
+        // تراکنش گذاشته، پس نبودِ `gasPrice` آن‌جا نقص نیست.
+        val gasPrice = state.fee.selected?.gasPrice
+        if (state.requiresGasPrice && gasPrice == null) return
 
         _uiState.update { it.copy(prepareState = SwapPrepareState.Loading) }
 
@@ -683,7 +687,7 @@ class SwapViewModel @Inject constructor(
             }
 
             executeSwapBundleUseCase(
-                SwapExecutionRequest(networkId = networkId, gasPrice = gasPrice, legs = legs)
+                SwapExecutionRequest(networkId = networkId, legs = legs)
             ).collect { progress ->
                 _uiState.update { it.copy(execution = progress) }
                 progress.outcome?.let { outcome -> onExecutionFinished(outcome, state) }
@@ -723,17 +727,24 @@ class SwapViewModel @Inject constructor(
      * بازسازیِ `gasLimit`: قرارداد سرور فقط `estimatedGas.native` (هزینهٔ ارز بومی) را می‌دهد، نه
      * سقفِ گس. تقسیم بر `gasPrice` سقف را برمی‌گرداند و ضریبِ اطمینان برای نوسانِ مسیر اضافه می‌شود.
      * وقتی مسیر چیزی نگفته، کفِ محافظه‌کارانه برداشته می‌شود.
+     *
+     * [gasPrice] برای بستهٔ TVM `null` است و خروجی آن‌جا استفاده نمی‌شود؛ سقفِ هزینهٔ ترون
+     * (`fee_limit`) داخلِ خودِ تراکنشی است که سرور ساخته.
      */
     private fun resolveGasLimits(
         route: SwapRoute,
-        gasPrice: BigInteger,
+        gasPrice: BigInteger?,
         legCount: Int
     ): List<BigInteger> {
-        val estimated = route.estimatedGas?.native
-            ?.takeIf { it.signum() > 0 && gasPrice.signum() > 0 }
-            ?.divide(gasPrice)
-            ?.multiply(GAS_LIMIT_BUFFER_NUMERATOR)
-            ?.divide(GAS_LIMIT_BUFFER_DENOMINATOR)
+        val estimated = gasPrice
+            ?.takeIf { it.signum() > 0 }
+            ?.let { price ->
+                route.estimatedGas?.native
+                    ?.takeIf { it.signum() > 0 }
+                    ?.divide(price)
+                    ?.multiply(GAS_LIMIT_BUFFER_NUMERATOR)
+                    ?.divide(GAS_LIMIT_BUFFER_DENOMINATOR)
+            }
 
         val swapLimit = estimated?.coerceAtLeast(MIN_SWAP_GAS_LIMIT) ?: DEFAULT_SWAP_GAS_LIMIT
         return List(legCount) { index ->
@@ -741,24 +752,44 @@ class SwapViewModel @Inject constructor(
         }
     }
 
+    /**
+     * ⚠️ شاخه‌زدن روی **خانوادهٔ هر پا**، نه روی شبکه. یک بسته می‌تواند پاهای متفاوت داشته باشد، و
+     * خانوادهٔ ناشناخته EVM فرض نمی‌شود: کلِ بسته رد می‌شود (`null`) تا چیزی که نمی‌شناسیم امضا نشود.
+     */
     private fun buildLegs(
         transactions: List<SwapTx>,
         route: SwapRoute,
-        gasPrice: BigInteger
+        gasPrice: BigInteger?
     ): List<SwapExecutionLeg>? {
         if (transactions.isEmpty()) return null
         val limits = resolveGasLimits(route, gasPrice, transactions.size)
 
         return transactions.mapIndexed { index, tx ->
-            // مقدارِ غیرقابل‌تجزیه صفر نمی‌شود؛ کلِ بسته رد می‌شود.
-            val value = parseHexQuantityOrNull(tx.value) ?: return null
-            SwapExecutionLeg(
-                kind = if (index == transactions.lastIndex) SwapLegKind.SWAP else SwapLegKind.APPROVE,
-                to = tx.to,
-                data = tx.data,
-                value = value,
-                gasLimit = limits[index]
-            )
+            val kind = if (index == transactions.lastIndex) SwapLegKind.SWAP else SwapLegKind.APPROVE
+            val payload = when (tx) {
+                is SwapTx.Evm -> {
+                    // بدونِ قیمتِ گس تراکنشِ EVM ساخته نمی‌شود؛ پیش‌فرض‌گرفتنش یعنی تراکنشی که
+                    // یا گیر می‌کند یا بیش از انتظارِ کاربر خرج می‌کند.
+                    if (gasPrice == null) return null
+                    // مقدارِ غیرقابل‌تجزیه صفر نمی‌شود؛ کلِ بسته رد می‌شود.
+                    val value = parseHexQuantityOrNull(tx.value) ?: return null
+                    SwapLegPayload.Evm(
+                        to = tx.to,
+                        data = tx.data,
+                        value = value,
+                        gasLimit = limits[index],
+                        gasPrice = gasPrice
+                    )
+                }
+
+                is SwapTx.Tvm -> SwapLegPayload.Tvm(
+                    txId = tx.txId,
+                    rawDataJson = tx.rawDataJson,
+                    rawDataHex = tx.rawDataHex,
+                    visible = tx.visible
+                )
+            }
+            SwapExecutionLeg(kind = kind, payload = payload)
         }
     }
 
@@ -1138,18 +1169,22 @@ class SwapViewModel @Inject constructor(
         networkCatalog.getNetworkTypeForNetworkId(networkId) == NetworkType.EVM
 
     /**
-     * پرداخت روی این شبکه ممکن است؟ دو شرطِ مستقل: سرور شبکه را تبدیل‌پذیر اعلام کرده، و **ریلِ
-     * امضای خودِ اپ** می‌تواند بستهٔ `prepare` را روی آن اجرا کند.
+     * خانواده‌هایی که ریلِ اجرا می‌تواند بستهٔ `prepare` را رویشان امضا و ارسال کند.
      *
-     * ⚠️ شرطِ دوم امروز یعنی EVM. `prepare` تراکنش را به شکلِ `{to, data, value}` می‌دهد و
-     * [ExecuteSwapBundleUseCase] آن را با `TransactionParams.Evm` می‌فرستد؛ مسیرِ TVM آدرسِ قرارداد
-     * به‌همراه **امضای متنیِ تابع** می‌خواهد (`transfer(address,uint256)`) که از چهار بایتِ اولِ
-     * `data` قابل بازسازی نیست. تا وقتی شکلِ تراکنشِ ترون در قراردادِ `prepare` مشخص و ریلِ TVM
-     * برای calldataیِ خام باز نشده، ترون فقط **مقصد** است، نه مبدأ — حدس‌زدنِ هر دو قرارداد
-     * هم‌زمان یعنی امضای چیزی که نمی‌دانیم چیست.
+     * هر تراکنشِ امضانشده حالا `family` دارد و [ExecuteSwapBundleUseCase] per-leg شاخه می‌زند:
+     * EVM همان مسیرِ قبلی، و TVM یک تراکنشِ کاملِ ترون که همان‌طور که آمده امضا می‌شود. زنجیره‌های
+     * UTXO ریلی ندارند و این‌جا رد می‌شوند — نه با تکیه بر `/swap/chains`، چون تا نیامدنِ آن پاسخ
+     * سخت‌گیری نمی‌شود و کاربر می‌توانست داراییِ بیت‌کوین را انتخاب کند.
+     */
+    private fun canSignOn(networkId: String): Boolean =
+        networkCatalog.getNetworkTypeForNetworkId(networkId) in SIGNABLE_PAY_FAMILIES
+
+    /**
+     * پرداخت روی این شبکه ممکن است؟ دو شرطِ مستقل: ریلِ امضا آن خانواده را می‌شناسد
+     * ([canSignOn])، و سرور شبکه را تبدیل‌پذیر اعلام کرده.
      */
     private fun canPayWith(networkId: String): Boolean =
-        isEvm(networkId) && _uiState.value.isNetworkSwappable(networkId)
+        canSignOn(networkId) && _uiState.value.isNetworkSwappable(networkId)
 
     /**
      * مقصدِ پل. برخلافِ مبدأ، به EVM محدود نیست: هیچ تراکنشی روی زنجیرهٔ مقصد امضا نمی‌شود، پس
@@ -1181,7 +1216,7 @@ class SwapViewModel @Inject constructor(
      */
     private fun payRejectionMessage(networkId: String): String = when {
         // مقصدبودن ممکن است، مبدأبودن نه — و کاربر باید همین را بشنود، نه «پشتیبانی نمی‌شود».
-        !isEvm(networkId) ->
+        !canSignOn(networkId) ->
             "فعلاً نمی‌توانید از این شبکه تبدیل کنید؛ ولی می‌توانید آن را به‌عنوان مقصد انتخاب کنید."
         else -> "تبدیل روی این شبکه پشتیبانی نمی‌شود."
     }
@@ -1204,6 +1239,10 @@ class SwapViewModel @Inject constructor(
                 "شبیه‌سازی این تبدیل روی زنجیره برگشت خورد؛ برای جلوگیری از سوختن کارمزد، امضا انجام نشد."
             ApiError.SwapTokensUnavailable -> "فهرست کامل ارزها موقتاً در دسترس نیست."
             ApiError.SwapUnavailable, ApiError.ServiceUnavailable -> "سرویس تبدیل موقتاً در دسترس نیست."
+            // TVM_TX_* — سرور مسیرِ غیرقابلِ امضا را کنار می‌گذارد. کدِ خام به کاربر نشان داده
+            // نمی‌شود؛ چیزی که برایش معنا دارد این است که این مسیر الان قابلِ اجرا نیست.
+            ApiError.SwapTvmTxUnsignable ->
+                "این مسیر تبدیل الان قابل اجرا نیست. مسیر دیگری را امتحان کنید یا کمی بعد دوباره تلاش کنید."
             else -> userMessageFor(throwable, fallback)
         }
     }
@@ -1427,6 +1466,12 @@ class SwapViewModel @Inject constructor(
 
         private const val DESTINATION_REQUIRED_MESSAGE =
             "قالب آدرس این دو شبکه فرق دارد؛ آدرس مقصد را وارد کنید."
+
+        /**
+         * خانواده‌هایی که ریلِ اجرا بستهٔ `prepare` را رویشان امضا می‌کند. زنجیره‌های UTXO ریلِ
+         * سوآپ ندارند و فهرستِ پرداخت نباید آن‌ها را پیشنهاد بدهد.
+         */
+        private val SIGNABLE_PAY_FAMILIES = setOf(NetworkType.EVM, NetworkType.TVM)
 
         /** همان کفی که مسیرِ approveِ گس‌لس استفاده می‌کند. */
         private val MIN_APPROVE_GAS_LIMIT = BigInteger.valueOf(120_000L)

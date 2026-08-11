@@ -2,6 +2,7 @@ package com.mtd.data.datasource
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.mtd.core.network.BlockchainNetwork
 
 import com.mtd.data.dto.BalancesRequestDto
@@ -220,7 +221,45 @@ class ProxyChainDataSource(
         return when (params) {
             is TransactionParams.Evm -> sendEvm(params, privateKeyHex)
             is TransactionParams.Tvm -> sendTron(params, privateKeyHex)
+            is TransactionParams.TvmPrepared -> sendPreparedTron(params, privateKeyHex)
             is TransactionParams.Utxo -> sendUtxo(params, privateKeyHex)
+        }
+    }
+
+    /**
+     * پای TVMِ سوآپ/پل: تراکنش را سرور ساخته، پس این‌جا هیچ `prepare`ی صدا زده نمی‌شود — فقط امضا
+     * و ارسال.
+     *
+     * بدنه به‌صورت `JsonObject` ساخته و بعد رشته می‌شود، نه از روی یک DTOی typed: پروکسی همان
+     * payload را به نود می‌دهد و نود در برابرِ همین بایت‌ها اعتبارسنجی می‌کند، پس هر فیلدی که یک
+     * لایهٔ بازتابی دور بیندازد بی‌سروصدا امضا را باطل می‌کند.
+     */
+    private suspend fun sendPreparedTron(
+        params: TransactionParams.TvmPrepared,
+        privateKeyHex: String
+    ): ResultResponse<String> {
+        return try {
+            val rawData = JsonParser.parseString(params.rawDataJson).asJsonObject
+            val signatureHex = tronSigner.signPreparedTronTx(
+                rawDataHex = params.rawDataHex,
+                expectedTxId = params.txId,
+                privateKeyHex = privateKeyHex
+            )
+
+            val signedTx = JsonObject().apply {
+                addProperty("txID", params.txId)
+                add("raw_data", rawData)
+                addProperty("raw_data_hex", params.rawDataHex)
+                addProperty("visible", params.visible)
+                add("signature", JsonArray().apply { add(signatureHex) })
+            }
+
+            proxyCall(
+                call = { proxyService.broadcastTransaction(network.id, BroadcastRequestDto(signedTx.toString())) },
+                map = { it.txHash?.takeIf { hash -> hash.isNotBlank() } ?: params.txId }
+            )
+        } catch (e: Exception) {
+            ResultResponse.Error(ApiException(ApiError.Unknown(null, e.message), cause = e))
         }
     }
 

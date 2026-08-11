@@ -36,4 +36,25 @@ sealed class TransactionParams {
 
         val feeLevel: String? = null
     ) : TransactionParams()
+
+    /**
+     * یک تراکنشِ ترونِ **از پیش ساخته‌شده** که فقط باید امضا و ارسال شود.
+     *
+     * از [Tvm] جداست و عمداً هم: آن یکی تراکنش را از روی امضای متنیِ تابع می‌سازد
+     * (`transfer(address,uint256)`)، ولی این‌جا تراکنش از قبل وجود دارد و بازسازی‌اش یعنی امضای
+     * چیزی غیر از آن‌چه سرور شبیه‌سازی کرده. نوعِ جدا باعث می‌شود هر `when`ی که روی
+     * [TransactionParams] شاخه می‌زند مجبور شود این حالت را صریحاً ببیند، نه این‌که در شاخهٔ
+     * TRONِ موجود گم شود.
+     *
+     * [rawDataJson] و [rawDataHex] هر دو لازم‌اند و باید **دست‌نخورده** به نود برسند؛ نود در
+     * برابرِ همان بایت‌ها اعتبارسنجی می‌کند و هیچ‌کدام به‌تنهایی کافی نیست.
+     */
+    data class TvmPrepared(
+        val networkId: String,
+        val txId: String,
+        val rawDataJson: String,
+        val rawDataHex: String,
+        val visible: Boolean = false,
+        val assetId: String? = null
+    ) : TransactionParams()
 }

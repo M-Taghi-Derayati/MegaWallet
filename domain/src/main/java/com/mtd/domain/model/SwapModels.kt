@@ -54,12 +54,58 @@ data class SwapEstimatedGas(
     val costUsd: Double?
 )
 
-/** An unsigned transaction template (approve or swap) to sign + broadcast locally. */
-data class SwapTx(
-    val to: String,
-    val data: String,
-    val value: String?     // hex-quantity string (e.g. "0x0"); not a raw base-unit amount
-)
+/**
+ * خانوادهٔ تراکنشِ امضانشده. **همیشه** روی این مقدار شاخه بزنید، هرگز روی `chainId`.
+ *
+ * aggregatorِ بالادست همهٔ زنجیره‌ها را در پاکتِ EVMـشکل (`{to, data, value}`) گزارش می‌کند، از
+ * جمله ترون — و آن‌جا `data` اصلاً ABI نیست، بلکه `raw_data`ی protobufِ یک تراکنشِ کاملِ ترون
+ * است. حدس‌زدنِ شکل از روی زنجیره یعنی امضای چیزی که نمی‌دانیم چیست.
+ */
+enum class SwapTxFamily { EVM, TVM }
+
+/**
+ * یک تراکنشِ امضانشده (approve یا swap) که محلی امضا و ارسال می‌شود.
+ *
+ * ⚠️ خانواده **per-leg** است، نه per-bundle: یک بسته می‌تواند پاهای متفاوت داشته باشد، پس هر پا
+ * جداگانه شاخه می‌خورد.
+ */
+sealed interface SwapTx {
+    val family: SwapTxFamily
+    /** مقصدِ تراکنش برای نمایش/تخمین — قراردادِ روتر در EVM، آدرسِ base58 در TVM. */
+    val to: String?
+
+    data class Evm(
+        override val to: String,
+        val data: String,
+        /** hex-quantity (مثل `"0x0"`)، نه مقدارِ خامِ base-unit. */
+        val value: String?
+    ) : SwapTx {
+        override val family: SwapTxFamily get() = SwapTxFamily.EVM
+    }
+
+    /**
+     * یک تراکنشِ **کاملِ** ترون که سرور ساخته و شبیه‌سازی کرده. هیچ‌چیزش بازسازی نمی‌شود: آن‌چه
+     * امضا می‌شود باید دقیقاً همان چیزی باشد که سرور استعلام و شبیه‌سازی کرده.
+     *
+     * [rawDataJson] عمداً رشتهٔ خامِ JSON است، نه یک مدلِ typed: نود ترون تراکنش را در برابرِ
+     * **همان بایت‌ها** اعتبارسنجی می‌کند، و هر لایهٔ DTOیی که فیلدِ ناشناخته را دور بریزد یا
+     * دوباره serialise کند، بی‌سروصدا امضا را بی‌اعتبار می‌کند.
+     *
+     * `value`/`gasLimit` این‌جا وجود ندارند — مفهومِ EVMاند. اهرمِ هزینه [feeLimit] است که داخلِ
+     * `raw_data.fee_limit` هم هست.
+     */
+    data class Tvm(
+        val txId: String,
+        val rawDataJson: String,
+        val rawDataHex: String,
+        /** آدرس‌های داخلِ `raw_data` هگزِ `41…`اند، نه base58 — همان‌طور که سرور فرستاده. */
+        val visible: Boolean,
+        override val to: String?,
+        val feeLimit: Long?
+    ) : SwapTx {
+        override val family: SwapTxFamily get() = SwapTxFamily.TVM
+    }
+}
 
 data class SwapRoute(
     val rank: Int?,

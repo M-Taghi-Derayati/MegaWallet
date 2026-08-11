@@ -459,6 +459,7 @@ class WalletRepositoryImpl @Inject constructor(
                     is TransactionParams.Evm -> blockchainRegistry.getNetworkById(params.networkId)?.chainId
                     is TransactionParams.Utxo -> params.chainId
                     is TransactionParams.Tvm -> blockchainRegistry.getNetworkById(params.networkId)?.chainId
+                    is TransactionParams.TvmPrepared -> blockchainRegistry.getNetworkById(params.networkId)?.chainId
                 }
                     ?: throw IllegalStateException("Network chain id is missing for transaction params")
                 val privateKey =

@@ -352,10 +352,20 @@ data class SwapUiState(
     val canContinueFromAmount: Boolean
         get() = canRequestQuote && quoteState is SwapQuoteState.Ready
 
+    /**
+     * قیمتِ گس فقط شرطِ زنجیره‌های EVM است.
+     *
+     * تراکنشِ ترون `gasPrice`/`gasLimit` ندارد — اهرمِ هزینه‌اش `feeLimit` است که سرور داخلِ همان
+     * تراکنشی که ساخته گذاشته. شرط‌کردنِ تأیید بر مقداری که آن خانواده اصلاً تولید نمی‌کند یعنی
+     * دکمهٔ تأیید روی ترون هیچ‌وقت فعال نشود.
+     */
+    val requiresGasPrice: Boolean
+        get() = payNetworkType == NetworkType.EVM
+
     val canConfirm: Boolean
         get() = canContinueFromAmount &&
             prepareState !is SwapPrepareState.Loading &&
-            fee.selected?.gasPrice != null
+            (!requiresGasPrice || fee.selected?.gasPrice != null)
 
     /**
      * ⚠️ پل در **دو پا** تسویه می‌شود: پای مبدأ در چند ثانیه تأیید می‌شود، پای مقصد چند دقیقه بعد

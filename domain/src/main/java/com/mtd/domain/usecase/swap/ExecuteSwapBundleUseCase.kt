@@ -8,6 +8,7 @@ import com.mtd.domain.model.swap.SwapExecutionLeg
 import com.mtd.domain.model.swap.SwapExecutionOutcome
 import com.mtd.domain.model.swap.SwapExecutionProgress
 import com.mtd.domain.model.swap.SwapExecutionRequest
+import com.mtd.domain.model.swap.SwapLegPayload
 import com.mtd.domain.model.swap.SwapLegProgress
 import com.mtd.domain.model.swap.SwapLegStatus
 import kotlinx.coroutines.flow.Flow
@@ -106,14 +107,29 @@ class ExecuteSwapBundleUseCase @Inject constructor(
         emit(progress.copy(activeIndex = null, outcome = SwapExecutionOutcome.Completed(swapTxId)))
     }
 
-    private fun SwapExecutionLeg.toParams(request: SwapExecutionRequest) = TransactionParams.Evm(
-        networkId = request.networkId,
-        to = to,
-        amount = value,
-        data = data,
-        gasPrice = request.gasPrice,
-        gasLimit = gasLimit
-    )
+    /**
+     * انتخابِ ریلِ ارسال بر مبنای خانوادهٔ **همین پا**، نه شبکه و نه بستهٔ کلی. یک بسته می‌تواند
+     * پاهای متفاوت داشته باشد، و اشتباه‌گرفتنِ شکل یعنی امضای بایت‌هایی که سرور نساخته.
+     */
+    private fun SwapExecutionLeg.toParams(request: SwapExecutionRequest): TransactionParams =
+        when (val body = payload) {
+            is SwapLegPayload.Evm -> TransactionParams.Evm(
+                networkId = request.networkId,
+                to = body.to,
+                amount = body.value,
+                data = body.data,
+                gasPrice = body.gasPrice,
+                gasLimit = body.gasLimit
+            )
+
+            is SwapLegPayload.Tvm -> TransactionParams.TvmPrepared(
+                networkId = request.networkId,
+                txId = body.txId,
+                rawDataJson = body.rawDataJson,
+                rawDataHex = body.rawDataHex,
+                visible = body.visible
+            )
+        }
 
     private fun SwapExecutionProgress.updateLeg(
         index: Int,

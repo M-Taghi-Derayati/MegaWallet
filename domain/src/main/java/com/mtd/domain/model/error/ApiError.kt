@@ -55,6 +55,17 @@ sealed class ApiError {
     /** 503 SWAP_UNAVAILABLE — swap engine off entirely; nothing to fall back to. */
     data object SwapUnavailable : ApiError()
 
+    /**
+     * A TRON route could not be turned into a signable transaction — `TVM_TX_NOT_PROTOBUF`,
+     * `TVM_TX_UNSUPPORTED_CONTRACT`, `TVM_TX_INTEGRITY_FAILED`.
+     *
+     * These arrive as per-route provider reasons, not as the top-level failure: the server drops
+     * the route rather than handing over something that would only break at broadcast. If every
+     * route drops this way the response is the usual 422 [SwapNoRoutes]. Typed here so the reason
+     * can be explained rather than shown as a raw code.
+     */
+    data object SwapTvmTxUnsignable : ApiError()
+
     /** Anything we don't yet have a typed case for — carries the raw code for logging/telemetry. */
     data class Unknown(val code: String?, val rawMessage: String?) : ApiError()
 
@@ -92,6 +103,9 @@ sealed class ApiError {
                 "SWAP_CHAIN_UNSUPPORTED" -> SwapChainUnsupported
                 "SWAP_TOKENS_UNAVAILABLE" -> SwapTokensUnavailable
                 "SWAP_UNAVAILABLE" -> SwapUnavailable
+                "TVM_TX_NOT_PROTOBUF",
+                "TVM_TX_UNSUPPORTED_CONTRACT",
+                "TVM_TX_INTEGRITY_FAILED" -> SwapTvmTxUnsignable
                 "INTERNAL_ERROR", "SWAP_ENGINE_ERROR" -> InternalError
                 else -> when (httpStatus) {
                     409 -> RequoteRequired

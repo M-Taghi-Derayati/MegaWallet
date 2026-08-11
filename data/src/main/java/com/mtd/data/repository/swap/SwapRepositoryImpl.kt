@@ -167,10 +167,18 @@ class SwapRepositoryImpl @Inject constructor(
         )
         val body = response.body()
         if (!response.isSuccessful || body == null) throw relayApiError(response, "swap prepare failed (${response.code()})")
-        SwapPrepareResult(
-            requestId = body.requestId,
-            transactions = body.transactions.orEmpty().mapNotNull { it.toDomainOrNull() }
-        )
+        val raw = body.orderedTransactions
+        val transactions = raw.map { tx ->
+            // ⚠️ پایی که شناخته نشد **حذف نمی‌شود**. دورانداختنِ بی‌صدای یک پا بستهٔ دوپایی را به
+            // یک swapِ بدونِ approve تبدیل می‌کند که روی زنجیره revert می‌شود و کارمزدش می‌سوزد.
+            tx.toDomainOrNull() ?: throw ApiException(
+                apiError = ApiError.SwapTvmTxUnsignable,
+                httpStatus = response.code(),
+                reasonFa = "تراکنشی که سرور برگرداند قابل امضا نبود؛ برای جلوگیری از ارسال ناقص، تبدیل انجام نشد."
+            )
+        }
+
+        SwapPrepareResult(requestId = body.requestId, transactions = transactions)
     }
 
     private fun SwapProvidersDto.toDomain() = SwapProviders(
@@ -229,9 +237,46 @@ class SwapRepositoryImpl @Inject constructor(
         costUsd = costUsd
     )
 
-    private fun SwapTxDto.toDomainOrNull(): SwapTx? {
+    /**
+     * ⚠️ مسیرِ امضا. خانواده صریح خوانده می‌شود و هر چیزِ دیگری `null` برمی‌گردد — که بالادست کلِ
+     * بسته را رد می‌کند.
+     *
+     * نبودِ `family` **EVM فرض نمی‌شود**: aggregator تراکنشِ ترون را هم در پاکتِ EVMـشکل می‌دهد و
+     * `data`ی آن protobuf است نه calldata، پس حدسِ اشتباه یعنی فرستادنِ یک بلابِ protobuf به
+     * زنجیره به‌عنوان فراخوانیِ قرارداد.
+     */
+    private fun SwapTxDto.toDomainOrNull(): SwapTx? =
+        when (family?.trim()?.uppercase()) {
+            "EVM" -> toEvmOrNull()
+            "TVM" -> toTvmOrNull()
+            // قراردادِ قدیمی خانواده نمی‌فرستاد و همه‌چیز EVM بود. این عقب‌نشینی فقط وقتی مجاز است
+            // که هیچ نشانه‌ای از TVM در پاسخ نباشد؛ وگرنه رد می‌شود.
+            null, "" -> if (rawDataHex == null && txId == null) toEvmOrNull() else null
+            else -> null
+        }
+
+    private fun SwapTxDto.toEvmOrNull(): SwapTx.Evm? {
         val target = to?.takeIf { it.isNotBlank() } ?: return null
-        return SwapTx(to = target, data = data.orEmpty(), value = value)
+        return SwapTx.Evm(to = target, data = data.orEmpty(), value = value)
+    }
+
+    /**
+     * `raw_data` به‌صورت رشتهٔ JSON حمل می‌شود تا از لایهٔ domain (که Gson ندارد) رد شود بی‌آن‌که
+     * فیلدی از دست برود؛ موقعِ ارسال دوباره پارس می‌شود. مدلِ typed این‌جا یعنی دورریختنِ فیلدِ
+     * ناشناخته، و نود در برابرِ همان بایت‌ها اعتبارسنجی می‌کند.
+     */
+    private fun SwapTxDto.toTvmOrNull(): SwapTx.Tvm? {
+        val id = txId?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val hex = rawDataHex?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val body = rawData ?: return null
+        return SwapTx.Tvm(
+            txId = id,
+            rawDataJson = body.toString(),
+            rawDataHex = hex,
+            visible = visible ?: false,
+            to = to?.takeIf { it.isNotBlank() },
+            feeLimit = feeLimit
+        )
     }
 
     private fun SwapChainDto.toDomainOrNull(): SwapChain? {

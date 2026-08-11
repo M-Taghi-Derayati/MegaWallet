@@ -60,6 +60,12 @@ class ProxyChainDataSourceTest {
 
         override fun signRawDataHex(rawDataHex: String, privateKeyHex: String): String =
             "deadbeefsig"
+
+        override fun signPreparedTronTx(
+            rawDataHex: String,
+            expectedTxId: String,
+            privateKeyHex: String
+        ): String = "deadbeefpreparedsig"
     }
 
     // Fake UTXO builder — keeps bitcoinj out of the unit test; we assert the orchestration
