@@ -1,9 +1,18 @@
 package com.mtd.megawallet.ui.compose.screens.settings
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,17 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.CallReceived
-import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.BugReport
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.SwapHoriz
-import androidx.compose.material.icons.outlined.Toll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,7 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mtd.common_ui.R
 import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.IranSansBold
 import com.mtd.common_ui.theme.IranSansRegular
@@ -84,8 +84,15 @@ private fun SupportCategory.accent(): Color = when (this) {
     SupportCategory.OTHER -> SupportOtherAccent
 }
 
-/** گام‌های فلو، به همان ترتیبی که طی می‌شوند. */
-private enum class SupportStep { Category, Form, Areas, Details }
+/**
+ * گام‌های فلو، به همان ترتیبی که طی می‌شوند.
+ *
+ * ⚠️ ترتیبِ اعضا معنادار است: جهتِ انیمیشن و «یک گام عقب» هر دو از `ordinal` خوانده می‌شوند.
+ *
+ * اول دسته، بعد بخش، بعد شرح: تا وقتی کاربر نگفته کجای برنامه را می‌گوید، نوشتنِ شرح یعنی
+ * توضیحِ چیزی در خلأ. با انتخابِ بخش، وقتی به فرم می‌رسد می‌داند دربارهٔ چه می‌نویسد.
+ */
+private enum class SupportStep { Category, Areas, Form, Details }
 
 /**
  * ایمیلِ به‌دردبخور، نه ایمیلِ استاندارد.
@@ -97,14 +104,14 @@ private enum class SupportStep { Category, Form, Areas, Details }
 private val EMAIL_PATTERN = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$")
 
 /** بخش‌های برنامه، با نام و نشانی که کاربر می‌شناسد. */
-private val SUPPORT_AREA_LABELS: List<Pair<SupportArea, Pair<String, ImageVector>>> = listOf(
-    SupportArea.SEND to ("ارسال" to Icons.AutoMirrored.Outlined.Send),
-    SupportArea.RECEIVE to ("دریافت" to Icons.AutoMirrored.Outlined.CallReceived),
-    SupportArea.SWAP to ("تبدیل و پل" to Icons.Outlined.SwapHoriz),
-    SupportArea.HISTORY to ("تاریخچه" to Icons.Outlined.History),
-    SupportArea.TOKENS to ("توکن‌ها" to Icons.Outlined.Toll),
-    SupportArea.SECURITY to ("امنیت" to Icons.Outlined.Lock),
-    SupportArea.OTHER to ("سایر" to Icons.Outlined.HelpOutline)
+private val SUPPORT_AREA_LABELS: List<Pair<SupportArea, Pair<String, Int>>> = listOf(
+    SupportArea.SEND to ("ارسال" to R.drawable.ic_send),
+    SupportArea.RECEIVE to ("دریافت" to R.drawable.ic_download),
+    SupportArea.SWAP to ("تبدیل" to R.drawable.ic_swap),
+    SupportArea.HISTORY to ("تاریخچه" to R.drawable.ic_history),
+    SupportArea.TOKENS to ("توکن‌ها" to R.drawable.ic_contract_name),
+    SupportArea.SECURITY to ("امنیت" to R.drawable.ic_security),
+    SupportArea.OTHER to ("سایر" to R.drawable.ic_question)
 )
 
 /**
@@ -145,14 +152,12 @@ fun SupportFlowSheet(
         if (submitState is SupportViewModel.SubmitState.Sent) onDismiss()
     }
 
-    // برگشت یعنی «یک گام عقب»، نه «بستنِ همه‌چیز». چون بعد از BackHandlerِ خودِ شیت ثبت می‌شود،
-    // اولویت با این است و در گامِ اول غیرفعال می‌ماند تا شیت طبقِ معمول بسته شود.
-    BackHandler(enabled = visible && step != SupportStep.Category) {
-        step = when (step) {
-            SupportStep.Details -> SupportStep.Areas
-            SupportStep.Areas -> SupportStep.Form
-            else -> SupportStep.Category
-        }
+    // برگشت یعنی «یک گام عقب»، نه «بستنِ همه‌چیز» — و این برای هر سه راهِ خروج یکی است: دکمهٔ
+    // ضربدر، برگشتِ گوشی، و ضربه به پس‌زمینه. هر سه به `onDismiss`ِ [AnimatedBottomSheetCard]
+    // می‌رسند، پس یک لامبدا کافی است و `BackHandler`ِ جداگانه لازم نیست.
+    val handleBack: () -> Unit = {
+        val previous = SupportStep.entries.getOrNull(step.ordinal - 1)
+        if (previous == null) onDismiss() else step = previous
     }
 
     val accent = category?.accent() ?: MaterialTheme.colorScheme.primary
@@ -162,16 +167,16 @@ fun SupportFlowSheet(
         visible = visible,
         title = when (step) {
             SupportStep.Category -> "چطور می‌توانیم کمک کنیم؟"
+            SupportStep.Areas -> "کدام بخش‌ها ؟"
             SupportStep.Form -> when (category) {
                 SupportCategory.FEEDBACK -> "ثبت بازخورد"
                 SupportCategory.OTHER -> "پیام شما"
                 else -> "گزارش اشکال"
             }
 
-            SupportStep.Areas -> "کدام بخش‌ها؟"
             SupportStep.Details -> "مشخصات شما"
         },
-        onDismiss = onDismiss
+        onDismiss = handleBack
     ) {
         Column(
             modifier = Modifier
@@ -187,55 +192,99 @@ fun SupportFlowSheet(
             )
             Spacer(Modifier.height(18.dp))
 
-            when (step) {
-                SupportStep.Category -> CategoryStep(
-                    onSelect = {
-                        viewModel.selectCategory(it)
-                        step = SupportStep.Form
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = { supportStepTransition(forward = targetState > initialState) },
+                label = "support_step",
+                modifier = Modifier.fillMaxWidth()
+            ) { current ->
+                // گام‌ها فرزندانشان را پشتِ سرِ هم می‌ریزند و روی `Column` حساب می‌کنند؛ اسلاتِ
+                // `AnimatedContent` جعبه است، پس این `Column` لازم است.
+                //
+                // ⚠️ `current` خوانده می‌شود و نه `step`: در حینِ گذار هر دو نسخه با هم روی صفحه‌اند
+                // و با `step` گامِ در حالِ خروج هم محتوای گامِ تازه را می‌گرفت.
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    when (current) {
+                        SupportStep.Category -> CategoryStep(
+                            onSelect = {
+                                viewModel.selectCategory(it)
+                                step = SupportStep.Areas
+                            }
+                        )
+
+                        SupportStep.Areas -> AreasStep(
+                            selected = areas,
+                            accent = accent,
+                            onToggle = viewModel::toggleArea,
+                            onContinue = { step = SupportStep.Form }
+                        )
+
+                        SupportStep.Form -> FormStep(
+                            subject = subject,
+                            description = description,
+                            accent = accent,
+                            onSubjectChange = viewModel::setSubject,
+                            onDescriptionChange = viewModel::setDescription,
+                            onContinue = { step = SupportStep.Details }
+                        )
+
+                        SupportStep.Details -> DetailsStep(
+                            name = name,
+                            email = email,
+                            accent = accent,
+                            wallet = selectedWallet,
+                            submitState = submitState,
+                            onNameChange = viewModel::setName,
+                            onEmailChange = {
+                                viewModel.setEmail(it)
+                                viewModel.clearSubmitFailure()
+                            },
+                            onPickWallet = { walletId -> viewModel.selectWallet(walletId) },
+                            wallets = wallets,
+                            onSubmit = viewModel::submit
+                        )
                     }
-                )
-
-                SupportStep.Form -> FormStep(
-                    subject = subject,
-                    description = description,
-                    accent = accent,
-                    onSubjectChange = viewModel::setSubject,
-                    onDescriptionChange = viewModel::setDescription,
-                    onContinue = { step = SupportStep.Areas }
-                )
-
-                SupportStep.Areas -> AreasStep(
-                    selected = areas,
-                    accent = accent,
-                    onToggle = viewModel::toggleArea,
-                    onContinue = { step = SupportStep.Details }
-                )
-
-                SupportStep.Details -> DetailsStep(
-                    name = name,
-                    email = email,
-                    accent = accent,
-                    wallet = selectedWallet,
-                    submitState = submitState,
-                    onNameChange = viewModel::setName,
-                    onEmailChange = {
-                        viewModel.setEmail(it)
-                        viewModel.clearSubmitFailure()
-                    },
-                    onPickWallet = { walletId -> viewModel.selectWallet(walletId) },
-                    wallets = wallets,
-                    onSubmit = viewModel::submit
-                )
+                }
             }
         }
     }
 }
 
+/**
+ * گذارِ بینِ گام‌ها: محوشدن، به‌اضافهٔ یک لغزشِ کوتاه که جهت را برساند.
+ *
+ * لغزش عمداً ۲۴ پیکسل است و نه یک عرضِ کامل: این‌جا یک شیت است که ارتفاعش هم بین گام‌ها عوض
+ * می‌شود، و لغزشِ بلند کنارِ تغییرِ ارتفاع شلوغ می‌شود. آن‌قدر هست که «جلو» از «عقب» تشخیص داده
+ * شود و نه بیشتر.
+ *
+ * ورودی کمی تأخیر دارد تا با خروجی روی هم نیفتد، وگرنه وسطِ گذار دو متن هم‌زمان خوانده می‌شوند.
+ *
+ * [SizeTransform] بخشِ اصلیِ کار است: گام‌ها ارتفاع‌های خیلی متفاوتی دارند (سه کارت در برابر هفت
+ * ردیف) و بدونِ آن، خودِ شیت بین گام‌ها می‌پرید.
+ */
+private fun supportStepTransition(forward: Boolean): ContentTransform {
+    val enterOffset = if (forward) SUPPORT_STEP_SLIDE_PX else -SUPPORT_STEP_SLIDE_PX
+    // سازندهٔ [ContentTransform] و نه `togetherWith ... using ...`: آن `using` یک اکستنشنِ
+    // اکسپریمنتال است و در نسخه‌های تازه‌ترِ compose-animation جایش عوض شده. این‌جا همان سه
+    // مقدار مستقیم پاس می‌شوند.
+    return ContentTransform(
+        targetContentEnter = slideInHorizontally(tween(260, delayMillis = 90)) { enterOffset } +
+            fadeIn(tween(220, delayMillis = 90)),
+        initialContentExit = slideOutHorizontally(tween(180)) { -enterOffset } +
+            fadeOut(tween(150)),
+        sizeTransform = SizeTransform(clip = false) { _, _ ->
+            tween(durationMillis = 320, easing = FastOutSlowInEasing)
+        }
+    )
+}
+
+private const val SUPPORT_STEP_SLIDE_PX = 24
+
 /** گامِ ۱ — سه کارت، سه مسیر، سه رنگ. */
 @Composable
 private fun CategoryStep(onSelect: (SupportCategory) -> Unit) {
     CategoryCard(
-        icon = Icons.Outlined.BugReport,
+        icon = R.drawable.ic_bug,
         accent = SupportBugAccent,
         title = "گزارش اشکال",
         description = "مشکلی که با آن روبه‌رو شده‌اید را بگویید تا دنبالش کنیم.",
@@ -243,7 +292,7 @@ private fun CategoryStep(onSelect: (SupportCategory) -> Unit) {
     )
     Spacer(Modifier.height(10.dp))
     CategoryCard(
-        icon = Icons.Outlined.ChatBubbleOutline,
+        icon = R.drawable.ic_chat,
         accent = SupportFeedbackAccent,
         title = "ثبت بازخورد",
         description = "بگویید چه چیزی را می‌شود بهتر کرد؛ خوانده می‌شود.",
@@ -251,7 +300,7 @@ private fun CategoryStep(onSelect: (SupportCategory) -> Unit) {
     )
     Spacer(Modifier.height(10.dp))
     CategoryCard(
-        icon = Icons.Outlined.Description,
+        icon = R.drawable.ic_other,
         accent = SupportOtherAccent,
         title = "چیز دیگری",
         description = "درخواست قابلیت، یک پیام کوتاه، یا هر چیز دیگر.",
@@ -261,7 +310,7 @@ private fun CategoryStep(onSelect: (SupportCategory) -> Unit) {
 
 @Composable
 private fun CategoryCard(
-    icon: ImageVector,
+    icon: Int,
     accent: Color,
     title: String,
     description: String,
@@ -287,7 +336,7 @@ private fun CategoryCard(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = icon,
+                painter = painterResource(icon),
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(21.dp)
@@ -361,15 +410,19 @@ private fun AreasStep(
     onToggle: (SupportArea) -> Unit,
     onContinue: () -> Unit
 ) {
-    SUPPORT_AREA_LABELS.forEach { (area, labelAndIcon) ->
-        val (label, icon) = labelAndIcon
-        AreaRow(
-            label = label,
-            icon = icon,
-            selected = area in selected,
-            accent = accent,
-            onClick = { onToggle(area) }
-        )
+    // فاصله لازم است چون این فهرست چندانتخابی است: ردیفِ انتخاب‌شده پس‌زمینهٔ گِرد می‌گیرد و دو
+    // انتخابِ کنارِ هم بدونِ فاصله به هم می‌چسبند و گوشه‌های گِردشان یک لکهٔ واحد به نظر می‌رسد.
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SUPPORT_AREA_LABELS.forEach { (area, labelAndIcon) ->
+            val (label, icon) = labelAndIcon
+            AreaRow(
+                label = label,
+                icon = icon,
+                selected = area in selected,
+                accent = accent,
+                onClick = { onToggle(area) }
+            )
+        }
     }
 
     Spacer(Modifier.height(20.dp))
@@ -392,7 +445,7 @@ private fun AreasStep(
 @Composable
 private fun AreaRow(
     label: String,
-    icon: ImageVector,
+    icon: Int,
     selected: Boolean,
     accent: Color,
     onClick: () -> Unit
@@ -416,7 +469,7 @@ private fun AreaRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = icon,
+            painter = painterResource(icon),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(22.dp)

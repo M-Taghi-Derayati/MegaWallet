@@ -3,6 +3,7 @@ package com.mtd.megawallet.ui.compose.components
 import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -110,14 +111,22 @@ fun AnimatedBottomSheetCard(
                             .padding(horizontal = 24.dp, vertical = 20.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontFamily = IranSansRegular
-                            ,
+                        // شیت‌های چندگامی عنوانشان را وسطِ کار عوض می‌کنند؛ بدونِ این، متن می‌پرید
+                        // در حالی که محتوا نرم گذار می‌کرد. برای شیت‌هایی که عنوانِ ثابت دارند
+                        // هیچ اثری ندارد.
+                        Crossfade(
+                            targetState = title,
+                            animationSpec = tween(220),
+                            label = "sheet_title",
                             modifier = Modifier.weight(1f)
-                        )
+                        ) { current ->
+                            Text(
+                                text = current,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                fontFamily = IranSansRegular
+                            )
+                        }
 
                         IconButton(
                             onClick = onDismiss,

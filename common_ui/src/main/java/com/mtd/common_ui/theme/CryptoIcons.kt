@@ -1,5 +1,6 @@
 package com.mtd.common_ui.theme
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +32,13 @@ import kotlin.math.abs
 import kotlin.math.min
 
 
+/**
+ * drawableِ باندل‌شدهٔ نمادهای شناخته‌شده.
+ *
+ * ⚠️ این **fallback** است، نه منبعِ آیکون. منبع همیشه `iconUrl`ِ کاتالوگ است — و کاتالوگ خودش
+ * را از باندلِ امضاشدهٔ سرور می‌گیرد، پس عوض‌کردنِ آیکونِ یک ارز نیازی به انتشارِ نسخه ندارد.
+ * این فهرست فقط برای وقتی است که URL شکست بخورد یا اصلاً وجود نداشته باشد.
+ */
 fun getLocalIconResId(symbol: String): Int {
     return when (symbol.uppercase()) {
         "BTC" -> R.drawable.ic_btc
@@ -99,10 +107,18 @@ object HexAssetShape : Shape {
 }
 
 /**
- * آیکونِ شبکه از `NetworkInfo.iconUrl` (networks.json یا باندلِ امضاشده).
+ * آیکونِ شبکه از `NetworkInfo.iconUrl`.
  *
  * جایگزینِ `getNetworkIconResId(networkId)`ِ قدیمی که یک `when` روی فهرستِ هاردکدِ networkIdها بود
  * و شاخهٔ `else` آن یعنی هر زنجیرهٔ تازه‌ای آیکونِ عمومیِ کیف‌پول می‌گرفت.
+ *
+ * مثلِ [AssetIcon] منبعِ حقیقت خودِ URL است و `ic_pls` فقط قابِ خنثیِ لحظهٔ بارگذاری و خطاست —
+ * عمداً یک آیکونِ *دیگر* نیست، وگرنه در گذار دو تصویرِ متفاوت برای یک شبکه دیده می‌شد.
+ *
+ * ⚠️ برخلافِ [AssetIcon] لایهٔ drawableِ لوکال را ندارد، چون فراخوان‌ها فقط URL را دارند و نه
+ * `currencySymbol`. یعنی اگر URLِ یک شبکه بیفتد این‌جا شش‌ضلعیِ خالی می‌شود ولی همان زنجیره در
+ * لیستِ دارایی‌ها drawableِ خودش را نشان می‌دهد. برای رفعش باید `currencySymbol` تا این‌جا
+ * برسد — کارِ جدا و پرتماس با ۱۴ فراخوان.
  */
 @Composable
 fun NetworkIcon(
@@ -126,18 +142,22 @@ fun NetworkIcon(
 /**
  * آیکونِ ارز از `AssetItem.iconUrl` — همتای [NetworkIcon].
  *
- * سه لایه، به ترتیب:
- *  1. drawableِ لوکالِ نمادهای شناخته‌شده ([getLocalIconResId])؛
- *  2. خودِ `iconUrl`؛
- *  3. **آواتارِ حرفیِ ساخته‌شده از نماد** ([SymbolAvatar]).
+ * ### ترتیبِ منابع (یکی، و همیشه همین)
+ *  1. خودِ `iconUrl` — **منبعِ حقیقت**؛
+ *  2. drawableِ لوکال ([getLocalIconResId])، فقط وقتی URL شکست بخورد یا اصلاً وجود نداشته باشد؛
+ *  3. آواتارِ حرفیِ ساخته‌شده از نماد ([SymbolAvatar]).
+ *
+ * ⚠️ لایهٔ ۲ عمداً **placeholder نیست**. تا دیروز برای نمادهای شناخته‌شده drawableِ لوکال به‌عنوان
+ * `placeholder` پاس می‌شد، یعنی کاربر اول آیکونِ داخلِ اپ را می‌دید و بعد با تصویرِ سرور عوض
+ * می‌شد — و چون Coil کش دارد، این «گاهی این، گاهی آن» بود نه یک رفتارِ ثابت. حالا لحظهٔ
+ * بارگذاری یک قابِ خنثی است و هیچ‌وقت دو آیکونِ متفاوت برای یک ارز پشتِ سر هم دیده نمی‌شود.
  *
  * لایهٔ سوم دائمی است، نه موقتی: هیچ منبعی کلِ توکن‌ها را پوشش نمی‌دهد و بخشی از آن‌ها هرگز آیکون
  * نخواهند داشت (سنجشِ زنده: ۸٪ روی BSC، ۱۹٪ آربیتروم، ۲۸٪ اتریوم). قبلاً همهٔ این‌ها یک
  * drawableِ عمومیِ کیف‌پول می‌گرفتند، یعنی ده‌ها ردیفِ متفاوت که از هم قابلِ تشخیص نبودند.
  *
  * هر سه لایه با [HexAssetShape] بریده می‌شوند تا شکلِ بیرونی مستقل از اینکه کدام لایه جواب داده
- * یکی بماند — همان شش‌ضلعیِ بجِ شبکه. منبعِ آیکون همچنان `iconUrl` است و drawableِ لوکال فقط
- * fallback؛ برش فقط قاب را عوض می‌کند، نه ترتیبِ منابع را.
+ * یکی بماند — همان شش‌ضلعیِ بجِ شبکه.
  */
 @Composable
 fun AssetIcon(
@@ -148,24 +168,14 @@ fun AssetIcon(
 ) {
     val localResId = remember(symbol) { getLocalIconResId(symbol) }
 
-    if (localResId != 0) {
-        val local = painterResource(id = localResId)
-        AsyncImage(
-            model = iconUrl,
-            contentDescription = contentDescription,
-            modifier = modifier.clip(HexAssetShape),
-            contentScale = ContentScale.Fit,
-            placeholder = local,
-            error = local,
-            fallback = local,
-            imageLoader = LocalContext.current.imageLoader
-        )
-        return
-    }
-
     // `iconUrl` می‌تواند **دائماً** خالی باشد؛ در آن حالت اصلاً درخواستی زده نمی‌شود.
     if (iconUrl.isNullOrBlank()) {
-        SymbolAvatar(symbol = symbol, contentDescription = contentDescription, modifier = modifier)
+        AssetIconFallback(
+            localResId = localResId,
+            symbol = symbol,
+            contentDescription = contentDescription,
+            modifier = modifier
+        )
         return
     }
 
@@ -177,9 +187,40 @@ fun AssetIcon(
         imageLoader = LocalContext.current.imageLoader,
         // `fillMaxSize` لازم است: اسلاتِ SubcomposeAsyncImage محتوا را wrap می‌کند، پس بدونِ آن
         // آواتار به اندازهٔ متنش جمع می‌شد و لحظهٔ بارگذاری یک شش‌ضلعیِ ریز وسطِ جای خالی می‌ماند.
-        loading = { SymbolAvatar(symbol = symbol, contentDescription = null, modifier = Modifier.fillMaxSize()) },
-        error = { SymbolAvatar(symbol = symbol, contentDescription = null, modifier = Modifier.fillMaxSize()) }
+        //
+        // لحظهٔ بارگذاری عمداً آواتار است و نه drawableِ لوکال — به دلیلی که بالا آمد.
+        loading = {
+            SymbolAvatar(symbol = symbol, contentDescription = null, modifier = Modifier.fillMaxSize())
+        },
+        error = {
+            AssetIconFallback(
+                localResId = localResId,
+                symbol = symbol,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     )
+}
+
+/** لایه‌های ۲ و ۳: drawableِ لوکال اگر بود، وگرنه آواتارِ حرفی. */
+@Composable
+private fun AssetIconFallback(
+    localResId: Int,
+    symbol: String,
+    contentDescription: String?,
+    modifier: Modifier = Modifier
+) {
+    if (localResId != 0) {
+        Image(
+            painter = painterResource(id = localResId),
+            contentDescription = contentDescription,
+            modifier = modifier.clip(HexAssetShape),
+            contentScale = ContentScale.Fit
+        )
+    } else {
+        SymbolAvatar(symbol = symbol, contentDescription = contentDescription, modifier = modifier)
+    }
 }
 
 /**

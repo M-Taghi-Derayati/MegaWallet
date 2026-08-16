@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -31,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mtd.common_ui.R
 import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.IranSansBold
 import com.mtd.common_ui.theme.IranSansRegular
@@ -302,7 +302,7 @@ fun SettingsInfoButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.Outlined.HelpOutline,
+            painter =painterResource(R.drawable.ic_info),
             contentDescription = "درباره",
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(24.dp)

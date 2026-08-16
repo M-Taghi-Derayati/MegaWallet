@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -41,12 +40,12 @@ import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.IranSansBold
 import com.mtd.common_ui.theme.IranSansRegular
-import com.mtd.data.BuildConfig as DataBuildConfig
 import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.megawallet.BuildConfig
 import com.mtd.megawallet.R
 import com.mtd.megawallet.ui.compose.components.AnimatedBottomSheetCard
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
+import com.mtd.data.BuildConfig as DataBuildConfig
 
 /**
  * درباره / توسعه‌دهنده — یک کارت با سرستونِ رنگی، نه یک صفحهٔ ساده.
@@ -139,7 +138,7 @@ private fun AboutHeader(onClose: () -> Unit) {
             .clipToBounds()
     ) {
         Image(
-            painter = painterResource(id = R.drawable.logo),
+            painter = painterResource(id = R.drawable.logo_flat),
             contentDescription = null,
             alpha = 0.16f,
             modifier = Modifier
@@ -160,7 +159,7 @@ private fun AboutHeader(onClose: () -> Unit) {
                 )
         ) {
             Text(
-                text = "مگاوالت",
+                text = "مگاولت",
                 color = Color.White,
                 fontFamily = IranSansBold,
                 fontSize = 24.sp

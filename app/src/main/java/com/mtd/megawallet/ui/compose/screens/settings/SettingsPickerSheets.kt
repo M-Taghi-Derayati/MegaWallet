@@ -219,7 +219,7 @@ fun NotificationPickerSheet(
             // و ردیف را از یک کنترلِ ساده به یک بلوکِ شلوغ تبدیل می‌کرد.
             Spacer(Modifier.height(8.dp))
             SwitchCaption(
-                "وقتی دارایی به کیف پول‌تان می‌رسد یا تراکنشی نهایی می‌شود خبر می‌گیرید. با خاموش‌کردن، دستگاه از فهرست گیرنده‌های اعلان برداشته می‌شود."
+                "وقتی دارایی به کیف پول‌تان می‌رسد یا تراکنشی نهایی می‌شود خبر می‌گیرید. با خاموش ‌کردن، دستگاه از فهرست گیرنده‌های اعلان برداشته می‌شود."
             )
 
             Spacer(Modifier.height(16.dp))
@@ -336,7 +336,7 @@ fun ConnectionModePickerSheet(
                             "برنامه خودش به نودهای شبکه وصل می‌شود. واسطه‌ای در میان نیست، اما اگر نودی در دسترس نباشد کندتر یا ناموفق می‌شود."
 
                         BlockchainConnectionMode.PROXY ->
-                            "درخواست‌ها از سرور مگاوالت رد می‌شوند. سریع‌تر و پایدارتر است، اما آن سرور می‌بیند چه آدرس‌هایی را می‌خوانید."
+                            "درخواست‌ها از سرور مگاولت رد می‌شوند. سریع‌تر و پایدارتر است."
                     },
                     selected = mode == selected,
                     showDivider = index != BlockchainConnectionMode.entries.lastIndex,
@@ -346,7 +346,7 @@ fun ConnectionModePickerSheet(
 
             Spacer(Modifier.height(12.dp))
             Text(
-                text = "کلید خصوصی در هیچ‌کدام از دو حالت از دستگاه خارج نمی‌شود؛ امضا همیشه همین‌جا انجام می‌شود.",
+                text = "کلید خصوصی در هیچ‌کدام از دو حالت از دستگاه خارج نمی‌شود؛ امضا همیشه همین ‌جا انجام می‌شود.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = IranSansRegular,
                 fontSize = 12.sp,
