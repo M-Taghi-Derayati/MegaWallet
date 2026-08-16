@@ -36,16 +36,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.mtd.common_ui.R
 import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.megawallet.ui.compose.animations.constants.MainScreenConstants
 
 private const val BOTTOM_SHEET_CONTENT_TRANSITION_MS = 360
-
+ val SHEET_SIDE_MARGIN = 15.dp
+ val SHEET_BOTTOM_MARGIN = 20.dp
 @SuppressLint("RememberInComposition")
 @Composable
 fun AnimatedBottomSheetCard(
@@ -93,8 +90,8 @@ fun AnimatedBottomSheetCard(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 15.dp)
-                    .padding(top = topInsetPadding + 20.dp, bottom = 20.dp)
+                    .padding(horizontal = SHEET_SIDE_MARGIN)
+                    .padding(top = topInsetPadding + SHEET_BOTTOM_MARGIN, bottom = SHEET_BOTTOM_MARGIN)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(MainScreenConstants.FAB_CORNER_RADIUS_EXPANDED))
                     .background(

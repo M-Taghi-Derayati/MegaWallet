@@ -16,6 +16,8 @@ import com.mtd.data.repository.CloudWalletBalanceCalculatorImpl
 import com.mtd.data.repository.GsonCloudWalletBackupCodec
 import com.mtd.data.repository.MarketDataRepositoryImpl
 import com.mtd.data.repository.FiatCurrencyProvider
+import com.mtd.data.repository.NotificationPreferenceProvider
+import com.mtd.data.repository.ThemeModeProvider
 import com.mtd.data.repository.UsdToIrrRateProvider
 import com.mtd.data.repository.MonitoringRepositoryImpl
 import com.mtd.data.repository.SendAssetDataSourceImpl
@@ -30,6 +32,7 @@ import com.mtd.data.repository.assets.MergedAssetCatalog
 import com.mtd.data.repository.assets.TokenDiscoveryRepositoryImpl
 import com.mtd.data.repository.assets.TokenPriceRepositoryImpl
 import com.mtd.data.repository.assets.UserTokenRepositoryImpl
+import com.mtd.data.repository.contacts.AddressBookRepositoryImpl
 import com.mtd.data.repository.auth.AuthRepositoryImpl
 import com.mtd.data.repository.auth.EvmAuthMessageSigner
 import com.mtd.data.repository.auth.SecureTokenStore
@@ -39,6 +42,7 @@ import com.mtd.data.repository.gasless.EvmGaslessRepositoryImpl
 import com.mtd.data.repository.gasless.TronGaslessRepositoryImpl
 import com.mtd.data.repository.growth.GrowthRepositoryImpl
 import com.mtd.data.repository.notification.NotificationRepositoryImpl
+import com.mtd.data.repository.support.SupportRepositoryImpl
 import com.mtd.data.repository.swap.SwapRepositoryImpl
 import com.mtd.data.repository.transfer.UnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.IAssetCatalog
@@ -62,6 +66,7 @@ import com.mtd.domain.interfaceRepository.IManageableAssetCatalog
 import com.mtd.domain.interfaceRepository.IMarketDataRepository
 import com.mtd.domain.interfaceRepository.INotificationRepository
 import com.mtd.domain.interfaceRepository.IMonitoringRepository
+import com.mtd.domain.interfaceRepository.ISupportRepository
 import com.mtd.domain.interfaceRepository.ISwapRepository
 import com.mtd.domain.interfaceRepository.ISendAssetDataSource
 import com.mtd.domain.interfaceRepository.ITokenDiscoveryRepository
@@ -72,8 +77,11 @@ import com.mtd.domain.interfaceRepository.IUnifiedTransferCoordinator
 import com.mtd.domain.interfaceRepository.IWalletBalanceSynchronizer
 import com.mtd.domain.interfaceRepository.IWalletRepository
 import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
+import com.mtd.domain.interfaceRepository.INotificationPreferenceProvider
+import com.mtd.domain.interfaceRepository.IThemeModeProvider
 import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IAddressBookRepository
 import com.mtd.domain.interfaceRepository.IUserTokenRepository
 import dagger.Binds
 import dagger.Module
@@ -140,6 +148,12 @@ abstract class DataModule {
     abstract fun bindMonitoringRepository(
         impl: MonitoringRepositoryImpl
     ): IMonitoringRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSupportRepository(
+        impl: SupportRepositoryImpl
+    ): ISupportRepository
 
     @Binds
     @Singleton
@@ -258,6 +272,18 @@ abstract class DataModule {
     @Singleton
     abstract fun bindFiatCurrencyProvider(impl: FiatCurrencyProvider): IFiatCurrencyProvider
 
+    /** @Singleton برای همان دلیل: یک پوسته، که هر دو Activity آن را می‌بینند. */
+    @Binds
+    @Singleton
+    abstract fun bindThemeModeProvider(impl: ThemeModeProvider): IThemeModeProvider
+
+    /** @Singleton چون هم صفحهٔ تنظیمات و هم ثبت‌کنندهٔ توکنِ FCM همین یک مقدار را می‌خوانند. */
+    @Binds
+    @Singleton
+    abstract fun bindNotificationPreferenceProvider(
+        impl: NotificationPreferenceProvider
+    ): INotificationPreferenceProvider
+
     @Binds
     abstract fun bindCloudWalletBalanceCalculator(
         impl: CloudWalletBalanceCalculatorImpl
@@ -323,6 +349,13 @@ abstract class DataModule {
     abstract fun bindUserTokenRepository(
         impl: UserTokenRepositoryImpl
     ): IUserTokenRepository
+
+    /** دفترِ آدرس‌ها؛ به کیف پول کلید نمی‌خورد، پس یک singletonِ ساده کافی است. */
+    @Binds
+    @Singleton
+    abstract fun bindAddressBookRepository(
+        impl: AddressBookRepositoryImpl
+    ): IAddressBookRepository
 
     @Binds
     @Singleton

@@ -9,8 +9,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,17 +35,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.theme.InterMedium
-import com.mtd.common_ui.theme.IranSansBoldMedium
-import com.mtd.common_ui.theme.IranSansLightLight
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.domain.model.swap.SwapExecutionOutcome
 import com.mtd.domain.model.swap.SwapExecutionProgress
 import com.mtd.domain.model.swap.SwapLegKind
 import com.mtd.domain.model.swap.SwapLegStatus
+import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.viewmodel.swap.SwapUiState
 
 /**
@@ -66,14 +66,14 @@ fun SwapExecutionSection(
     val receive = state.receiveToken
 
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "در حال انجام تبدیل",
-            color = MaterialTheme.colorScheme.onBackground,
+            color = MaterialTheme.colorScheme.tertiary,
             fontSize = 20.sp,
-            fontFamily = IranSansBoldMedium,
+            fontFamily = IranSansBold,
             fontWeight = FontWeight.Bold
         )
 
@@ -81,7 +81,7 @@ fun SwapExecutionSection(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = "${pay.option.symbol} ← ${receive.symbol}",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onTertiary,
                 fontSize = 14.sp,
                 fontFamily = InterMedium
             )
@@ -137,19 +137,19 @@ private fun SwapLegRow(
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = MaterialTheme.colorScheme.tertiary,
                 fontSize = 15.sp,
-                fontFamily = IranSansBoldMedium,
+                fontFamily = IranSansBold,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = subtitle,
                 color = when (status) {
                     SwapLegStatus.FAILED -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onTertiary
                 },
                 fontSize = 12.sp,
-                fontFamily = IranSansLightLight
+                fontFamily = IranSansRegular
             )
         }
     }
@@ -159,10 +159,11 @@ private fun SwapLegRow(
 private fun SwapLegIndicator(status: SwapLegStatus, isActive: Boolean) {
     val motion = LocalSwapMotion.current
     val color = when (status) {
-        SwapLegStatus.CONFIRMED -> MaterialTheme.colorScheme.primary
+        // همان سبزی که اسلایدرِ تأییدِ ارسال موقعِ موفقیت می‌گیرد.
+        SwapLegStatus.CONFIRMED -> SWAP_SUCCESS_GREEN
         SwapLegStatus.FAILED -> MaterialTheme.colorScheme.error
-        SwapLegStatus.UNCONFIRMED -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+        SwapLegStatus.UNCONFIRMED -> MaterialTheme.colorScheme.onTertiary
+        else -> MaterialTheme.colorScheme.onTertiary
     }
 
     Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
@@ -250,14 +251,14 @@ fun SwapResultSection(
     val bridgePending = state.isBridgeSettlementPending
     val isSuccess = outcome is SwapExecutionOutcome.Completed && !bridgePending
     val accent = when {
-        bridgePending -> MaterialTheme.colorScheme.onSurfaceVariant
-        outcome is SwapExecutionOutcome.Completed -> MaterialTheme.colorScheme.primary
-        outcome is SwapExecutionOutcome.Stalled -> MaterialTheme.colorScheme.onSurfaceVariant
+        bridgePending -> MaterialTheme.colorScheme.onTertiary
+        outcome is SwapExecutionOutcome.Completed -> SWAP_SUCCESS_GREEN
+        outcome is SwapExecutionOutcome.Stalled -> MaterialTheme.colorScheme.onTertiary
         else -> MaterialTheme.colorScheme.error
     }
 
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -294,9 +295,9 @@ fun SwapResultSection(
                 outcome is SwapExecutionOutcome.Stalled -> "ارسال شد، در انتظار تأیید"
                 else -> "تبدیل ناموفق بود"
             },
-            color = MaterialTheme.colorScheme.onBackground,
+            color = MaterialTheme.colorScheme.tertiary,
             fontSize = 20.sp,
-            fontFamily = IranSansBoldMedium,
+            fontFamily = IranSansBold,
             fontWeight = FontWeight.Bold
         )
 
@@ -309,9 +310,9 @@ fun SwapResultSection(
                         ?.let { SwapFormat.amountWithSymbol(it, receive.decimals, receive.symbol) }
                         ?: ""
                     ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onTertiary,
                 fontSize = 13.sp,
-                fontFamily = IranSansLightLight
+                fontFamily = IranSansRegular
             )
         }
 
@@ -319,33 +320,17 @@ fun SwapResultSection(
             Spacer(Modifier.height(10.dp))
             Text(
                 text = message,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onTertiary,
                 fontSize = 13.sp,
-                fontFamily = IranSansLightLight
+                fontFamily = IranSansRegular
             )
         }
 
         Spacer(Modifier.height(28.dp))
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .clip(RoundedCornerShape(26.dp))
-                .background(MaterialTheme.colorScheme.onBackground)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onDone() },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "بستن",
-                color = MaterialTheme.colorScheme.background,
-                fontSize = 16.sp,
-                fontFamily = IranSansBoldMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        PrimaryButton(text = "بستن", onClick = onDone)
     }
 }
+
+/** سبزِ موفقیت؛ همان مقداری که اسلایدرِ تأیید و نشانِ آواتارِ ارسال استفاده می‌کنند. */
+private val SWAP_SUCCESS_GREEN = Color(0xFF34C759)

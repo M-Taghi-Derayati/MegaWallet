@@ -26,41 +26,56 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.imageLoader
-import androidx.compose.ui.platform.LocalContext
+import com.mtd.common_ui.theme.AssetIcon
 import com.mtd.common_ui.theme.InterMedium
-import com.mtd.common_ui.theme.getPlaceholderIconResId
+import com.mtd.common_ui.theme.NetworkIcon
+import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
+import com.mtd.megawallet.ui.compose.components.AssetIconWithNetworkBadge
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** آیکونِ توکن/شبکه از `iconUrl`ِ کانفیگ. هیچ نگاشتِ per-token در کد نیست. */
+/**
+ * آیکونِ ارز در فلوی تبدیل.
+ *
+ * فقط اندازه را می‌بندد و بقیه را به [AssetIcon] می‌سپارد: ترتیبِ منابع (drawableِ لوکال ← `iconUrl`
+ * ← آواتارِ حرفی) و شش‌ضلعیِ قاب همان چیزی می‌ماند که لیستِ دارایی و صفحهٔ ارسال دارند. پیش از این
+ * این‌جا یک `AsyncImage`ِ دایره‌ایِ جدا بود، پس یک توکن در دو صفحه دو شکلِ متفاوت داشت.
+ */
 @Composable
-fun SwapTokenLogo(
+fun SwapAssetLogo(
+    iconUrl: String?,
+    symbol: String,
+    contentDescription: String?,
+    size: Dp,
+    modifier: Modifier = Modifier
+) {
+    AssetIcon(
+        iconUrl = iconUrl,
+        symbol = symbol,
+        contentDescription = contentDescription,
+        modifier = modifier.size(size)
+    )
+}
+
+/** آیکونِ شبکه؛ همتای [SwapAssetLogo] برای `networkIconUrl`. */
+@Composable
+fun SwapNetworkLogo(
     iconUrl: String?,
     contentDescription: String?,
     size: Dp,
     modifier: Modifier = Modifier
 ) {
-    val placeholder = painterResource(id = getPlaceholderIconResId())
-    AsyncImage(
-        model = iconUrl,
+    NetworkIcon(
+        iconUrl = iconUrl,
         contentDescription = contentDescription,
-        modifier = modifier.size(size).clip(CircleShape),
-        contentScale = ContentScale.Fit,
-        placeholder = placeholder,
-        error = placeholder,
-        fallback = placeholder,
-        imageLoader = LocalContext.current.imageLoader
+        modifier = modifier.size(size)
     )
 }
 
@@ -77,6 +92,12 @@ enum class SwapMorphSlot { PAY_PILL, RECEIVE_CARD, COIN_PAY, COIN_RECEIVE }
  */
 class SwapMorphIcon {
     var iconUrl by mutableStateOf<String?>(null)
+
+    /** نمادِ توکن؛ ورودیِ آواتارِ حرفی وقتی نه drawableِ لوکالی هست و نه `iconUrl` جواب می‌دهد. */
+    var symbol by mutableStateOf("")
+
+    /** شبکه‌ای که این توکن رویش است؛ بجِ گوشهٔ آیکون از این ساخته می‌شود و با آن پرواز می‌کند. */
+    var networkIconUrl by mutableStateOf<String?>(null)
     var slot by mutableStateOf<SwapMorphSlot?>(null)
     var currentRect by mutableStateOf<Rect?>(null)
     val translation = Animatable(Offset.Zero, Offset.VectorConverter)
@@ -136,7 +157,14 @@ class SwapMorphIcon {
     }
 }
 
-/** فضای [slot] را همیشه نگه می‌دارد؛ آیکون را فقط وقتی می‌کشد که مالکِ آن باشد. */
+/**
+ * فضای [slot] را همیشه نگه می‌دارد؛ آیکون را فقط وقتی می‌کشد که مالکِ آن باشد.
+ *
+ * چیزی که پرواز می‌کند **آیکون به‌علاوهٔ بجِ شبکه** است، نه فقط دایرهٔ ارز: در فلوی تبدیل هر توکن
+ * فقط با شبکه‌اش معنی دارد (همان USDT روی سه زنجیره سه چیزِ متفاوت است) و بجْ همان‌جایی می‌نشیند
+ * که در فهرستِ دارایی و صفحهٔ ارسال می‌نشیند. چون [AssetIconWithNetworkBadge] یک واحدِ اندازه‌گیری
+ * است، محاسبهٔ FLIP هم بدونِ تغییر روی همین قابِ بزرگ‌تر کار می‌کند.
+ */
 @Composable
 fun SwapMorphSlotHost(
     model: SwapMorphIcon,
@@ -145,13 +173,15 @@ fun SwapMorphSlotHost(
     contentDescription: String? = null,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier.size(size), contentAlignment = Alignment.Center) {
-        val url = model.iconUrl
+    Box(modifier.size(size * SLOT_CONTAINER_RATIO), contentAlignment = Alignment.Center) {
         if (model.slot == slot) {
-            SwapTokenLogo(
-                iconUrl = url,
+            AssetIconWithNetworkBadge(
+                iconUrl = model.iconUrl,
+                symbol = model.symbol,
+                networkIconUrl = model.networkIconUrl,
                 contentDescription = contentDescription,
-                size = size,
+                iconSize = size,
+                showBadge = model.networkIconUrl != null,
                 modifier = Modifier
                     .onGloballyPositioned { model.onRect(it.boundsInRoot()) }
                     .graphicsLayer {
@@ -164,6 +194,10 @@ fun SwapMorphSlotHost(
         }
     }
 }
+
+/** بجْ از گوشهٔ آیکون بیرون می‌زند؛ همان نسبتی که [AssetIconWithNetworkBadge] برای قابش دارد. */
+private val SLOT_CONTAINER_RATIO =
+    WalletScreenConstants.ASSET_ICON_SIZE / WalletScreenConstants.ASSET_ICON_MAIN_SIZE
 
 /** سکشنی از ستونِ واحد که بین فازها باز/بسته می‌شود. */
 @Composable
@@ -198,7 +232,7 @@ fun SwapQuoteTimer(
     modifier: Modifier = Modifier
 ) {
     val expiring = fraction <= 0.34f
-    val color = if (expiring) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val color = if (expiring) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onTertiary
 
     Row(
         modifier = modifier,

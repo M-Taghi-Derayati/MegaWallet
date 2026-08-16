@@ -15,6 +15,9 @@ import com.mtd.data.config.ConfigCatalogBootstrapper
 import com.mtd.data.datasource.DefaultBlockchainConnectionModeProvider
 import com.mtd.data.datasource.DefaultTestnetVisibilityProvider
 import com.mtd.data.di.ForImageLoading
+import com.mtd.domain.interfaceRepository.IAddressBookRepository
+import com.mtd.domain.interfaceRepository.INotificationPreferenceProvider
+import com.mtd.domain.interfaceRepository.IThemeModeProvider
 import com.mtd.domain.interfaceRepository.IUserTokenRepository
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -42,6 +45,17 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
     // فهرستِ توکنِ کاربر. منبعِ ادغام‌شده آن را **همگام** می‌خواند، پس باید پیش از اولین ساختِ لیست
     // از دیسک بالا آمده باشد؛ وگرنه اولین فریم فقط باندل را نشان می‌دهد تا اولین تغییرِ استیت.
     @Inject lateinit var userTokenRepository: IUserTokenRepository
+
+    // دفترِ آدرس‌ها. برخلافِ بالا همگام خوانده نمی‌شود، ولی همین‌جا prime می‌شود تا اولین باز شدنِ
+    // شیتِ گیرنده فهرست را آماده ببیند و یک فریم خالی نزند.
+    @Inject lateinit var addressBookRepository: IAddressBookRepository
+
+    // پوسته. باید پیش از اولین composition بالا آمده باشد، وگرنه برنامه یک لحظه با پوستهٔ سیستم
+    // باز می‌شود و بعد به انتخابِ کاربر می‌پرد — یعنی یک چشمکِ سفید برای کسی که تاریک انتخاب کرده.
+    @Inject lateinit var themeModeProvider: IThemeModeProvider
+
+    // ترجیحِ اعلان‌ها؛ ثبت‌کنندهٔ توکنِ FCM آن را همان اول کار می‌خواند.
+    @Inject lateinit var notificationPreferenceProvider: INotificationPreferenceProvider
 
     // Lazy است چون newImageLoader ممکن است پیش از آماده‌شدنِ کاملِ گراف صدا زده شود و ساختنِ
     // کلاینت زنجیرهٔ tokenStore/authenticator را هم می‌کشد؛ با Lazy تا اولین درخواستِ تصویر عقب می‌افتد.
@@ -86,12 +100,19 @@ class MegaWalletApplication: Application() , ImageLoaderFactory{
 
     private fun warmUpDynamicConfig() {
         applicationScope.launch {
+            // اول از همه: هرچه دیرتر بنشیند، چشمکِ پوستهٔ اشتباه بلندتر دیده می‌شود.
+            runCatching { themeModeProvider.ensurePrimed() }
+                .onFailure { Timber.w(it, "Theme prime failed; following the system theme") }
+            runCatching { notificationPreferenceProvider.ensurePrimed() }
+                .onFailure { Timber.w(it, "Notification-preference prime failed; assuming enabled") }
             runCatching { connectionModeProvider.prime() }
                 .onFailure { Timber.w(it, "Connection-mode prime failed; defaulting to DIRECT") }
             runCatching { testnetVisibilityProvider.prime() }
                 .onFailure { Timber.w(it, "Testnet-visibility prime failed; using the build default") }
             runCatching { userTokenRepository.prime() }
                 .onFailure { Timber.w(it, "User-token prime failed; showing the bundle catalog only") }
+            runCatching { addressBookRepository.prime() }
+                .onFailure { Timber.w(it, "Address-book prime failed; the saved-address list stays empty") }
 
             runCatching { configCatalogBootstrapper.bootstrap() }
                 .onSuccess { Timber.i("Catalog bootstrap finished (appliedFromBundle=$it)") }

@@ -611,8 +611,6 @@ private fun HistoryNetworkIcon(
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
         contentAlignment = Alignment.Center
     ) {
-        // TASK-53 — «همهٔ شبکه‌ها» یک گزینهٔ ترکیبی است و شبکهٔ واقعی نیست، پس تنها جایی است که
-        // یک drawable ثابت درست است. بقیه از iconUrl کانفیگ می‌آیند.
         if (option.isAllNetworks) {
             Image(
                 painter = painterResource(id = R.drawable.ic_wallet),

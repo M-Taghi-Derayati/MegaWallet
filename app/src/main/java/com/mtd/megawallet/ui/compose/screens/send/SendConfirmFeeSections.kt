@@ -56,6 +56,7 @@ import com.mtd.common_ui.theme.IranSansRegularMedium
 import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.domain.model.FeeOption
 import com.mtd.domain.model.GaslessPreviewState
+import com.mtd.megawallet.ui.compose.components.FeeLevelIndicator
 
 data class SmartFeeInfo(
     val amount: String,
@@ -495,7 +496,7 @@ internal fun FeeSection(
 
                 Spacer(Modifier.width(10.dp))
 
-                VerticalFeeIndicator(selectedIndex = selectedIndex, totalOptions = if (feeOptions.isEmpty()) 1 else feeOptions.size, isLoading = isFetchingInitial)
+                FeeLevelIndicator(selectedIndex = selectedIndex, totalOptions = if (feeOptions.isEmpty()) 1 else feeOptions.size, isLoading = isFetchingInitial)
             }
         }
     }
@@ -548,67 +549,6 @@ private fun PolicyBadge(
             fontFamily = IranSansRegular,
             fontSize = 10.sp
         )
-    }
-}
-
-@Composable
-private fun VerticalFeeIndicator(selectedIndex: Int, totalOptions: Int, isLoading: Boolean = false) {
-    val dotsCount = maxOf(3, totalOptions)
-    Box(
-        modifier = Modifier
-            .width(26.dp)
-            .height(64.dp)
-            .clip(RoundedCornerShape(13.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-            .padding(vertical = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier.fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            for (i in (dotsCount - 1) downTo 0) {
-                val isSelected = (i == selectedIndex) || (selectedIndex > 2 && i == 2)
-
-                val size by animateDpAsState(if (isSelected) 18.dp else 5.dp, label = "dotSize")
-                val color = when (i) {
-                    2 -> Color(0xFFFF7043)
-                    1 -> Color(0xFFFFCA28)
-                    0 -> Color(0xFF29B6F6)
-                    else -> Color.Gray
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(size)
-                        .clip(CircleShape)
-                        .background(color),
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isSelected || isLoading,
-                        enter = fadeIn(tween(300)),
-                        exit = fadeOut(tween(300))
-                    ) {
-                        if (isLoading) {
-                            Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) // just keep dot colored without icon
-                        } else {
-                            Icon(
-                                imageVector = when(i){
-                                    2 -> Icons.Default.Bolt
-                                    1 -> Icons.Default.Check
-                                    else -> Icons.Default.Schedule
-                                },
-                                contentDescription = null,
-                                tint = Color.Black.copy(alpha = 0.7f),
-                                modifier = Modifier.size(12.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

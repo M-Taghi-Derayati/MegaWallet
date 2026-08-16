@@ -896,6 +896,11 @@ class TransactionHistoryViewModel @Inject constructor(
     }
 
     private suspend fun refreshWalletAddressBook() {
+        // یک‌بار در طولِ عمرِ این صفحه کافی است. ساختِ دفترچه حالا کلیدهای همهٔ کیف‌پول‌ها را مشتق
+        // می‌کند (قبلاً همیشه خالی برمی‌گشت و عملاً بی‌هزینه بود)، و مجموعهٔ کیف‌پول‌ها وسطِ تازه‌سازیِ
+        // سابقه عوض نمی‌شود.
+        if (walletAddressBook.isNotEmpty()) return
+
         walletAddressBook = when (val result = getWalletAddressBookUseCase()) {
             is ResultResponse.Success -> {
                 result.data

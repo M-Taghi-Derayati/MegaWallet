@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.mtd.domain.model.AssetItem
 import com.mtd.megawallet.ui.compose.components.HintState
 import com.mtd.megawallet.ui.compose.components.SearchInputField
+import com.mtd.megawallet.ui.compose.components.ShimmerAssetList
 import com.mtd.megawallet.ui.compose.components.TokenList
 import com.mtd.megawallet.viewmodel.swap.SwapUiState
 
@@ -51,7 +52,9 @@ fun SwapPaySection(
         Spacer(Modifier.height(14.dp))
 
         when {
-            state.isLoadingPayTokens -> HintState("در حال خواندن دارایی‌ها…")
+            // اسکلتِ ردیف‌ها به‌جای یک خط متن: فهرست چند شبکه را موازی می‌خواند و تا آمدنشان
+            // کاربر باید ببیند چه چیزی قرار است بیاید، نه اینکه صفحه خالی بماند و بعد بپرد.
+            state.isLoadingPayTokens -> ShimmerAssetList()
 
             !hasAnyAsset -> HintState("دارایی با موجودی برای تبدیل ندارید")
 
@@ -110,6 +113,6 @@ fun SwapNetworkBadge(
             .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
-        SwapTokenLogo(iconUrl = iconUrl, contentDescription = null, size = 15.dp)
+        SwapNetworkLogo(iconUrl = iconUrl, contentDescription = null, size = 15.dp)
     }
 }

@@ -226,7 +226,8 @@ class MultiWalletViewModel @Inject constructor(
             when (val result = deleteWalletUseCase(walletId)) {
                 is ResultResponse.Success -> {
                     loadWallets(forceRefresh = true)
-                    showSuccess("کیف پول حذف شد")
+                    // بدونِ توست: فلوی حذف صفحهٔ «کیف پول حذف شد» را تمام‌قد نشان می‌دهد و
+                    // یک اعلانِ سبز روی همان پیام، تکرارِ حرفِ خودش بود.
                 }
                 is ResultResponse.Error -> {
                     // TASK-57 — was `showSnackbar(result.toString())`: it printed the raw

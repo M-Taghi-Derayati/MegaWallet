@@ -93,46 +93,28 @@ class HomeViewModel @Inject constructor(
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab = _selectedTab.asStateFlow()
 
-    /**
-     * TASK-54 — نرخ تتر به تومان دیگر اینجا کش نمی‌شود.
-     *
-     * The private `cachedIrrRate` field this replaces was invisible to the UI: a fresh Wallex rate
-     * updated the field, but nothing could observe a field, so screens kept rendering the value they
-     * had pulled once. [usdToIrrRate] is the shared observable state; collect it.
-     */
+
     val usdToIrrRate: StateFlow<CurrencyRate?> = usdToIrrRateProvider.rate
 
-    /**
-     * TASK-56 — the user's selected fiat currency, observable. The wallet list mirrors it into
-     * [HomeUiState.Success.displayCurrency]; other screens collect this directly.
-     */
+
     val fiatCurrency: StateFlow<FiatCurrency> = fiatCurrencyProvider.currency
 
-    /**
-     * Latest known rate, or `null` when it is not known yet. Handed to [BalanceFormatter.formatFiatValue]
-     * as-is — the `null` case is what produces a placeholder instead of a zero, so it must NOT be
-     * defaulted to ZERO here. For non-reactive internal formatting only; the UI observes the flows.
-     */
+
     private val currentRate: CurrencyRate?
         get() = usdToIrrRateProvider.rate.value
 
-    /**
-     * TASK-56 — display strings are derived from `balanceRaw × priceUsdRaw` on every pass rather than
-     * carried forward, which is what lets a currency switch or a fresh Wallex rate re-render the list
-     * with no network round-trip. The formatting itself lives in [withFiatBalances] so the send screen
-     * produces byte-identical strings.
-     */
+
     private fun withFiatStrings(item: AssetItem, currency: FiatCurrency): AssetItem =
         item.withFiatBalances(currency, currentRate)
 
     private fun withFiatStrings(item: AssetItem): AssetItem =
         withFiatStrings(item, fiatCurrencyProvider.currency.value)
 
-    // زمان‌بندی‌های مجزا برای رفرش دیتای خودکار
+
     private val RR_PRICE_REFRESH_INTERVAL = 5 * 60 * 1000L // 2 دقیقه برای قیمت‌ها
     private val RR_BALANCE_REFRESH_INTERVAL = 10 * 60 * 1000L // 5 دقیقه برای موجودی‌ها
 
-    // کلیدهای ذخیره زمان آخرین آپدیت در کش
+
     private val LAST_PRICE_SYNC_TIME_KEY = "last_price_sync_time"
     private val LAST_BALANCE_SYNC_TIME_KEY = "last_balance_sync_time"
 
@@ -206,8 +188,10 @@ class HomeViewModel @Inject constructor(
                     }
                 } else {
                     if (!hasWalletUseCase()) {
+                        // فقط استیت، بدونِ اسنک‌بار: نبودِ کیف‌پول یک خطای گذرا نیست که لازم
+                        // باشد رویش اعلان بیاید — یا کاربر تازه رسیده، یا همین الان آخرین
+                        // کیفش را حذف کرده و صفحهٔ حذف را می‌بیند. صفحه خودش پیام را می‌گوید.
                         _uiState.value = HomeUiState.Error("کیف پولی یافت نشد.")
-                        showErrorSnackbar("کیف پولی یافت نشد.")
                         return@collect
                     }
 
@@ -934,6 +918,11 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    fun onTabSelected(index: Int) {
+        _selectedTab.value = index
+    }
+
 
     fun refreshData() {
         getActiveWalletUseCase()?.let {

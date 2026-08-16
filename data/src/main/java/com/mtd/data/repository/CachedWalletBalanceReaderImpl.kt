@@ -29,7 +29,9 @@ class CachedWalletBalanceReaderImpl @Inject constructor(
         return totalUsdValue.max(BigDecimal.ZERO)
     }
 
-    private companion object {
+    // عمومی است چون `WalletRepositoryImpl` هنگام حذفِ کیف‌پول با همین پیشوند کش را پاک می‌کند.
+    // تکرارِ رشته در دو جا یعنی یک روز یکی عوض می‌شود و آن یکی بی‌صدا جا می‌ماند.
+    companion object {
         const val CACHE_KEY_PREFIX = "asset_balance_"
     }
 }

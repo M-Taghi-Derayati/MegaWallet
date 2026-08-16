@@ -70,73 +70,109 @@ fun TermsPart(
         label = "ButtonColorAnimation"
     )
 
+    TermsPart(
+        terms = TERMS,
+        accepted = listOf(
+            viewModel.term1Accepted,
+            viewModel.term2Accepted,
+            viewModel.term3Accepted,
+            viewModel.term4Accepted
+        ),
+        accentColor = animatedButtonColor,
+        onToggle = { index ->
+            when (index) {
+                0 -> viewModel.term1Accepted = !viewModel.term1Accepted
+                1 -> viewModel.term2Accepted = !viewModel.term2Accepted
+                2 -> viewModel.term3Accepted = !viewModel.term3Accepted
+                3 -> viewModel.term4Accepted = !viewModel.term4Accepted
+            }
+        },
+        onContinue = { viewModel.nextStep() },
+        modifier = modifier
+    )
+}
+
+/**
+ * همان صفحهٔ تاییدِ شرایط، بدون وابستگی به ViewModelِ ساختِ کیف پول. متن‌ها و رنگِ تاکیدی پارامتر
+ * شده‌اند تا فلوهای دیگر (مثلِ حذفِ کیف پول) همین اجزا و همین قاعده را داشته باشند: دکمه تا وقتی
+ * همهٔ تیک‌ها زده نشده‌اند غیرفعال است. نسخهٔ بالا فقط پوسته‌ای است روی همین تابع.
+ *
+ * @param accepted وضعیتِ تیکِ هر بند، هم‌ترتیب با [terms].
+ * @param topBar نوارِ اختیاریِ بالای صفحه (بازگشت/نشان/راهنما)؛ در فلوی ساختِ کیف پول خالی است.
+ */
+@Composable
+fun TermsPart(
+    terms: List<String>,
+    accepted: List<Boolean>,
+    accentColor: Color,
+    onToggle: (Int) -> Unit,
+    onContinue: () -> Unit,
+    modifier: Modifier = Modifier,
+    title: String = "قوانین امنیتی را تایید کنید",
+    subtitle: String = "برای ادامه، باید موارد زیر را مطالعه کرده و تایید نمایید",
+    footerNote: String = "لطفاً با دقت تمام موارد را بررسی کنید، این موارد برای امنیت دارایی شما حیاتی هستند",
+    buttonText: String = "موارد فوق را قبول دارم، ادامه",
+    topBar: (@Composable () -> Unit)? = null
+) {
+    // بندی که هنوز رندر نشده را «پذیرفته» حساب نمی‌کنیم؛ لیستِ کوتاه‌تر یعنی دکمه غیرفعال می‌ماند.
+    val allAccepted = terms.indices.all { accepted.getOrElse(it) { false } }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .navigationBarsPadding()
+            // حاشیهٔ افقی نداشت و متن به لبهٔ صفحه می‌چسبید. `TopHeader` حاشیهٔ خودش را ندارد،
+            // پس همین یک padding هر چهار بخش را هم‌تراز می‌کند.
+            .padding(horizontal = 24.dp)
             .padding(top = 40.dp)
     ) {
-        // Header
+        topBar?.invoke()
 
         TopHeader(
-            title = "قوانین امنیتی را تایید کنید",
-            subtitle = "برای ادامه، باید موارد زیر را مطالعه کرده و تایید نمایید"
+            title = title,
+            subtitle = subtitle
         )
 
+        Spacer(modifier = Modifier.height(36.dp))
 
-
-
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Terms list
-        Column(modifier = Modifier.weight(1f)) {
-            TERMS.forEachIndexed { index, termText ->
+        // فاصلهٔ بندها از خودِ چیدمان می‌آید نه از Spacerهای دستی، تا آخرین بند هم فاصلهٔ
+        // اضافهٔ انتهایی نگیرد.
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            terms.forEachIndexed { index, termText ->
                 TermItem(
                     text = termText,
-                    isSelected = when (index) {
-                        0 -> viewModel.term1Accepted
-                        1 -> viewModel.term2Accepted
-                        2 -> viewModel.term3Accepted
-                        3 -> viewModel.term4Accepted
-                        else -> false
-                    },
-                    color = viewModel.selectedColor,
-                    onToggle = {
-                        when (index) {
-                            0 -> viewModel.term1Accepted = !viewModel.term1Accepted
-                            1 -> viewModel.term2Accepted = !viewModel.term2Accepted
-                            2 -> viewModel.term3Accepted = !viewModel.term3Accepted
-                            3 -> viewModel.term4Accepted = !viewModel.term4Accepted
-                        }
-                    }
+                    isSelected = accepted.getOrElse(index) { false },
+                    color = accentColor,
+                    onToggle = { onToggle(index) }
                 )
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
 
-        // Footer text
+        Spacer(modifier = Modifier.height(20.dp))
+
         Text(
-            text = "لطفاً با دقت تمام موارد را بررسی کنید، این موارد برای امنیت دارایی شما حیاتی هستند",
+            text = footerNote,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onTertiary,
             fontFamily = IranSansLightLight,
             modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Right,
+            textAlign = TextAlign.Center,
             fontSize = 12.sp
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
+        Spacer(modifier = Modifier.height(14.dp))
 
         PrimaryButton(
-            text = "موارد فوق را قبول دارم، ادامه",
-            onClick = { viewModel.nextStep() },
-            enabled = viewModel.areTermsAccepted,
-            containerColor = animatedButtonColor
+            text = buttonText,
+            onClick = onContinue,
+            enabled = allAccepted,
+            containerColor = accentColor
         )
 
-
+        Spacer(modifier = Modifier.height(20.dp))
     }
 }
 
@@ -157,9 +193,9 @@ private fun TermItem(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             )
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(vertical = 4.dp),
+        // بالا، نه وسط: بندها دو یا سه سطری‌اند و چک‌باکسِ وسط‌چین وسطِ پاراگراف می‌افتاد.
+        verticalAlignment = Alignment.Top
     ) {
 
         // Custom animated checkbox
@@ -197,8 +233,12 @@ private fun TermItem(
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 12.dp),
-            textAlign = TextAlign.Right,
-            fontSize = 15.sp
+            // `Start` نه `Right` — در راست‌به‌چپ یکی‌اند، ولی این یکی به جهتِ چیدمان وابسته است.
+            textAlign = TextAlign.Start,
+            fontSize = 15.sp,
+            // چک‌باکس ۲۴dp است و متن ۱۵sp؛ بدونِ این، سطرِ اول کمی بالاتر از مرکزِ چک‌باکس
+            // می‌نشیند و ردیف کج به نظر می‌رسد.
+            lineHeight = 24.sp
         )
 
     }

@@ -1,6 +1,7 @@
 package com.mtd.megawallet.notification
 
 import com.google.firebase.messaging.FirebaseMessaging
+import com.mtd.domain.interfaceRepository.INotificationPreferenceProvider
 import com.mtd.domain.interfaceRepository.INotificationRepository
 import com.mtd.domain.interfaceRepository.ITokenStore
 import com.mtd.domain.model.DeviceRegistration
@@ -32,7 +33,8 @@ import javax.inject.Singleton
 class FcmTokenRegistrar @Inject constructor(
     private val notificationRepository: INotificationRepository,
     private val userPreferences: IUserPreferencesRepository,
-    private val tokenStore: ITokenStore
+    private val tokenStore: ITokenStore,
+    private val notificationPreference: INotificationPreferenceProvider
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val mutex = Mutex()
@@ -71,9 +73,28 @@ class FcmTokenRegistrar @Inject constructor(
         }
     }
 
+    /**
+     * ترجیحِ اعلان‌ها عوض شد.
+     *
+     * روشن‌شدن یعنی همین حالا توکن را ثبت کن، و خاموش‌شدن یعنی همین حالا از رله برش دار — نه اینکه
+     * فقط یک کلید جابه‌جا شود و اعلان‌ها همچنان برسند. تا وقتی توکنِ ثبت‌شده روی رله باشد، رله
+     * push می‌فرستد؛ پس تنها راهِ درستِ خاموش‌کردن همان unregister است.
+     */
+    fun onPushPreferenceChanged(enabled: Boolean) {
+        if (enabled) syncToken() else unregister()
+    }
+
     private fun register(token: String) {
         scope.launch {
             mutex.withLock {
+                // کاربر اعلان نمی‌خواهد — ثبت نکن. ensurePrimed چون register ممکن است پیش از
+                // گرم‌شدنِ provider در استارتِ سرد صدا زده شود و آن‌وقت پیش‌فرضِ «روشن» را می‌دید.
+                notificationPreference.ensurePrimed()
+                if (!notificationPreference.pushEnabled.value) {
+                    Timber.d("[FCM] push disabled by the user; skipping registration.")
+                    return@withLock
+                }
+
                 // Needs the login JWT for device identity; deferred until syncToken() runs post-auth.
                 if (tokenStore.getTokenDevice().isNullOrBlank()) {
                     Timber.d("[FCM] no session yet; deferring token registration.")

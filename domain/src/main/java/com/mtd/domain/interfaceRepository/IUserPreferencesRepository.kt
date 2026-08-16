@@ -2,6 +2,7 @@ package com.mtd.domain.interfaceRepository
 
 import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.FiatCurrency
+import com.mtd.domain.model.ThemeMode
 
 
 interface IUserPreferencesRepository {
@@ -84,4 +85,35 @@ interface IUserPreferencesRepository {
      */
     suspend fun getRegisteredFcmToken(): String?
     suspend fun setRegisteredFcmToken(token: String?)
+
+    /**
+     * پوستهٔ برنامه. ذخیره می‌شود تا انتخاب پس از مرگِ پروسه هم بماند؛ پیش‌فرض
+     * [ThemeMode.DEFAULT] یعنی «مثل سیستم».
+     *
+     * این فقط نیمهٔ **ذخیره‌سازی** است. برای رندرکردنِ صفحه از این getter نخوانید — یک getterِ
+     * suspend هر فراخوان را وادار می‌کند مقدار را یک‌بار عکس بگیرد و دیگر تغییرش را نبیند، که
+     * برای پوسته یعنی تعویضِ پوسته تا استارتِ بعدی دیده نمی‌شود.
+     * [IThemeModeProvider.themeMode] را collect کنید.
+     */
+    suspend fun getThemeMode(): ThemeMode
+    suspend fun setThemeMode(mode: ThemeMode)
+
+    /**
+     * آیا کاربر اعلان‌های push را می‌خواهد. پیش‌فرض روشن.
+     *
+     * مثلِ بالا فقط نیمهٔ ذخیره‌سازی است؛ برای مشاهده از
+     * [INotificationPreferenceProvider.pushEnabled] استفاده کنید.
+     */
+    suspend fun isPushNotificationsEnabled(): Boolean
+    suspend fun setPushNotificationsEnabled(enabled: Boolean)
+
+    /**
+     * پاک‌کردنِ همهٔ ترجیحات — برای وقتی که آخرین کیف‌پول حذف می‌شود و برنامه باید مثل نصبِ
+     * تازه بالا بیاید.
+     *
+     * ⚠️ شاملِ شناسه‌های ثبت‌شدهٔ مانیتورینگ و توکنِ FCM هم هست. عمدی است: آن‌ها به کیف‌پولی
+     * اشاره می‌کنند که دیگر وجود ندارد، و ماندنشان یعنی کاربرِ بعدی اعلانِ کیف‌پولِ قبلی را
+     * بگیرد.
+     */
+    suspend fun clearAll()
 }

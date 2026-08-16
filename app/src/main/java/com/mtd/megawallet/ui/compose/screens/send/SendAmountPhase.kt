@@ -5,7 +5,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,21 +23,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mtd.common_ui.R
 import com.mtd.domain.model.AssetItem
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AmountDisplaySection
+import com.mtd.megawallet.ui.compose.components.AssetIconWithNetworkBadge
 import com.mtd.megawallet.ui.compose.components.KEYPAD_DELETE_KEY
 import com.mtd.megawallet.ui.compose.components.NumericKeypad
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.components.normalizeAmountForCalculation
-import com.mtd.common_ui.theme.AssetIcon
-import com.mtd.common_ui.theme.NetworkIcon
 import java.math.BigDecimal
 import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.IranSansRegular
@@ -182,48 +176,13 @@ private fun AssetInfoCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Icon
-            Box(
-                modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_SIZE)
-            ) {
-                // آیکون اصلی ارز
-                Box(
-                    modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AssetIcon(
-                        iconUrl = asset.iconUrl,
-                        symbol = asset.symbol,
-                        contentDescription = "${asset.name} icon",
-                        modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE)
-                    )
-                }
-
-                // بج شبکه (پایین سمت راست)
-                if (asset.networkName.isNotEmpty()) {
-                    val isDark = isSystemInDarkTheme()
-                    Box(
-                        modifier = Modifier
-                            .size(WalletScreenConstants.ASSET_ICON_NETWORK_SIZE_LARGE)
-                            .align(Alignment.BottomEnd),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_pls),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            tint = if (isDark) Color.Black else Color.White
-                        )
-
-                        NetworkIcon(
-                            iconUrl = asset.networkIconUrl,
-                            contentDescription = "${asset.networkName} network icon",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING)
-                        )
-                    }
-                }
-            }
+            AssetIconWithNetworkBadge(
+                iconUrl = asset.iconUrl,
+                symbol = asset.symbol,
+                networkIconUrl = asset.networkIconUrl,
+                contentDescription = "${asset.name} icon",
+                showBadge = asset.networkName.isNotEmpty()
+            )
 
             Spacer(modifier = Modifier.width(12.dp))
 

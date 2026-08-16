@@ -2,26 +2,33 @@ package com.mtd.common_ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.imageLoader
 import com.mtd.common_ui.R
 import kotlin.math.abs
+import kotlin.math.min
 
 
 fun getLocalIconResId(symbol: String): Int {
@@ -42,7 +49,54 @@ fun getLocalIconResId(symbol: String): Int {
 }
 
 /** آخرین fallback وقتی نه URL جواب داد و نه drawableِ نماد وجود داشت. */
-fun getPlaceholderIconResId(): Int = R.drawable.ic_wallet
+fun getPlaceholderIconResId(): Int = R.drawable.ic_pls
+
+/**
+ * همان شش‌ضلعیِ `ic_pls`، این بار به‌شکلِ [Shape] تا بشود با آن **برش** زد و نه فقط پشتِ چیزی کشید.
+ *
+ * تا امروز این فرم فقط زیرِ بجِ شبکه (لیستِ دارایی‌ها) به‌عنوان یک drawable کشیده می‌شد، پس هر جای
+ * دیگری که آیکون داشتیم دایره بود — دو زبانِ فرمیِ متفاوت در یک صفحه. با [Shape] شدن، همان مسیرِ
+ * برداری هم قابِ آیکونِ ارز می‌شود و هم پس‌زمینهٔ [SymbolAvatar]، و کلِ سیستمِ آیکون یک‌دست می‌شود.
+ *
+ * مسیر عیناً از `res/drawable/ic_pls.xml` برداشته شده و در viewportِ ۴۵×۴۰ تعریف است؛ این‌جا **با
+ * حفظِ نسبت** داخلِ اندازهٔ واقعی fit و وسط‌چین می‌شود — دقیقاً کاری که `Icon` با همان drawable
+ * می‌کند، وگرنه در یک باکسِ مربع شش‌ضلعی کشیده و بدریخت می‌شد.
+ */
+object HexAssetShape : Shape {
+
+    private const val VIEWPORT_WIDTH = 45f
+    private const val VIEWPORT_HEIGHT = 40f
+
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        val scale = min(size.width / VIEWPORT_WIDTH, size.height / VIEWPORT_HEIGHT)
+        val offsetX = (size.width - VIEWPORT_WIDTH * scale) / 2f
+        val offsetY = (size.height - VIEWPORT_HEIGHT * scale) / 2f
+
+        fun x(value: Float) = offsetX + value * scale
+        fun y(value: Float) = offsetY + value * scale
+
+        val path = Path().apply {
+            moveTo(x(30.067f), y(0.086f))
+            cubicTo(x(32.187f), y(0.098f), x(34.145f), y(1.228f), x(35.215f), y(3.058f))
+            lineTo(x(43.347f), y(16.972f))
+            cubicTo(x(44.435f), y(18.833f), x(44.441f), y(21.134f), x(43.364f), y(23f))
+            lineTo(x(35.445f), y(36.715f))
+            cubicTo(x(34.368f), y(38.582f), x(32.372f), y(39.726f), x(30.217f), y(39.715f))
+            lineTo(x(14.101f), y(39.628f))
+            cubicTo(x(11.981f), y(39.616f), x(10.024f), y(38.486f), x(8.953f), y(36.655f))
+            lineTo(x(0.82f), y(22.743f))
+            cubicTo(x(-0.267f), y(20.882f), x(-0.274f), y(18.581f), x(0.804f), y(16.715f))
+            lineTo(x(8.722f), y(3f))
+            cubicTo(x(9.8f), y(1.133f), x(11.796f), y(-0.012f), x(13.951f), y(0f))
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
 
 /**
  * آیکونِ شبکه از `NetworkInfo.iconUrl` (networks.json یا باندلِ امضاشده).
@@ -80,6 +134,10 @@ fun NetworkIcon(
  * لایهٔ سوم دائمی است، نه موقتی: هیچ منبعی کلِ توکن‌ها را پوشش نمی‌دهد و بخشی از آن‌ها هرگز آیکون
  * نخواهند داشت (سنجشِ زنده: ۸٪ روی BSC، ۱۹٪ آربیتروم، ۲۸٪ اتریوم). قبلاً همهٔ این‌ها یک
  * drawableِ عمومیِ کیف‌پول می‌گرفتند، یعنی ده‌ها ردیفِ متفاوت که از هم قابلِ تشخیص نبودند.
+ *
+ * هر سه لایه با [HexAssetShape] بریده می‌شوند تا شکلِ بیرونی مستقل از اینکه کدام لایه جواب داده
+ * یکی بماند — همان شش‌ضلعیِ بجِ شبکه. منبعِ آیکون همچنان `iconUrl` است و drawableِ لوکال فقط
+ * fallback؛ برش فقط قاب را عوض می‌کند، نه ترتیبِ منابع را.
  */
 @Composable
 fun AssetIcon(
@@ -95,7 +153,7 @@ fun AssetIcon(
         AsyncImage(
             model = iconUrl,
             contentDescription = contentDescription,
-            modifier = modifier,
+            modifier = modifier.clip(HexAssetShape),
             contentScale = ContentScale.Fit,
             placeholder = local,
             error = local,
@@ -114,16 +172,22 @@ fun AssetIcon(
     SubcomposeAsyncImage(
         model = iconUrl,
         contentDescription = contentDescription,
-        modifier = modifier,
+        modifier = modifier.clip(HexAssetShape),
         contentScale = ContentScale.Fit,
         imageLoader = LocalContext.current.imageLoader,
-        loading = { SymbolAvatar(symbol = symbol, contentDescription = null) },
-        error = { SymbolAvatar(symbol = symbol, contentDescription = null) }
+        // `fillMaxSize` لازم است: اسلاتِ SubcomposeAsyncImage محتوا را wrap می‌کند، پس بدونِ آن
+        // آواتار به اندازهٔ متنش جمع می‌شد و لحظهٔ بارگذاری یک شش‌ضلعیِ ریز وسطِ جای خالی می‌ماند.
+        loading = { SymbolAvatar(symbol = symbol, contentDescription = null, modifier = Modifier.fillMaxSize()) },
+        error = { SymbolAvatar(symbol = symbol, contentDescription = null, modifier = Modifier.fillMaxSize()) }
     )
 }
 
 /**
- * آواتارِ دایره‌ایِ حرفی از نماد — جایگزینِ آیکونِ نبوده.
+ * آواتارِ حرفی از نماد — جایگزینِ آیکونِ نبوده.
+ *
+ * فرمش همان شش‌ضلعیِ [HexAssetShape] است و نه دایره: این کامپوزبل کنارِ آیکون‌های واقعیِ ارز
+ * می‌نشیند و تا وقتی دایره بود، «آیکون نداریم» یک تفاوتِ فرمیِ چشمگیر می‌ساخت — چیزی که کاربر
+ * به‌عنوانِ تفاوتِ **معنایی** می‌خواند. حالا فقط محتوای قاب فرق می‌کند، نه خودِ قاب.
  *
  * رنگ از خودِ نماد مشتق می‌شود، پس برای یک توکن همیشه یکسان است و دو توکنِ متفاوت معمولاً دو رنگ
  * می‌گیرند؛ همین چیزی است که ردیف‌های بی‌آیکون را از هم قابلِ تشخیص می‌کند. پالت ثابت و از قبل
@@ -143,7 +207,7 @@ fun SymbolAvatar(
 
     BoxWithConstraints(
         modifier = modifier
-            .clip(CircleShape)
+            .clip(HexAssetShape)
             .background(background)
             .then(
                 if (contentDescription != null) {

@@ -10,12 +10,29 @@ import com.mtd.domain.model.ImportData
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.Wallet
+import com.mtd.domain.model.core.WalletKey
 import javax.inject.Inject
 
 class GetAllWalletsUseCase @Inject constructor(
     private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(): ResultResponse<List<Wallet>> = walletRepository.get().getAllWallets()
+}
+
+/**
+ * آدرس‌های همهٔ کیف‌پول‌ها، نه فقط کیف‌پولِ فعال.
+ *
+ * [GetAllWalletsUseCase] عمداً `keys` را خالی برمی‌گرداند و [LoadExistingWalletUseCase] فقط
+ * کیف‌پولِ فعال را باز می‌کند؛ هر جایی که باید کیف‌پولِ **غیرفعال** را با آدرسش نشان دهد از این
+ * می‌آید. خروجی فقط کلیدِ عمومی و آدرس دارد.
+ */
+class GetWalletKeysForWalletsUseCase @Inject constructor(
+    private val walletRepository: dagger.Lazy<IWalletRepository>
+) {
+    suspend operator fun invoke(
+        walletIds: List<String>
+    ): ResultResponse<Map<String, List<WalletKey>>> =
+        walletRepository.get().getWalletKeysForWallets(walletIds)
 }
 
 class LoadExistingWalletUseCase @Inject constructor(

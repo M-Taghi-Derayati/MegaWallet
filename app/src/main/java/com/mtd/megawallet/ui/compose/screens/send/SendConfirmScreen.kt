@@ -60,6 +60,7 @@ import com.mtd.domain.model.GaslessAvailability
 import com.mtd.domain.model.GaslessPreviewState
 import com.mtd.domain.model.SubmitState
 import com.mtd.megawallet.ui.compose.components.BottomSecuritySection
+import com.mtd.megawallet.ui.compose.components.ConfirmSliderButton
 import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 import com.mtd.megawallet.viewmodel.SendViewModel
 import kotlinx.coroutines.delay

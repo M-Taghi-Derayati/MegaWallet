@@ -24,6 +24,7 @@ import com.mtd.domain.model.WalletStorageMetadata
 import com.mtd.domain.model.core.NetworkName
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.core.Wallet
+import com.mtd.domain.model.core.WalletKey
 import com.mtd.domain.model.error.ApiError
 import com.mtd.domain.model.error.ApiException
 import org.web3j.utils.Numeric
@@ -32,6 +33,10 @@ import timber.log.Timber
 import kotlin.collections.find
 import kotlin.collections.isNotEmpty
 import kotlin.collections.map
+import com.mtd.domain.interfaceRepository.IAddressBookRepository
+import com.mtd.domain.interfaceRepository.IAppCacheStore
+import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
+import com.mtd.domain.interfaceRepository.IUserTokenRepository
 import kotlin.collections.toMutableList
 
 class WalletRepositoryImpl @Inject constructor(
@@ -40,7 +45,13 @@ class WalletRepositoryImpl @Inject constructor(
     private val activeWalletManager: ActiveWalletManager,
     private val blockchainRegistry: BlockchainRegistry,
     private val gson: Gson,
-    val dataSourceFactory: dagger.Lazy<ChainDataSourceFactory>
+    val dataSourceFactory: dagger.Lazy<ChainDataSourceFactory>,
+    // هر دو Lazy: فقط در مسیرِ حذفِ آخرین کیف‌پول لازم می‌شوند و نباید گرافِ راه‌اندازی را
+    // سنگین‌تر کنند.
+    private val appCacheStore: dagger.Lazy<IAppCacheStore>,
+    private val userPreferences: dagger.Lazy<IUserPreferencesRepository>,
+    private val userTokenRepository: dagger.Lazy<IUserTokenRepository>,
+    private val addressBook: dagger.Lazy<IAddressBookRepository>
 ) : IWalletRepository {
     private companion object {
         const val WALLETS_METADATA_KEY = "wallets_metadata_list"
@@ -303,6 +314,36 @@ class WalletRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getWalletKeysForWallets(
+        walletIds: List<String>
+    ): ResultResponse<Map<String, List<WalletKey>>> {
+        if (walletIds.isEmpty()) return ResultResponse.Success(emptyMap())
+
+        return safeApiCall {
+            // مشتق‌کردن کلید برای هر کیف‌پول سنگین است (BIP32 به ازای هر شبکه)، پس مثل
+            // getBalancesForMultipleWallets کل بلاک روی IO می‌رود.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val metadataList = getWalletsMetadata()
+
+                walletIds.distinct().mapNotNull { walletId ->
+                    val metadata = metadataList.find { it.id == walletId } ?: return@mapNotNull null
+                    val secret = secureStorage.getDecrypted(getSecretKey(walletId))
+                        ?: return@mapNotNull null
+
+                    val keys = if (metadata.isMnemonic) {
+                        keyManager.generateWalletKeysFromMnemonic(secret)
+                    } else {
+                        keyManager.generateWalletKeysFromPrivateKey(secret)
+                    }
+
+                    walletId to keys
+                }.toMap()
+                // ⚠️ عمداً activeWalletManager.unlockWallet صدا زده نمی‌شود: این‌جا فقط آدرس خوانده
+                // می‌شود و باز کردن یک کیف‌پول به‌عنوان فعال، حالتِ کلِ اپ را عوض می‌کند.
+            }
+        }
+    }
+
     override suspend fun switchActiveWallet(walletId: String): ResultResponse<Unit> {
         return safeApiCall {
             val metadataList = getWalletsMetadata()
@@ -350,7 +391,6 @@ class WalletRepositoryImpl @Inject constructor(
     override suspend fun deleteWallet(walletId: String): ResultResponse<Unit> {
         return safeApiCall {
             val metadata = getWalletsMetadata().toMutableList()
-            if (metadata.size <= 1) throw Exception("Cannot delete the last wallet")
 
             val itemToRemove =
                 metadata.find { it.id == walletId } ?: throw Exception("Wallet not found")
@@ -372,6 +412,26 @@ class WalletRepositoryImpl @Inject constructor(
                     secureStorage.remove(ACTIVE_WALLET_ID_KEY)
                     activeWalletManager.lockWallet()
                 }
+            }
+
+            // ردِ خودِ این کیف‌پول، چه آخرین باشد چه نه. کش‌های موجودی با پیشوندِ شناسه کلید
+            // می‌خورند و بدونِ این، روی دیسک می‌مانند و کیفِ هم‌نامِ بعدی آن‌ها را برمی‌دارد.
+            // هیچ‌کدام نباید حذف را برگردانند: کارِ اصلی انجام شده و پاک‌سازی از آن مهم‌تر نیست.
+            runCatching {
+                appCacheStore.get().removeByPrefix("${CachedWalletBalanceReaderImpl.CACHE_KEY_PREFIX}${walletId}_")
+            }.onFailure { Timber.w(it, "Balance-cache wipe for %s failed", walletId) }
+            runCatching { userTokenRepository.get().forgetWallet(walletId) }
+                .onFailure { Timber.w(it, "Token-selection wipe for %s failed", walletId) }
+
+            // آخرین کیف‌پول که رفت، هرچه مانده به کیف‌پولی اشاره می‌کند که دیگر وجود ندارد.
+            // پس از این نقطه، برنامه باید مثل نصبِ تازه رفتار کند.
+            if (metadata.isEmpty()) {
+                runCatching { appCacheStore.get().clear() }
+                    .onFailure { Timber.w(it, "Cache wipe after last-wallet removal failed") }
+                runCatching { userPreferences.get().clearAll() }
+                    .onFailure { Timber.w(it, "Preference wipe after last-wallet removal failed") }
+                runCatching { addressBook.get().clear() }
+                    .onFailure { Timber.w(it, "Address-book wipe after last-wallet removal failed") }
             }
             Unit
         }

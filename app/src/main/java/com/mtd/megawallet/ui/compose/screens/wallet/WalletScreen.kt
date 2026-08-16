@@ -77,6 +77,7 @@ import com.mtd.domain.model.HomeUiState
 import com.mtd.domain.model.NetworkShare
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AnimatedCounter
+import com.mtd.megawallet.ui.compose.screens.nft.NftUnderDevelopmentSection
 import com.mtd.megawallet.viewmodel.HomeViewModel
 import java.math.BigDecimal
 
@@ -166,7 +167,7 @@ fun WalletScreens(
                                             tabs.forEachIndexed { index, title ->
                                                 Tab(
                                                     selected = selectedTabIndex == index,
-                                                    onClick = {/* viewModel.onTabSelected(index)*/ },//todo اینو درست کنم
+                                                    onClick = { viewModel.onTabSelected(index) },
                                                     text = {
                                                         Text(
                                                             text = title,
@@ -238,17 +239,7 @@ fun WalletScreens(
                                 }
                             } else {
                                 item {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(200.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "No collectibles found",
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    NftUnderDevelopmentSection()
                                 }
                             }
 
@@ -257,15 +248,12 @@ fun WalletScreens(
                     }
                 }
             }
-            // خطا قبلاً به همین شاخهٔ shimmer می‌افتاد، پس هر شکستی به‌شکلِ «هنوز در حال بارگذاری»
-            // دیده می‌شد: بدون پیام، بدون راهِ خروج، برای همیشه.
             is HomeUiState.Error -> {
                 WalletErrorState(
                     message = state.message,
                     onRetry = { viewModel.retry() }
                 )
             }
-
             HomeUiState.Loading -> {
                 ShimmerWalletScreen()
             }
@@ -600,8 +588,7 @@ private fun AssetListItems(
                                     ),
                                     modifier = Modifier.padding(start = WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END)
                                 )
-                            }
-                            if (displayCurrency == FiatCurrency.TOMAN) {
+                            }else{
                                 Text(
                                     text = " تومان",
                                     style = MaterialTheme.typography.bodySmall.copy(
@@ -613,6 +600,7 @@ private fun AssetListItems(
                                     modifier = Modifier.padding(start = WalletScreenConstants.ASSET_PRICE_SYMBOL_PADDING_END)
                                 )
                             }
+
 
                         }
                     }

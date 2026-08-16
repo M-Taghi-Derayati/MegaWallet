@@ -5,6 +5,7 @@ import androidx.core.content.edit
 import com.mtd.domain.interfaceRepository.IUserPreferencesRepository
 import com.mtd.domain.model.BlockchainConnectionMode
 import com.mtd.domain.model.FiatCurrency
+import com.mtd.domain.model.ThemeMode
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,6 +28,8 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         const val KEY_FIAT_CURRENCY = "fiat_currency"
         const val KEY_MONITORING_SUBSCRIBED_WALLET_IDS = "monitoring_subscribed_wallet_ids"
         const val KEY_REGISTERED_FCM_TOKEN = "registered_fcm_token"
+        const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_PUSH_NOTIFICATIONS_ENABLED = "push_notifications_enabled"
         const val DEFAULT_LOCK_TIMEOUT_SECONDS = 30
     }
 
@@ -150,5 +153,23 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             if (token.isNullOrBlank()) remove(KEY_REGISTERED_FCM_TOKEN)
             else putString(KEY_REGISTERED_FCM_TOKEN, token)
         }
+    }
+
+    override suspend fun getThemeMode(): ThemeMode =
+        ThemeMode.fromNameOrDefault(prefs.getString(KEY_THEME_MODE, null))
+
+    override suspend fun setThemeMode(mode: ThemeMode) {
+        prefs.edit { putString(KEY_THEME_MODE, mode.name) }
+    }
+
+    override suspend fun isPushNotificationsEnabled(): Boolean =
+        prefs.getBoolean(KEY_PUSH_NOTIFICATIONS_ENABLED, true)
+
+    override suspend fun setPushNotificationsEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_PUSH_NOTIFICATIONS_ENABLED, enabled) }
+    }
+
+    override suspend fun clearAll() {
+        prefs.edit { clear() }
     }
 }

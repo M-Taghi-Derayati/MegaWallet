@@ -41,6 +41,8 @@ import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.domain.model.AssetItem
 import com.mtd.common_ui.theme.AssetIcon
 import com.mtd.common_ui.theme.NetworkIcon
+import com.mtd.megawallet.ui.compose.components.ConfirmDetailCard
+import com.mtd.megawallet.ui.compose.components.ConfirmDetailRow
 
 /**
  * آواتار گیرنده در صفحهٔ تأیید تراکنش (آیکون ارز + نشانِ تأیید).
@@ -77,32 +79,11 @@ internal fun RecipientAvatar(
 }
 
 /**
- * یک ردیف «برچسب ← مقدار» در کارتِ جزئیات تراکنش.
- */
-@Composable
-internal fun ConfirmDetailRow(label: String, value: String? = null, valueLeft: (@Composable () -> Unit)? = null) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onTertiary,
-            fontFamily = IranSansRegular,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(top = 2.dp)
-        )
-        if (valueLeft != null) valueLeft()
-        else if (value != null) {
-            Text(text = value, color = MaterialTheme.colorScheme.tertiary, fontFamily = IranSansBold, fontSize = 15.sp)
-        }
-    }
-}
-
-/**
  * کارتِ جزئیات تراکنش (مقدار ارسالی، ارزش کل، کیف‌پول مبدأ، شبکه).
  * تمام ورودی‌ها immutable هستند؛ رنگ‌های انیمیشنی از بیرون پاس داده می‌شوند.
+ *
+ * قاب و ردیف‌ها از [ConfirmDetailCard]/[ConfirmDetailRow] می‌آیند تا صفحهٔ تأییدِ تبدیل هم دقیقاً
+ * همین‌ها را بردارد، نه یک کپیِ کمی متفاوت.
  */
 @Composable
 internal fun TransactionDetailCard(
@@ -116,76 +97,67 @@ internal fun TransactionDetailCard(
     secondaryColor: Color,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            ConfirmDetailRow(
-                label = "ارسال ${asset.faName}",
-                valueLeft = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AssetIcon(
-                            iconUrl = asset.iconUrl,
-                            symbol = asset.symbol,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = displayCrypto,
-                            color = if (isAmountTooSmall) MaterialTheme.colorScheme.error else primaryColor,
-                            fontFamily = InterBold,
-                            fontSize = 15.sp
-                        )
-                    }
+    ConfirmDetailCard(modifier = modifier) {
+        ConfirmDetailRow(
+            label = "ارسال ${asset.faName}",
+            valueLeft = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AssetIcon(
+                        iconUrl = asset.iconUrl,
+                        symbol = asset.symbol,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = displayCrypto,
+                        color = if (isAmountTooSmall) MaterialTheme.colorScheme.error else primaryColor,
+                        fontFamily = InterBold,
+                        fontSize = 15.sp
+                    )
                 }
-            )
-            Spacer(Modifier.height(12.dp))
-            ConfirmDetailRow(
-                label = "ارزش کل",
-                valueLeft = {
-                    Column(horizontalAlignment = Alignment.End) {
+            }
+        )
+        ConfirmDetailRow(
+            label = "ارزش کل",
+            valueLeft = {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = displayUsd,
+                        color = primaryColor,
+                        fontFamily = InterBold,
+                        fontSize = 15.sp
+                    )
+                    if (displayIrr.isNotBlank()) {
                         Text(
-                            text = displayUsd,
-                            color = primaryColor,
-                            fontFamily = InterBold,
-                            fontSize = 15.sp
-                        )
-                        if (displayIrr.isNotBlank()) {
-                            Text(
-                                text = "≈ $displayIrr",
-                                color = secondaryColor,
-                                fontFamily = IranSansRegular,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            )
-            Spacer(Modifier.height(12.dp))
-            ConfirmDetailRow(
-                label = "از کیف‌ پول",
-                value = walletName
-            )
-            Spacer(Modifier.height(12.dp))
-            ConfirmDetailRow(
-                label = "شبکه",
-                valueLeft = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        NetworkIcon(asset.networkIconUrl, null, Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = asset.networkFaName ?: "نامشخص",
-                            color = MaterialTheme.colorScheme.tertiary,
+                            text = "≈ $displayIrr",
+                            color = secondaryColor,
                             fontFamily = IranSansRegular,
-                            fontSize = 15.sp
+                            fontSize = 12.sp
                         )
                     }
                 }
-            )
-        }
+            }
+        )
+        ConfirmDetailRow(
+            label = "از کیف‌ پول",
+            value = walletName
+        )
+        ConfirmDetailRow(
+            label = "شبکه",
+            valueLeft = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    NetworkIcon(asset.networkIconUrl, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = asset.networkFaName ?: "نامشخص",
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontFamily = IranSansRegular,
+                        fontSize = 15.sp
+                    )
+                }
+            }
+        )
     }
 }
 

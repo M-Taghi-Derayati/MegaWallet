@@ -31,6 +31,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.core.manager.ErrorManager
+import com.mtd.domain.interfaceRepository.IThemeModeProvider
 import com.mtd.domain.model.AuthPurpose
 import com.mtd.megawallet.security.BiometricAuthHelper
 import com.mtd.megawallet.session.RealtimeLifecycleCoordinator
@@ -42,6 +43,7 @@ import com.mtd.megawallet.ui.compose.screens.security.LockedFingerprintOverlay
 import com.mtd.megawallet.ui.compose.screens.security.PasscodeKeypadSheet
 import com.mtd.megawallet.ui.compose.screens.security.PasscodeSetupSheet
 import com.mtd.megawallet.ui.compose.screens.security.SecuritySettingsSheet
+import com.mtd.megawallet.ui.compose.theme.resolveIsDark
 import com.mtd.megawallet.viewmodel.AppLockViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -67,6 +69,9 @@ class MainActivityCompose : FragmentActivity() {
     // TASK-57 — the app-wide message bus; one AppMessageHost per Activity renders it.
     @Inject lateinit var errorManager: ErrorManager
 
+    // پوستهٔ انتخاب‌شدهٔ کاربر. Singleton است، پس همان نمونه‌ای است که صفحهٔ تنظیمات می‌نویسد.
+    @Inject lateinit var themeModeProvider: IThemeModeProvider
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -75,7 +80,10 @@ class MainActivityCompose : FragmentActivity() {
         lockKeyCoordinator.start()
         realtimeLifecycleCoordinator.start()
         setContent {
-            MegaWalletTheme {
+            // پوسته از ترجیحِ ماندگارِ کاربر می‌آید، نه فقط از سیستم. تا کامل‌شدنِ prime مقدارش
+            // SYSTEM است، پس اولین فریم همان چیزی است که قبلاً نشان داده می‌شد.
+            val themeMode by themeModeProvider.themeMode.collectAsStateWithLifecycle()
+            MegaWalletTheme(darkTheme = themeMode.resolveIsDark()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

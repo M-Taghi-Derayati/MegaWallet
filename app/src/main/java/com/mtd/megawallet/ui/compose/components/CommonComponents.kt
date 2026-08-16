@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -20,10 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -119,18 +120,24 @@ fun UnifiedHeader(
     }
 }
 
+/**
+ * @param icon نشانِ روی لبهٔ بالای کادر. پیش‌فرض سپر است (همان چیزی که فلوهای پشتیبان‌گیری
+ * می‌خواهند)؛ فلوهای دیگر نشانِ خودشان را می‌دهند تا کادرِ خط‌چینِ مشترک دوباره ساخته نشود.
+ */
 @Composable
 fun BottomSecuritySection(
     message: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icon: Int = R.drawable.ic_shield,
+    iconTint: Color = MaterialTheme.colorScheme.surface
 ) {
     Box(
         modifier = modifier.fillMaxWidth()
     ) {
         Icon(
-            imageVector = Icons.Filled.Shield,
-            contentDescription = "Security Shield",
-            tint = MaterialTheme.colorScheme.surface,
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = iconTint,
             modifier = Modifier
                 .size(22.dp)
                 .align(Alignment.TopCenter)

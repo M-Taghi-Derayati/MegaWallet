@@ -113,9 +113,23 @@ class CacheManager @Inject constructor(
     /**
      * پاک کردن همه cache
      */
-    suspend fun clear() = withContext(Dispatchers.IO) {
+    override suspend fun clear() = withContext(Dispatchers.IO) {
         memoryCache.clear()
+        // `listFiles()` نال‌پذیر است، پس `?.forEach` مقدارش `Unit?` می‌شود و بدونِ این خط،
+        // همان می‌شد نوعِ بازگشتیِ متد و با `Unit`ِ اینترفیس نمی‌خواند.
         cacheDir.listFiles()?.forEach { it.delete() }
+        Unit
+    }
+
+    /**
+     * هر دو لایه با هم: نامِ فایلِ روی دیسک همان کلید است، پس یک شرط برای هر دو کافی است.
+     */
+    override suspend fun removeByPrefix(prefix: String) = withContext(Dispatchers.IO) {
+        memoryCache.keys.filter { it.startsWith(prefix) }.forEach { memoryCache.remove(it) }
+        cacheDir.listFiles()?.forEach { file ->
+            if (file.name.startsWith(prefix)) file.delete()
+        }
+        Unit
     }
 
     /**
@@ -128,11 +142,7 @@ class CacheManager @Inject constructor(
         // Disk cache cleanup می‌تواند در background انجام شود
     }
 
-    /**
-     * TASK-20 — keep the in-memory cache bounded. First drop anything already expired; if that isn't
-     * enough, evict the soonest-to-expire entries (approximate LRU) until there is room. Safe to evict
-     * live entries: the cache is best-effort, so a miss just re-fetches.
-     */
+
     private fun evictIfOverCapacity() {
         if (memoryCache.size < MAX_MEMORY_ENTRIES) return
 

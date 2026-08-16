@@ -45,25 +45,44 @@ class GetTransactionFeeDetailsUseCase @Inject constructor(
     }
 }
 
+/**
+ * آدرس‌های خودِ کاربر، برای آنکه طرفِ مقابلِ یک تراکنش به‌جای آدرسِ خام با نامِ کیف‌پول دیده شود.
+ *
+ * ⚠️ آدرس‌ها از [IWalletRepository.getWalletKeysForWallets] گرفته می‌شوند، نه از `Wallet.keys`:
+ * آن‌چه [IWalletRepository.getAllWallets] برمی‌گرداند فقط متادیتاست و `keys` در آن همیشه خالی است،
+ * پس هر مصرف‌کننده‌ای که از آن بخواند بی‌صدا فهرستِ خالی می‌گیرد.
+ */
 class GetWalletAddressBookUseCase @Inject constructor(
     private val walletRepository: dagger.Lazy<IWalletRepository>
 ) {
     suspend operator fun invoke(): ResultResponse<List<WalletAddressBookEntry>> {
-        return when (val result = walletRepository.get().getAllWallets()) {
-            is ResultResponse.Success -> ResultResponse.Success(
-                result.data.flatMap { wallet ->
-                    wallet.keys.map { key ->
+        val wallets = when (val result = walletRepository.get().getAllWallets()) {
+            is ResultResponse.Success -> result.data
+            is ResultResponse.Error -> return ResultResponse.Error(result.exception)
+        }
+        if (wallets.isEmpty()) return ResultResponse.Success(emptyList())
+
+        val keysByWalletId =
+            when (val result = walletRepository.get().getWalletKeysForWallets(wallets.map { it.id })) {
+                is ResultResponse.Success -> result.data
+                is ResultResponse.Error -> return ResultResponse.Error(result.exception)
+            }
+
+        return ResultResponse.Success(
+            wallets.flatMap { wallet ->
+                keysByWalletId[wallet.id].orEmpty()
+                    // یک آدرسِ EVM روی چند شبکه کلید دارد و همه‌شان یک رشته‌اند؛ برای دفترچه یک
+                    // مدخل کافی است. مقایسه دقیق است و آدرس دست‌نخورده می‌ماند.
+                    .distinctBy { it.address }
+                    .map { key ->
                         WalletAddressBookEntry(
                             address = key.address,
                             walletName = wallet.name,
                             walletColor = wallet.color
                         )
                     }
-                }
-            )
-
-            is ResultResponse.Error -> ResultResponse.Error(result.exception)
-        }
+            }
+        )
     }
 }
 

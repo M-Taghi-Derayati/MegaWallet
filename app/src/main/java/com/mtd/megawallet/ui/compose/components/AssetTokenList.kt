@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,14 +32,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.mtd.common_ui.R
-import com.mtd.common_ui.theme.AssetIcon
 import com.mtd.core.utils.BalanceFormatter
 import com.mtd.domain.model.CurrencyRate
 import com.mtd.domain.model.FiatCurrency
@@ -56,7 +52,6 @@ import com.mtd.common_ui.theme.InterRegularMedium
 import com.mtd.common_ui.theme.IranSansBoldBold
 import com.mtd.common_ui.theme.IranSansRegularBold
 import com.mtd.common_ui.theme.MegaWalletTheme
-import com.mtd.common_ui.theme.NetworkIcon
 
 /**
  * لیست دارایی‌های قابل ارسال با ورود مرحله‌ای (staggered) هر آیتم.
@@ -139,8 +134,6 @@ private fun AssetListItems(
     asset: AssetItem,
     onClick: () -> Unit = {}
 ) {
-    val isDark = isSystemInDarkTheme()
-
     // جداسازی مقدار و نماد برای انیمیشن
     val balanceAmount = remember(asset.balance, asset.symbol) {
         asset.balance
@@ -155,48 +148,13 @@ private fun AssetListItems(
         horizontalArrangement = Arrangement.End
     ) {
         // بخش آیکون‌ها (اصلی + بج شبکه)
-        Box(
-            modifier = Modifier
-                .size(WalletScreenConstants.ASSET_ICON_SIZE)
-        ) {
-            // آیکون اصلی ارز
-            Box(
-                modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE),
-                contentAlignment = Alignment.Center
-            ) {
-                AssetIcon(
-                    iconUrl = asset.iconUrl,
-                    symbol = asset.symbol,
-                    contentDescription = "${asset.name} icon",
-                    modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE)
-                )
-            }
-
-            // بج شبکه (پایین سمت راست)
-            if (asset.networkName.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .size(WalletScreenConstants.ASSET_ICON_NETWORK_SIZE_LARGE)
-                        .align(Alignment.BottomEnd),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_pls),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        tint = if (isDark) Color.Black else Color.White
-                    )
-
-                    NetworkIcon(
-                        iconUrl = asset.networkIconUrl,
-                        contentDescription = "${asset.networkName} network icon",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(WalletScreenConstants.ASSET_ICON_NETWORK_PADDING)
-                    )
-                }
-            }
-        }
+        AssetIconWithNetworkBadge(
+            iconUrl = asset.iconUrl,
+            symbol = asset.symbol,
+            networkIconUrl = asset.networkIconUrl,
+            contentDescription = "${asset.name} icon",
+            showBadge = asset.networkName.isNotEmpty()
+        )
 
         Spacer(modifier = Modifier.width(WalletScreenConstants.ASSET_ICON_SPACING))
 

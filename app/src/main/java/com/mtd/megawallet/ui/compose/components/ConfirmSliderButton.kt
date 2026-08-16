@@ -1,4 +1,4 @@
-package com.mtd.megawallet.ui.compose.screens.send
+package com.mtd.megawallet.ui.compose.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable

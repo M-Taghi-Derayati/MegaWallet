@@ -8,6 +8,7 @@ import com.mtd.domain.model.TransactionParams
 import com.mtd.domain.model.TransactionFeeDetails
 import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.core.Wallet
+import com.mtd.domain.model.core.WalletKey
 
 
 interface IWalletRepository {
@@ -111,8 +112,28 @@ interface IWalletRepository {
 
     /**
      * لیست تمام کیف پول‌های ذخیره شده در دستگاه (فقط متادیتا) را برمی‌گرداند.
+     *
+     * ⚠️ `Wallet.keys` در خروجی این متد **همیشه خالی است**. آدرس‌ها از رمزِ رمزگشایی‌شدهٔ هر
+     * کیف‌پول مشتق می‌شوند و این متد هیچ رمزی را باز نمی‌کند. برای آدرس‌ها
+     * [getWalletKeysForWallets] را صدا بزنید.
      */
     suspend fun getAllWallets(): ResultResponse<List<Wallet>>
+
+    /**
+     * کلیدهای **عمومی** هر کیف‌پول: نگاشتِ `walletId` به فهرست [WalletKey].
+     *
+     * وجود دارد چون [getAllWallets] عمداً فقط متادیتا می‌دهد و [loadExistingWallet] فقط کیف‌پولِ
+     * فعال را باز می‌کند؛ بدون این، هیچ صفحه‌ای نمی‌تواند آدرسِ کیف‌پولِ **غیرفعال** را نشان دهد.
+     *
+     * ⚠️ برای هر کیف‌پول رمزش رمزگشایی و کلیدها مشتق می‌شوند (همان کاری که
+     * [getBalancesForMultipleWallets] از قبل می‌کرد)، ولی هیچ رمز یا کلیدِ خصوصی‌ای برنمی‌گردد —
+     * [WalletKey] فقط آدرس و کلیدِ عمومی دارد. کیف‌پولِ فعال هم **عوض نمی‌شود**.
+     *
+     * کیف‌پولی که متادیتا یا رمزش پیدا نشود، از خروجی حذف می‌شود و خطا نمی‌دهد.
+     */
+    suspend fun getWalletKeysForWallets(
+        walletIds: List<String>
+    ): ResultResponse<Map<String, List<WalletKey>>>
  
     /**
      * کیف پول فعال سیستم را با استفاده از ID تغییر می‌دهد.

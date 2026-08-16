@@ -589,18 +589,13 @@ private fun MainDashboardContent(
             )
         }
 
-        // --- لایه ۳.۶: شیتِ مدیریتِ توکن (root-level) ---
-        // مثل شیتِ جزئیاتِ تراکنش بیرون از Scaffold رندر می‌شود تا scrim و ارتفاعش نویگیشنِ پایین
-        // را هم بپوشاند؛ داخل innerPadding بالای نوار قیچی می‌شد.
+
         ManageTokensSheet(
             visible = showManageTokens,
             onDismiss = { showManageTokens = false }
         )
 
-        // --- لایه ۳.۵: History Transaction Details Sheet (root-level, full-screen overlay) ---
-        // Rendered here — outside the Scaffold — so its full-screen scrim covers the bottom navigation
-        // and its expanded height spans the whole screen (both regressed when it lived inside the
-        // Scaffold's innerPadding content).
+
         Box(
             modifier = Modifier
                 .fillMaxSize()

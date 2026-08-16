@@ -19,8 +19,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
@@ -28,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mtd.common_ui.theme.MegaWalletTheme
 import com.mtd.core.manager.ErrorManager
+import com.mtd.domain.interfaceRepository.IThemeModeProvider
 import com.mtd.domain.model.CreateWalletStep
 import com.mtd.domain.model.ImportScreenState
 import com.mtd.megawallet.ui.compose.components.AppMessageHost
@@ -35,6 +38,7 @@ import com.mtd.megawallet.ui.compose.screens.addexistingwallet.AddExistingWallet
 import com.mtd.megawallet.ui.compose.screens.createwallet.CreateWalletScreen
 import com.mtd.megawallet.ui.compose.screens.splash.SplashScreen
 import com.mtd.megawallet.ui.compose.screens.welcome.WelcomeIntroScreen
+import com.mtd.megawallet.ui.compose.theme.resolveIsDark
 import com.mtd.megawallet.viewmodel.CreateWalletViewModel
 import com.mtd.megawallet.viewmodel.WalletImportViewModel
 import com.mtd.megawallet.viewmodel.WelcomeViewModel
@@ -49,6 +53,11 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class WelcomeActivityCompose : ComponentActivity() {
 
+    companion object {
+        /** با `true` مستقیم از «شروع» باز می‌شود و اسپلش رد می‌شود. */
+        const val EXTRA_SKIP_SPLASH = "skip_splash"
+    }
+
     private val viewModelWelcome: WelcomeViewModel by viewModels()
     private val viewModelWalletImport: WalletImportViewModel by viewModels()
     private val viewModelCreateWallet: CreateWalletViewModel by viewModels()
@@ -56,13 +65,20 @@ class WelcomeActivityCompose : ComponentActivity() {
     // TASK-57 — the app-wide message bus; one AppMessageHost per Activity renders it.
     @Inject lateinit var errorManager: ErrorManager
 
+    // همان provider که MainActivity می‌خواند؛ Singleton است تا پوسته بین این دو صفحه نپرد.
+    @Inject lateinit var themeModeProvider: IThemeModeProvider
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         enableEdgeToEdge()
+        // پس از حذفِ آخرین کیف‌پول، برنامه از همین‌جا از نو بالا می‌آید. اسپلش کارش تصمیم‌گیری
+        // بین «خانه» و «شروع» است و اینجا جواب از قبل معلوم است، پس فقط یک لوگوی تکراری بود.
+        val startAtOnboarding = intent.getBooleanExtra(EXTRA_SKIP_SPLASH, false)
         setContent {
-            MegaWalletTheme {
+            val themeMode by themeModeProvider.themeMode.collectAsStateWithLifecycle()
+            MegaWalletTheme(darkTheme = themeMode.resolveIsDark()) {
                 // TASK-02/TD-36 — all onboarding screens (recovery-phrase display, import, passcode
                 // setup) are sensitive, so protect the whole flow from screen capture.
                 com.mtd.megawallet.ui.compose.components.SecureFlagEffect()
@@ -75,6 +91,7 @@ class WelcomeActivityCompose : ComponentActivity() {
                             viewModelWelcome = viewModelWelcome,
                             viewModelWalletImport = viewModelWalletImport,
                             viewModelCreateWallet=viewModelCreateWallet,
+                            startAtOnboarding = startAtOnboarding,
                             onNavigateToHome = {
                                 startActivity(Intent(this@WelcomeActivityCompose,MainActivityCompose::class.java))
                                 finish()
@@ -97,6 +114,7 @@ class WelcomeActivityCompose : ComponentActivity() {
         viewModelWelcome: WelcomeViewModel,
         viewModelWalletImport: WalletImportViewModel,
         viewModelCreateWallet:CreateWalletViewModel,
+        startAtOnboarding: Boolean = false,
         onNavigateToHome: () -> Unit
     ) {
         val navController = rememberNavController()
@@ -114,7 +132,7 @@ class WelcomeActivityCompose : ComponentActivity() {
 
         NavHost(
             navController = navController,
-            startDestination = "splash",
+            startDestination = if (startAtOnboarding) "onboarding" else "splash",
             enterTransition = {
                 fadeIn(animationSpec = tween(500)) + slideIntoContainer(
                     AnimatedContentTransitionScope.SlideDirection.Start, tween(500)

@@ -25,7 +25,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -35,7 +44,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,6 +78,26 @@ import com.mtd.megawallet.ui.compose.components.FlipCardTargets
 import com.mtd.megawallet.ui.compose.components.PrivateKeyWallet
 import com.mtd.megawallet.ui.compose.components.SeedPhraseGrid
 
+/** ضلعی که کارت در پایانِ جمع‌شدن به آن می‌رسد — اول ارتفاع، بعد عرض. */
+private val COLLAPSE_TARGET = 5.dp
+
+/** مدتِ جمع‌شدنِ ارتفاعِ کارت تا خط. */
+private const val COLLAPSE_DURATION_MS = 900
+
+/** مدتِ جمع‌شدنِ عرضِ خط تا یک مربعِ کوچک. */
+private const val SHRINK_DURATION_MS = 550
+
+/** مدتِ محوشدنِ مربع. */
+private const val COLLAPSE_FADE_MS = 420
+
+/**
+ * محتوای داخلِ کارت تا این کسر از جمع‌شدنِ عمودی باید کامل رفته باشد.
+ *
+ * زودتر از خودِ کارت می‌رود: اگر تا آخر بماند، متن در ارتفاعِ کم بریده می‌شود و لحظهٔ آخر
+ * شلوغ به نظر می‌رسد.
+ */
+private const val CONTENT_FADE_AT = 0.35f
+
 private val PremiumSpring = spring<Float>(
     dampingRatio = 0.82f,
     stiffness = 380f
@@ -95,20 +126,55 @@ fun WalletCard(
     onSelect: () -> Unit,
     onToggleExpand: () -> Unit,
     onSettingsClick: () -> Unit,
-    onDeleteClick: () -> Unit,
     onNameChange: (String) -> Unit = {},
     onEditNicknameToggle: () -> Unit = {},
     hideActions: Boolean = false,
     isRevealingSecret: Boolean = false,
     isBackupSuccess: Boolean = false,
     secretData: String = "",
-    focusRequester: FocusRequester? = null
+    focusRequester: FocusRequester? = null,
+    /**
+     * فلوی حذف. از نظرِ حرکت و اندازه دقیقاً مثلِ «افشای عبارت» است — همان کارت به وسطِ صفحه
+     * می‌رود — پس حالتِ تازه‌ای در همان `transition` است، نه کارتِ دومی که جای این را بگیرد.
+     */
+    isRemoving: Boolean = false,
+    /** مرحلهٔ «در حال حذف»: جای نشانِ پشتیبان، اسپینر و متن می‌نشیند. */
+    isRemovalInProgress: Boolean = false,
+    /**
+     * ۰ تا ۱ — کم‌شدنِ **ارتفاعِ واقعیِ** کارت تا یک خطِ باریک. عرض دست نمی‌خورد.
+     *
+     * فقط هدف است، نه مقدارِ لحظه‌ای: انیمیتِ آن داخلِ همین کامپوننت انجام می‌شود.
+     */
+    removalCollapse: Float = 0f,
+    /**
+     * ۰ تا ۱ — گامِ بعدی: کم‌شدنِ **عرضِ** خط تا یک مربعِ کوچک.
+     *
+     * جدا از [removalCollapse] است تا دو حرکت پشتِ سر هم بیایند نه با هم؛ فراخوان ترتیب را
+     * تعیین می‌کند.
+     */
+    removalShrink: Float = 0f,
+    /**
+     * محوشدنِ **کلِ** کارت، پس از رسیدن به خط.
+     *
+     * ⚠️ به `FlipCardTargets.contentAlpha` می‌رود که نامش گمراه‌کننده است: روی `alpha`ِ کلِ
+     * لایه می‌نشیند، نه محتوای داخل. برای همین این‌جا مرحلهٔ آخر است و نه پیش از جمع‌شدن.
+     *
+     * مثلِ [removalCollapse] فقط هدف است؛ انیمیتش همین‌جا انجام می‌شود.
+     */
+    removalAlpha: Float = 1f,
+    /**
+     * رنگِ پس‌زمینه را بازنویسی می‌کند (فلوی حذف قرمز می‌فرستد). از همان `animateColorAsState`
+     * همیشگی رد می‌شود، پس گذارِ رنگ همراهِ خودِ حرکت انجام می‌شود نه جدا از آن.
+     */
+    overrideColor: Color? = null
 ) {
     val density = LocalDensity.current
     var cardCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     val transition = updateTransition(
         targetState = when {
+            // اول از همه: حذف بر هر حالتِ دیگری غلبه می‌کند.
+            isRemoving -> "removing"
             isBackupSuccess -> "success"
             isRevealingSecret -> "revealing"
             isExpanded -> "expanded"
@@ -131,7 +197,7 @@ fun WalletCard(
         transitionSpec = { PremiumSpringDp }
     ) { state ->
         when (state) {
-            "revealing", "success" -> targetWidth
+            "revealing", "success", "removing" -> targetWidth
             "expanded" -> targetWidth
             else -> collapsedWidth
         }
@@ -142,7 +208,7 @@ fun WalletCard(
         transitionSpec = { PremiumSpringDp }
     ) { state ->
         when (state) {
-            "revealing", "success" -> targetHeight
+            "revealing", "success", "removing" -> targetHeight
             "expanded" -> targetHeight
             else -> collapsedHeight
         }
@@ -155,7 +221,7 @@ fun WalletCard(
         if (cardCoords != null && rootCoordinates != null) {
             val currentY = rootCoordinates.localPositionOf(cardCoords!!, Offset.Zero).y
             when (state) {
-                "revealing", "success" -> {
+                "revealing", "success", "removing" -> {
                     val screenHeight = rootCoordinates.size.height
                     val currentHeight =
                         with(density) { cardHeight.toPx() } // استفاده از اندازه زمان حال
@@ -173,21 +239,47 @@ fun WalletCard(
         } else 0f
     }
 
+    // یک انیمیشنِ رنگ و نه بیشتر. رنگِ حذف از بیرون می‌آید و از همین مسیر رد می‌شود، پس
+    // برگشتنش به رنگِ خودِ کیف‌پول هم خودبه‌خود انیمیت می‌شود.
     val animatedBgColor by animateColorAsState(
-        targetValue = if (isPersonalizing) editColor else Color(wallet.color),
+        targetValue = when {
+            overrideColor != null -> overrideColor
+            isPersonalizing -> editColor
+            else -> Color(wallet.color)
+        },
         animationSpec = tween(500),
         label = "card_color"
     )
+    // فاصله تا وسطِ صفحه، بر اساسِ جایگاهِ لحظه‌ایِ کارت.
+    val liveCenterOffsetX = if (cardCoords != null && rootCoordinates != null) {
+        val currentX = rootCoordinates.localPositionOf(cardCoords!!, Offset.Zero).x
+        val currentWidth = cardCoords!!.size.width
+        (rootCoordinates.size.width / 2f) - (currentX + currentWidth / 2f)
+    } else 0f
+
+    // ⚠️ در فلوی حذف این مقدار **قفل** می‌شود.
+    //
+    // مرحلهٔ بندها کارت را خودش جابه‌جا نمی‌کند؛ کلِ ستونِ کیف‌پول‌ها با یک `graphicsLayer` به
+    // چپ می‌رود. ولی `localPositionOf` جابه‌جاییِ لایه‌های بالادست را هم حساب می‌کند، و هر
+    // layout pass ای که وسطِ آن حرکت بیفتد (ورود و خروجِ بندها، عوض‌شدنِ چیپ با اسپینر)
+    // `cardCoords` را دوباره گزارش می‌کند — این بار با آفستِ ستون تویش.
+    //
+    // نتیجه: هدف چند صد dp می‌پرید و `PremiumSpring` (با `dampingRatio` ۰.۸۲ که از هدف رد
+    // می‌شود) دنبالش می‌دوید. همان حرکتِ شلاقی. از منحنیِ خودِ ستون نمی‌آمد، برای همین
+    // عوض‌کردنِ easing هیچ‌وقت درستش نکرد.
+    val lastStableCenterX = remember { mutableFloatStateOf(liveCenterOffsetX) }
+    SideEffect { if (!isRemoving) lastStableCenterX.floatValue = liveCenterOffsetX }
+    val centerOffsetX = if (isRemoving) lastStableCenterX.floatValue else liveCenterOffsetX
+
     val translationX by transition.animateFloat(
         label = "x",
         transitionSpec = { PremiumSpring }
     ) { state ->
         if (cardCoords != null && rootCoordinates != null) {
-            val currentX = rootCoordinates.localPositionOf(cardCoords!!, Offset.Zero).x
-            val currentWidth = cardCoords!!.size.width
-            val screenWidth = rootCoordinates.size.width
-            val targetX = (screenWidth / 2f) - (currentX + currentWidth / 2f)
-            if (state == "expanded" || state == "revealing" || state == "success") targetX else 0f
+            when (state) {
+                "expanded", "revealing", "success", "removing" -> centerOffsetX
+                else -> 0f
+            }
         } else 0f
     }
 
@@ -205,6 +297,41 @@ fun WalletCard(
         transitionSpec = { PremiumSpring }
     ) { if (it == "collapsed") 1f else 0f }
 
+    // جمع‌شدنِ پایانی.
+    //
+    // ⚠️ [AnimatedFlipCard] این‌جا با `animate = false` صدا زده می‌شود، یعنی هیچ‌کدام از مقدارهای
+    // `targets` را خودش انیمیت نمی‌کند و `animationSpec`اش بی‌اثر است. بقیهٔ مقدارها از
+    // `transition`ِ همین فایل می‌آیند و برای همین نرم‌اند؛ هر مقداری که این‌جا انیمیت نشود،
+    // ناگهانی می‌پرد.
+    val collapseProgress by animateFloatAsState(
+        targetValue = removalCollapse.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = COLLAPSE_DURATION_MS, easing = FastOutSlowInEasing),
+        label = "removal_collapse"
+    )
+    val shrinkProgress by animateFloatAsState(
+        targetValue = removalShrink.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = SHRINK_DURATION_MS, easing = FastOutSlowInEasing),
+        label = "removal_shrink"
+    )
+    // خودِ **ابعاد** کم می‌شوند، نه `scaleX`/`scaleY`: مقیاس فقط تصویرِ همان کارتِ بزرگ را
+    // می‌فشارد، ولی خواسته این است که کارت واقعاً کوچک شود.
+    val collapsedCardHeight = cardHeight + (COLLAPSE_TARGET - cardHeight) * collapseProgress
+    val collapsedCardWidth = cardWidth + (COLLAPSE_TARGET - cardWidth) * shrinkProgress
+    // کارت از **بالای** [Box]ِ بیرونی چیده می‌شود، پس با کم‌شدنِ ارتفاع مرکزش به بالا می‌رفت.
+    // نصفِ ارتفاعِ از دست رفته را برمی‌گردانیم تا خط دقیقاً وسطِ صفحه بماند.
+    // برای عرض چنین چیزی لازم نیست: چینش `TopCenter` است، پس افقی از قبل وسط می‌ماند.
+    val collapseOffsetY = with(density) { (cardHeight - collapsedCardHeight).toPx() } / 2f
+
+    // محتوا زودتر از خودِ کارت می‌رود و به `removalShrink` کاری ندارد: تا رسیدن به خط،
+    // دیگر چیزی برای دیده‌شدن نمانده است.
+    val contentFade = (1f - collapseProgress / CONTENT_FADE_AT).coerceIn(0f, 1f)
+
+    val fadeAlpha by animateFloatAsState(
+        targetValue = removalAlpha.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = COLLAPSE_FADE_MS),
+        label = "removal_alpha"
+    )
+
     val rotationY by transition.animateFloat(
         label = "rotation_y",
         transitionSpec = { tween(800, easing = FastOutSlowInEasing) }
@@ -220,14 +347,16 @@ fun WalletCard(
     ) {
         AnimatedFlipCard(
             targets = FlipCardTargets(
-                width = cardWidth,
-                height = cardHeight,
+                width = collapsedCardWidth,
+                height = collapsedCardHeight,
                 offsetX = translationX,
-                offsetY = translationY,
+                offsetY = translationY + collapseOffsetY,
                 rotationY = rotationY,
                 cornerRadius = 15.dp,
                 cornerRadiusBoarder = 21.dp,
-                contentAlpha = if (isExpanded || isRevealingSecret) 1f else otherAlpha,
+                contentAlpha = if (isExpanded || isRevealingSecret || isRemoving) {
+                    fadeAlpha
+                } else otherAlpha,
                 borderAlpha = if (isActive) borderAlpha * otherAlpha else 0f
             ),
             backgroundColor = animatedBgColor,
@@ -248,21 +377,34 @@ fun WalletCard(
                 )
                 .graphicsLayer { alpha = if (isExpanded) 1f else otherAlpha },
             front = {
-                WalletCardContent(
-                    walletName = if (isPersonalizing) editName else wallet.name,
-                    balance = balance,
-                    isSmall = !isExpanded && !isRevealingSecret && !isBackupSuccess,
-                    onMoreClick = {
-                        if (!isAnyOtherExpanded) onToggleExpand()
-                    },
-                    onPersonalizeClick = if (isExpanded && !isPersonalizing && !isRevealingSecret) onSettingsClick else null,
-                    isPersonalizing = isPersonalizing,
-                    isEditingNickname = isEditingNickname,
-                    hideActions=hideActions,
-                    onNameChange = onNameChange,
-                    onEditNicknameToggle = onEditNicknameToggle,
-                    focusRequester = focusRequester
-                )
+                // اینجا و نه `FlipCardTargets.contentAlpha`: آن مقدار روی `alpha`ِ کلِ لایه
+                // می‌نشیند و پس‌زمینهٔ قرمز را هم با خود می‌برد. این لایه فقط محتواست.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = contentFade }
+                ) {
+                    WalletCardContent(
+                        walletName = if (isPersonalizing) editName else wallet.name,
+                        balance = balance,
+                        isSmall = !isExpanded && !isRevealingSecret && !isBackupSuccess,
+                        onMoreClick = {
+                            if (!isAnyOtherExpanded) onToggleExpand()
+                        },
+                        onPersonalizeClick = if (isExpanded && !isPersonalizing && !isRevealingSecret && !isRemoving) onSettingsClick else null,
+                        isPersonalizing = isPersonalizing,
+                        isEditingNickname = isEditingNickname,
+                        hideActions = hideActions,
+                        onNameChange = onNameChange,
+                        onEditNicknameToggle = onEditNicknameToggle,
+                        focusRequester = focusRequester,
+                        // `null` یعنی «در حالِ حذف نیستیم» و چیپِ شخصی‌سازی سرِ جایش می‌ماند.
+                        removalBackupState = if (isRemoving) {
+                            isManualBackedUp || isCloudBackedUp
+                        } else null,
+                        removalInProgress = isRemovalInProgress
+                    )
+                }
             },
             back = {
                 if (!isRevealingSecret && rotationY <= 90f) {
@@ -305,7 +447,14 @@ private fun WalletCardContent(
     hideActions: Boolean = false,
     onNameChange: (String) -> Unit = {},
     onEditNicknameToggle: () -> Unit = {},
-    focusRequester: FocusRequester? = null
+    focusRequester: FocusRequester? = null,
+    /**
+     * `null` = حالتِ عادی، چیپِ شخصی‌سازی. غیرِ `null` = فلوی حذف، و مقدارش یعنی پشتیبان دارد
+     * یا نه. عمداً سه‌حالته است تا «در حالِ حذف» با «پشتیبان ندارد» قاطی نشود.
+     */
+    removalBackupState: Boolean? = null,
+    /** جای وضعیتِ پشتیبان، اسپینر و «در حال حذف» بنشیند. */
+    removalInProgress: Boolean = false
 ) {
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -353,7 +502,58 @@ private fun WalletCardContent(
                     fontSize = if (isSmall) 12.sp else 22.sp
                 )
 
-                if (!isSmall && !isEditingNickname) {
+                if (!isSmall && !isEditingNickname && (removalBackupState != null || removalInProgress)) {
+                    // فلوی حذف: جای چیپِ شخصی‌سازی، وضعیتِ پشتیبان می‌نشیند. کاربر در لحظه‌ای که
+                    // دارد کیف را پاک می‌کند باید بداند پشتیبان دارد یا نه — این تنها چیزی است
+                    // که تصمیمش را عوض می‌کند.
+                    AnimatedContent(
+                        // `null` در این شاخه یعنی «در حال حذف» — قرص دیگر وضعیت نشان نمی‌دهد،
+                        // پیشرفت نشان می‌دهد.
+                        targetState = if (removalInProgress) null else removalBackupState,
+                        transitionSpec = {
+                            (fadeIn(tween(220, delayMillis = 120)) + scaleIn(initialScale = 0.85f))
+                                .togetherWith(fadeOut(tween(120)) + scaleOut(targetScale = 0.85f))
+                        },
+                        label = "removal_backup_state"
+                    ) { backedUp ->
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            if (backedUp == null) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    strokeWidth = 1.5.dp,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (backedUp) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            Text(
+                                text = when (backedUp) {
+                                    null -> "در حال حذف"
+                                    true -> "پشتیبان گرفته شده"
+                                    false -> "بدون پشتیبان"
+                                },
+                                color = Color.White,
+                                style = TextStyle(
+                                    fontSize = 11.sp,
+                                    fontFamily = IranSansBold,
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                                )
+                            )
+                        }
+                    }
+                } else if (!isSmall && !isEditingNickname) {
                     if (isPersonalizing) {
                         Box(
                             modifier = Modifier

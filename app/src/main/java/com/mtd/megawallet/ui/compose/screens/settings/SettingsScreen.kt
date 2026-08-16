@@ -1,80 +1,345 @@
 package com.mtd.megawallet.ui.compose.screens.settings
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mtd.domain.model.BlockchainConnectionMode
+import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.InterMedium
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.megawallet.BuildConfig
 import com.mtd.megawallet.viewmodel.SettingsViewModel
 
-private enum class SettingsDialog { ADDRESS_BOOK, PASSKEY, SIGNING, CONNECTION, THEME, NOTIFICATIONS, ABOUT, SUPPORT }
-private data class SettingsItem(val title: String, val subtitle: String, val icon: ImageVector, val dialog: SettingsDialog)
+/**
+ * یک ردیفِ تنظیمات به‌صورتِ داده.
+ *
+ * فهرست عمداً با اندیس خوانده نمی‌شود: نسخهٔ قبلی `items[0]` تا `items[8]` را دستی به هم وصل
+ * می‌کرد، یعنی افزودنِ یک ردیف در وسط، کلیکِ همهٔ ردیف‌های بعدی را یکی جابه‌جا می‌کرد. حالا هر
+ * ردیف عملِ خودش را با خودش حمل می‌کند.
+ */
+private data class SettingsRowModel(
+    val key: String,
+    val icon: Int,
+    val title: String,
+    val subtitle: String? = null,
+    val trailing: SettingsRowTrailing,
+    val onClick: () -> Unit
+)
 
+/** گروهی از ردیف‌ها. [header] برابرِ `null` یعنی گروهِ اول، که سرگروه ندارد. */
+private data class SettingsGroup(
+    val header: String?,
+    val rows: List<SettingsRowModel>
+)
+
+/**
+ * تنظیمات.
+ *
+ * هفت بخش در سه گروه. تفاوتِ پایانهٔ ردیف‌ها معنی دارد و اتفاقی نیست: شِوران یعنی صفحه‌ای باز
+ * می‌شود، و «مقدار + سه‌نقطه» یعنی انتخابی همان‌جا عوض می‌شود. هر ردیف کارِ واقعی می‌کند —
+ * انتخابگرها ترجیح را ماندگار ذخیره می‌کنند و صفحه‌ها محتوای واقعی دارند.
+ *
+ * ناوبری مثلِ بقیهٔ برنامه با state انجام می‌شود نه NavHost: زیرصفحه‌ها همین‌جا روی همین صفحه
+ * می‌آیند و با state خودشان بسته می‌شوند.
+ */
 @Composable
-fun SettingsScreen(onSecurityClick: () -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(
+    onSecurityClick: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: SettingsViewModel = hiltViewModel()
+) {
     val connectionMode by viewModel.connectionMode.collectAsStateWithLifecycle()
-    var dialog by remember { mutableStateOf<SettingsDialog?>(null) }
-    val items = listOf(
-        SettingsItem("امنیت", "اثر انگشت، passcode و قفل برنامه", Icons.Default.Fingerprint, SettingsDialog.SIGNING),
-        SettingsItem("امضای امن", "امضا با اثر انگشت یا passkey", Icons.Default.Fingerprint, SettingsDialog.SIGNING),
-        SettingsItem("Passkey", "مدیریت passkey برای احراز هویت", Icons.Default.Link, SettingsDialog.PASSKEY),
-        SettingsItem("Address Book", "مدیریت مخاطب‌ها و آدرس‌ها", Icons.Default.Book, SettingsDialog.ADDRESS_BOOK),
-        SettingsItem("Connection", if (connectionMode == BlockchainConnectionMode.PROXY) "Proxy" else "Direct", Icons.Default.SwapHoriz, SettingsDialog.CONNECTION),
-        SettingsItem("Theme", "System، روشن یا تاریک", Icons.Default.Palette, SettingsDialog.THEME),
-        SettingsItem("Notifications", "مدیریت اعلان‌های کیف پول", Icons.Default.Notifications, SettingsDialog.NOTIFICATIONS),
-        SettingsItem("About / Developer", "نسخه برنامه و اطلاعات فنی", Icons.Default.Info, SettingsDialog.ABOUT),
-        SettingsItem("Help & Support", "راهنما و پشتیبانی", Icons.Default.HelpOutline, SettingsDialog.SUPPORT)
+    val fiatCurrency by viewModel.fiatCurrency.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val pushEnabled by viewModel.pushEnabled.collectAsStateWithLifecycle()
+
+    // زیرصفحهٔ جاری جدا از دیده‌شدنش نگه داشته می‌شود — همان الگوی شیت‌ها — تا هنگام بسته‌شدن،
+    // صفحه وسطِ انیمیشنِ بیرون‌رفتن خالی نشود.
+    var subScreen by remember { mutableStateOf(SettingsSubScreen.AddressBook) }
+    var subScreenVisible by remember { mutableStateOf(false) }
+    var showCurrencyPicker by remember { mutableStateOf(false) }
+    var showConnectionPicker by remember { mutableStateOf(false) }
+    var showThemePicker by remember { mutableStateOf(false) }
+    var showNotificationPicker by remember { mutableStateOf(false) }
+    var showSupportFlow by remember { mutableStateOf(false) }
+
+    // «درباره» ردیف نیست: از دکمهٔ انتهای نوارِ بالا باز می‌شود، روبه‌روی ضربدر — همان‌جایی که
+    // کاربر انتظار دارد راهنمای یک صفحه باشد، و فهرست را هم از یک ردیفِ صرفاً خواندنی خلاص می‌کند.
+    var showAbout by remember { mutableStateOf(false) }
+
+    val groups = listOf(
+        SettingsGroup(
+            header = null,
+            rows = listOf(
+                SettingsRowModel(
+                    key = "address-book",
+                    icon = R.drawable.ic_address_book,
+                    title = "دفتر آدرس ‌ها",
+                    subtitle = "مدیریت مخاطب ‌ها و آدرس ‌ها",
+                    trailing = SettingsRowTrailing.Navigate,
+                    onClick = {
+                        subScreen = SettingsSubScreen.AddressBook
+                        subScreenVisible = true
+                    }
+                ),
+                SettingsRowModel(
+                    key = "security",
+                    icon = R.drawable.ic_security,
+                    title = "امنیت",
+                    subtitle = "قفل برنامه، رمز عبور و اثر انگشت",
+                    trailing = SettingsRowTrailing.Navigate,
+                    onClick = onSecurityClick
+                )
+            )
+        ),
+        SettingsGroup(
+            header = "تنظیمات",
+            rows = listOf(
+                SettingsRowModel(
+                    key = "currency",
+                    icon = R.drawable.ic_currency,
+                    title = "واحد پول",
+                    trailing = SettingsRowTrailing.Value(fiatCurrency.displayLabel()),
+                    onClick = { showCurrencyPicker = true }
+                ),
+                SettingsRowModel(
+                    key = "theme",
+                    icon = R.drawable.ic_theme,
+                    title = "پوسته",
+                    trailing = SettingsRowTrailing.Value(themeMode.displayLabel()),
+                    onClick = { showThemePicker = true }
+                ),
+                SettingsRowModel(
+                    key = "notifications",
+                    icon = R.drawable.ic_notification,
+                    title = "اعلان‌ها",
+                    // پایانهٔ بی‌مقدار: خودِ کلید داخلِ شیت است و نوشتنِ «روشن/خاموش» در ردیف،
+                    // همان یک حقیقت را در دو جا نگه می‌داشت.
+                    trailing = SettingsRowTrailing.Menu,
+                    onClick = { showNotificationPicker = true }
+                ),
+                SettingsRowModel(
+                    key = "connection",
+                    icon = R.drawable.ic_link,
+                    title = "اتصال",
+                    trailing = SettingsRowTrailing.Value(connectionMode.displayLabel()),
+                    onClick = { showConnectionPicker = true }
+                )
+            )
+        ),
+        SettingsGroup(
+            header = "بیشتر",
+            rows = listOf(
+                SettingsRowModel(
+                    key = "faq",
+                    icon = R.drawable.ic_question,
+                    title = "پرسش‌های پرتکرار",
+                    trailing = SettingsRowTrailing.Navigate,
+                    onClick = {
+                        subScreen = SettingsSubScreen.Help
+                        subScreenVisible = true
+                    }
+                ),
+                SettingsRowModel(
+                    key = "support",
+                    icon = R.drawable.ic_support,
+                    title = "تماس با پشتیبانی",
+                    // شِوران نیست چون صفحه‌ای عوض نمی‌شود؛ شیت روی همین فهرست باز می‌شود.
+                    trailing = SettingsRowTrailing.Menu,
+                    onClick = { showSupportFlow = true }
+                )
+            )
+        )
     )
-    Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) { Icon(Icons.Default.ArrowBack, "بستن تنظیمات") }
-                Text("تنظیمات", Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(48.dp))
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                SettingsTopBar(
+                    title = "تنظیمات",
+                    onClose = onClose,
+                    trailing = { SettingsInfoButton(onClick = { showAbout = true }) }
+                )
+
+                LazyColumn(
+
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)
+                ) {
+                    groups.forEach { group ->
+                        if (group.header != null) {
+                            item(key = "header-${group.header}") {
+                                SettingsSectionHeader(group.header)
+                            }
+                        }
+
+                        itemsIndexed(group.rows, key = { _, row -> row.key }) { index, row ->
+                            SettingsRow(
+                                title = row.title,
+                                subtitle = row.subtitle,
+                                trailing = row.trailing,
+                                showDivider = index != group.rows.lastIndex,
+                                onClick = row.onClick,
+                                leading = { SettingsRowIcon(row.icon) }
+                            )
+                        }
+                    }
+                }
+
+                AppVersionFooter()
             }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-                item { Header("امنیت") }
-                item { RowItem(items[0]) { onSecurityClick() } }
-                item { RowItem(items[1]) { dialog = it.dialog } }
-                item { RowItem(items[2]) { dialog = it.dialog } }
-                item { Header("کیف پول") }
-                item { RowItem(items[3]) { dialog = it.dialog } }
-                item { Header("اتصال") }
-                item { RowItem(items[4]) { dialog = it.dialog } }
-                item { Header("تنظیمات برنامه") }
-                item { RowItem(items[5]) { dialog = it.dialog } }
-                item { RowItem(items[6]) { dialog = it.dialog } }
-                item { Header("اطلاعات") }
-                item { RowItem(items[7]) { dialog = it.dialog } }
-                item { RowItem(items[8]) { dialog = it.dialog } }
+        }
+
+        FiatCurrencyPickerSheet(
+            visible = showCurrencyPicker,
+            selected = fiatCurrency,
+            onSelect = {
+                viewModel.setFiatCurrency(it)
+                showCurrencyPicker = false
+            },
+            onDismiss = { showCurrencyPicker = false }
+        )
+
+        ThemeModePickerSheet(
+            visible = showThemePicker,
+            selected = themeMode,
+            onSelect = {
+                viewModel.setThemeMode(it)
+                showThemePicker = false
+            },
+            onDismiss = { showThemePicker = false }
+        )
+
+        NotificationPickerSheet(
+            visible = showNotificationPicker,
+            enabled = pushEnabled,
+            // زدنِ کلید شیت را نمی‌بندد: برخلافِ انتخابگرها، این‌جا کاربر ممکن است کلید را
+            // برگرداند و توضیحِ زیرش را بخواند. بستن کارِ دکمهٔ «تمام» است.
+            onSelect = { viewModel.setPushEnabled(it) },
+            onDismiss = { showNotificationPicker = false }
+        )
+
+        ConnectionModePickerSheet(
+            visible = showConnectionPicker,
+            selected = connectionMode,
+            onSelect = {
+                viewModel.setConnectionMode(it)
+                showConnectionPicker = false
+            },
+            onDismiss = { showConnectionPicker = false }
+        )
+
+        SupportFlowSheet(
+            visible = showSupportFlow,
+            onDismiss = { showSupportFlow = false }
+        )
+
+        AboutSheet(
+            visible = showAbout,
+            connectionMode = connectionMode,
+            onDismiss = { showAbout = false }
+        )
+
+        // زیرصفحه‌ها از سمتِ «پایانِ» صفحه می‌آیند؛ در RTL یعنی از چپ، که همان جهتِ «جلو رفتن»
+        // در فارسی است.
+        AnimatedVisibility(
+            visible = subScreenVisible,
+            enter = fadeIn(animationSpec = tween(160)) +
+                slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(320)),
+            exit = fadeOut(animationSpec = tween(140)) +
+                slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(260))
+        ) {
+            when (subScreen) {
+                SettingsSubScreen.AddressBook -> AddressBookScreen(
+                    onClose = { subScreenVisible = false },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                SettingsSubScreen.Help -> HelpSupportScreen(
+                    onClose = { subScreenVisible = false },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
     }
-    when (dialog) {
-        SettingsDialog.CONNECTION -> ConnectionDialog(connectionMode, { viewModel.setConnectionMode(it); dialog = null }) { dialog = null }
-        SettingsDialog.ADDRESS_BOOK -> PlaceholderDialog("Address Book", "بخش Address Book اضافه شد. اتصال زیرساخت ذخیره و مدیریت آدرس‌ها در مرحله بعد انجام می‌شود.") { dialog = null }
-        SettingsDialog.PASSKEY -> PlaceholderDialog("Passkey", "زیرساخت passkey هنوز متصل نشده است. این بخش برای فعال‌سازی بعدی آماده است.") { dialog = null }
-        SettingsDialog.SIGNING -> PlaceholderDialog("امضای امن", "امضای transaction با biometric/passkey بعد از تکمیل auth provider فعال می‌شود.") { dialog = null }
-        SettingsDialog.THEME -> PlaceholderDialog("Theme", "انتخاب System، روشن یا تاریک در مرحله اتصال preferenceهای theme فعال می‌شود.") { dialog = null }
-        SettingsDialog.NOTIFICATIONS -> PlaceholderDialog("Notifications", "Permission و FCM در پروژه موجود است. کنترل‌های جزئی اعلان‌ها بعداً متصل می‌شوند.") { dialog = null }
-        SettingsDialog.ABOUT -> PlaceholderDialog("About / Developer", "نسخه، endpoint و diagnostics توسعه‌دهنده در مرحله بعد متصل می‌شوند.") { dialog = null }
-        SettingsDialog.SUPPORT -> PlaceholderDialog("Help & Support", "راهنما و مسیر پشتیبانی در این بخش قرار می‌گیرد.") { dialog = null }
-        null -> Unit
-    }
+
+    BackHandler(enabled = subScreenVisible) { subScreenVisible = false }
 }
 
-@Composable private fun Header(text: String) { Text(text, Modifier.padding(start = 24.dp, top = 22.dp, bottom = 8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold) }
-@Composable private fun RowItem(item: SettingsItem, onClick: (SettingsItem) -> Unit) { Column { Row(Modifier.fillMaxWidth().clickable { onClick(item) }.padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) { Icon(item.icon, null, tint = MaterialTheme.colorScheme.primary); Column(Modifier.weight(1f)) { Text(item.title, style = MaterialTheme.typography.titleMedium); Text(item.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Text("›", style = MaterialTheme.typography.headlineSmall) }; HorizontalDivider(Modifier.padding(start = 24.dp)) } }
-@Composable private fun ConnectionDialog(selected: BlockchainConnectionMode, onSelected: (BlockchainConnectionMode) -> Unit, onDismiss: () -> Unit) { AlertDialog(onDismissRequest = onDismiss, title = { Text("Connection") }, text = { Column { BlockchainConnectionMode.entries.forEach { mode -> Row(Modifier.fillMaxWidth().clickable { onSelected(mode) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { RadioButton(selected == mode, { onSelected(mode) }); Text(if (mode == BlockchainConnectionMode.PROXY) "Proxy" else "Direct") } } } }, confirmButton = { TextButton(onDismiss) { Text("بستن") } }) }
-@Composable private fun PlaceholderDialog(title: String, message: String, onDismiss: () -> Unit) { AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onDismiss) { Text("متوجه شدم") } }) }
+/** زیرصفحه‌هایی که از داخلِ تنظیمات باز می‌شوند. */
+private enum class SettingsSubScreen {
+    AddressBook,
+    Help
+}
+
+/**
+ * نسخهٔ برنامه، چسبیده به پایینِ صفحه.
+ *
+ * ردیف نیست چون ضربه‌زدنش کاری نمی‌کند و در این صفحه ردیف یعنی «این‌جا کاری انجام می‌شود».
+ *
+ * متنِ فارسی و متنِ لاتین در دو `Text` جدا نوشته می‌شوند، نه یک رشتهٔ به‌هم‌چسبیده: در یک متنِ
+ * راست‌به‌چپ، الگوریتمِ دوجهته یک تکهٔ لاتینِ چسبیده به فارسی را جابه‌جا می‌چیند و «۱.۰ · debug»
+ * به شکلِ «debug · ۱.۰» خوانده می‌شود. جداکردنشان هر تکه را در جهتِ خودش نگه می‌دارد.
+ */
+@Composable
+private fun AppVersionFooter() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = SETTINGS_ROW_HORIZONTAL_PADDING)
+            .padding(top = 12.dp, bottom = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "نسخهٔ",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = IranSansRegular,
+            fontSize = 12.sp
+        )
+        // فاصله با Spacer، نه با فاصلهٔ ابتدای رشته: فاصلهٔ چسبیده به یک تکهٔ لاتین در بندِ
+        // راست‌به‌چپ خودش جهت ندارد و به آن سرِ رشته می‌پرد.
+        Spacer(Modifier.width(5.dp))
+        Text(
+            text = "${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_TYPE}",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = InterMedium,
+            fontSize = 12.sp
+        )
+    }
+}

@@ -2,11 +2,11 @@ package com.mtd.megawallet.ui.compose.screens.swap
 
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -15,17 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -37,23 +30,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mtd.common_ui.theme.IranSansBoldMedium
+import com.blankj.utilcode.util.ClipboardUtils
 import com.mtd.domain.model.AssetItem
 import com.mtd.domain.model.HomeUiState
+import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.ChooseBalanceBottomSheet
 import com.mtd.megawallet.ui.compose.components.NumericKeypad
+import com.mtd.megawallet.ui.compose.components.PrimaryButton
+import com.mtd.megawallet.ui.compose.components.UnifiedHeader
 import com.mtd.megawallet.ui.compose.components.buildSendableAssetList
+import com.mtd.megawallet.ui.compose.screens.scanner.QrScannerScreen
 import com.mtd.megawallet.viewmodel.HomeViewModel
+import com.mtd.megawallet.viewmodel.wallet.WalletAddressPickerViewModel
 import com.mtd.megawallet.viewmodel.swap.SwapEvent
 import com.mtd.megawallet.viewmodel.swap.SwapPhase
 import com.mtd.megawallet.viewmodel.swap.SwapQuoteState
@@ -72,7 +68,8 @@ fun SwapFlowScreen(
     homeViewModel: HomeViewModel,
     walletName: String,
     onDismiss: () -> Unit,
-    swapViewModel: SwapViewModel = hiltViewModel()
+    swapViewModel: SwapViewModel = hiltViewModel(),
+    walletAddressPickerViewModel: WalletAddressPickerViewModel = hiltViewModel()
 ) {
     val state by swapViewModel.uiState.collectAsStateWithLifecycle()
     val homeState by homeViewModel.uiState.collectAsStateWithLifecycle()
@@ -146,14 +143,19 @@ fun SwapFlowScreen(
         }
     }
 
-    // آیکون‌ها استیتِ خارج از ترکیب‌اند؛ باید با انتخابِ کاربر هم‌گام بمانند.
+    // آیکون‌ها استیتِ خارج از ترکیب‌اند؛ باید با انتخابِ کاربر هم‌گام بمانند. نماد هم کنارِ URL
+    // می‌آید چون آیکونِ نبوده با آواتارِ حرفیِ همان نماد پر می‌شود، نه با یک درِیوبلِ عمومی.
     LaunchedEffect(state.payToken?.option?.id) {
         payIcon.iconUrl = state.payToken?.option?.iconUrl
+        payIcon.symbol = state.payToken?.option?.symbol.orEmpty()
+        payIcon.networkIconUrl = state.payToken?.option?.networkIconUrl
     }
 
     LaunchedEffect(state.receiveToken?.id, state.phase) {
         val token = state.receiveToken
         receiveIcon.iconUrl = token?.iconUrl
+        receiveIcon.symbol = token?.symbol.orEmpty()
+        receiveIcon.networkIconUrl = token?.networkIconUrl
         when {
             token == null -> receiveIcon.slot = null
             // انتخابِ ارزِ دریافت وسطِ فازِ مبلغ اتفاق می‌افتد: پروازی در کار نیست، پس با یک پاپ می‌آید.
@@ -189,8 +191,26 @@ fun SwapFlowScreen(
      */
     var chooseReceiveNetworkAsset by remember { mutableStateOf<AssetItem?>(null) }
 
+    /**
+     * شیتِ انتخابِ گیرنده. ویزیبیلیتی‌اش استیتِ خالصِ UI است و در [SwapUiState] نمی‌نشیند؛ باز و
+     * بستهٔ یک شیت چیزی نیست که ViewModel لازم باشد بداند.
+     */
+    var destinationPickerVisible by remember { mutableStateOf(false) }
+    var destinationScannerVisible by remember { mutableStateOf(false) }
+    var destinationSnapshot by remember { mutableStateOf("") }
+
+    val dismissDestinationPicker = {
+        // انصراف = برگشت به همان گیرنده‌ای که قبلِ باز شدنِ شیت انتخاب شده بود.
+        if (state.destinationInput != destinationSnapshot) {
+            swapViewModel.onEvent(SwapEvent.DestinationAddressChanged(destinationSnapshot))
+        }
+        destinationPickerVisible = false
+    }
+
     BackHandler {
         when {
+            destinationScannerVisible -> destinationScannerVisible = false
+            destinationPickerVisible -> dismissDestinationPicker()
             chooseReceiveNetworkAsset != null -> chooseReceiveNetworkAsset = null
             state.receiveSheetVisible -> swapViewModel.onEvent(SwapEvent.DismissReceiveSheet)
             chooseBalanceAsset != null -> chooseBalanceAsset = null
@@ -225,6 +245,35 @@ fun SwapFlowScreen(
         payAssets.filterByPayQuery(state.payQuery)
     }
 
+    // کیف‌پول‌هایی که روی **شبکهٔ مقصد** آدرس دارند. منبعش یک خواندنِ محلی است و هیچ موجودی یا
+    // درخواستِ شبکه‌ای با خودش نمی‌آورد.
+    val walletAddresses by walletAddressPickerViewModel.wallets.collectAsStateWithLifecycle()
+    val walletDestinationOptions = remember(walletAddresses, state.receiveToken?.networkId) {
+        walletAddresses.destinationOptionsFor(state.receiveToken?.networkId)
+    }
+
+    val addressBook by walletAddressPickerViewModel.savedAddresses.collectAsStateWithLifecycle()
+    val savedDestinationAddresses = remember(addressBook, state.receiveToken?.networkId) {
+        addressBook.savedAddressesFor(state.receiveToken?.networkId)
+    }
+
+    // نامِ گیرنده از روی همان دو فهرست پیدا می‌شود، نه از یک متنِ ثابت: کیف‌پولِ فعال هم یکی از
+    // همین گزینه‌هاست، پس اسمی که کاربر خودش رویش گذاشته همان‌جا پیدا می‌شود. [walletName] فقط
+    // وقتی به کار می‌آید که کیف‌پول روی شبکهٔ مقصد در فهرست نباشد ولی آدرسِ مقصد همان آدرسِ خودش باشد.
+    val destinationName = remember(
+        state.usableDestinationAddress,
+        state.destinationIsOwnWallet,
+        walletDestinationOptions,
+        savedDestinationAddresses,
+        walletName
+    ) {
+        resolveDestinationName(
+            address = state.usableDestinationAddress,
+            walletOptions = walletDestinationOptions,
+            savedAddresses = savedDestinationAddresses
+        ) ?: walletName.takeIf { state.destinationIsOwnWallet }
+    }
+
     CompositionLocalProvider(LocalSwapMotion provides motion) {
         Box(
             modifier = Modifier
@@ -233,16 +282,25 @@ fun SwapFlowScreen(
         ) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
 
-                SwapTopBar(
-                    showBack = state.phase == SwapPhase.CONFIRM,
-                    showClose = state.phase != SwapPhase.EXECUTING,
-                    onBack = { swapViewModel.onEvent(SwapEvent.BackFromConfirm) },
-                    onClose = {
-                        if (state.phase == SwapPhase.RESULT) {
-                            swapViewModel.onEvent(SwapEvent.ResultDismissed)
-                        }
-                        onDismiss()
-                    }
+                // حاشیهٔ افقیِ هر فاز، همان چیزی که همتایش در فلوی ارسال دارد: فهرست و مبلغ ۱۶،
+                // تأیید و بعدش ۲۰. سرصفحه با محتوای زیرِ خودش هم‌تراز می‌ماند.
+                val contentPadding = when (state.phase) {
+                    SwapPhase.PAY_TOKEN, SwapPhase.AMOUNT -> 16.dp
+                    else -> 20.dp
+                }
+
+                UnifiedHeader(
+                    onBack = { handleBack() },
+                    // فازِ تأیید عنوان ندارد؛ عنوانِ صفحه آن‌جا خودِ جفتِ ارز است، مثلِ صفحهٔ
+                    // تأییدِ ارسال که گیرنده را بزرگ می‌نویسد.
+                    title = if (state.phase == SwapPhase.CONFIRM) null else "تبدیل",
+                    isClose = when (state.phase) {
+                        SwapPhase.PAY_TOKEN, SwapPhase.RESULT -> true
+                        // اجرا شروع شده و روی زنجیره است؛ راهِ خروجی نشان داده نمی‌شود.
+                        SwapPhase.EXECUTING -> null
+                        else -> false
+                    },
+                    modifier = Modifier.padding(horizontal = contentPadding)
                 )
 
                 Box(Modifier.weight(1f)) {
@@ -278,11 +336,12 @@ fun SwapFlowScreen(
                                 intro = amountIntro.value,
                                 onUseMax = { swapViewModel.onEvent(SwapEvent.UseMax) },
                                 onToggleFiat = { swapViewModel.onEvent(SwapEvent.ToggleFiatInput) },
+                                // هم‌اندازهٔ آیکونِ کارتِ داراییِ فازِ مبلغِ ارسال.
                                 tokenSlot = {
                                     SwapMorphSlotHost(
                                         model = payIcon,
                                         slot = SwapMorphSlot.PAY_PILL,
-                                        size = 30.dp
+                                        size = WalletScreenConstants.ASSET_ICON_MAIN_SIZE
                                     )
                                 }
                             )
@@ -297,12 +356,14 @@ fun SwapFlowScreen(
                                     onOpenSheet = { swapViewModel.onEvent(SwapEvent.OpenReceiveSheet) },
                                     leading = {
                                         if (state.receiveToken == null) {
-                                            SwapReceivePlaceholder()
+                                            SwapReceivePlaceholder(
+                                                size = WalletScreenConstants.ASSET_ICON_MAIN_SIZE
+                                            )
                                         } else {
                                             SwapMorphSlotHost(
                                                 model = receiveIcon,
                                                 slot = SwapMorphSlot.RECEIVE_CARD,
-                                                size = 38.dp
+                                                size = WalletScreenConstants.ASSET_ICON_MAIN_SIZE
                                             )
                                         }
                                     }
@@ -319,14 +380,13 @@ fun SwapFlowScreen(
                                 Spacer(Modifier.height(14.dp))
                                 SwapDestinationSection(
                                     state = state,
-                                    onAddressChange = {
-                                        swapViewModel.onEvent(SwapEvent.DestinationAddressChanged(it))
-                                    },
-                                    onToggleEditor = {
-                                        swapViewModel.onEvent(SwapEvent.DestinationEditorToggled)
-                                    },
-                                    onResetToOwnWallet = {
-                                        swapViewModel.onEvent(SwapEvent.DestinationResetToOwnWallet)
+                                    destinationName = destinationName,
+                                    onOpenPicker = {
+                                        // مقدارِ فعلی قبل از باز شدنِ شیت نگه داشته می‌شود: تایپ
+                                        // داخلِ شیت زنده اعتبارسنجی می‌شود، پس انصراف باید بتواند
+                                        // دقیقاً همان چیزی را برگرداند که کاربر داشت.
+                                        destinationSnapshot = state.destinationInput
+                                        destinationPickerVisible = true
                                     }
                                 )
                             }
@@ -342,18 +402,19 @@ fun SwapFlowScreen(
                                 quoteSecondsRemaining = timer.seconds,
                                 onSlippageSelected = { swapViewModel.onEvent(SwapEvent.SlippageChanged(it)) },
                                 onFeeLevelSelected = { swapViewModel.onEvent(SwapEvent.FeeLevelSelected(it)) },
+                                // ۵۶dp: همان قطرِ آواتارِ گیرنده در صفحهٔ تأییدِ ارسال.
                                 payCoin = {
                                     SwapMorphSlotHost(
                                         model = payIcon,
                                         slot = SwapMorphSlot.COIN_PAY,
-                                        size = 60.dp
+                                        size = 56.dp
                                     )
                                 },
                                 receiveCoin = {
                                     SwapMorphSlotHost(
                                         model = receiveIcon,
                                         slot = SwapMorphSlot.COIN_RECEIVE,
-                                        size = 60.dp
+                                        size = 56.dp
                                     )
                                 }
                             )
@@ -404,7 +465,7 @@ fun SwapFlowScreen(
                 }
 
                 SwapMorphSection(visible = state.phase == SwapPhase.CONFIRM) {
-                    Column(Modifier.navigationBarsPadding().padding(vertical = 12.dp)) {
+                    Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
                         SwapConfirmCta(
                             state = state,
                             intro = confirmIntro.value,
@@ -450,92 +511,59 @@ fun SwapFlowScreen(
                 // مقصدِ پل معمولاً همان شبکه‌ای است که کاربر رویش چیزی ندارد.
                 includeZeroBalance = true
             )
-        }
-    }
-}
 
-@Composable
-private fun SwapTopBar(
-    showBack: Boolean,
-    showClose: Boolean,
-    onBack: () -> Unit,
-    onClose: () -> Unit
-) {
-    val motion = LocalSwapMotion.current
-
-    Box(Modifier.fillMaxWidth().height(58.dp)) {
-        Crossfade(
-            targetState = showBack,
-            animationSpec = motion.fade(),
-            label = "swapTopBar"
-        ) { back ->
-            Box(Modifier.fillMaxSize()) {
-                if (back) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = 8.dp)
-                            .size(44.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { onBack() }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowLeft,
-                            contentDescription = "بازگشت",
-                            tint = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.size(32.dp)
-                        )
+            SwapDestinationSheet(
+                visible = destinationPickerVisible && !destinationScannerVisible,
+                networkName = state.receiveToken?.networkName.orEmpty(),
+                walletOptions = walletDestinationOptions,
+                savedAddresses = savedDestinationAddresses,
+                selectedAddress = state.usableDestinationAddress,
+                manualInput = state.destinationInput,
+                manualError = state.destinationError,
+                // اسکن، انتخابِ کیف‌پول، مدخلِ دفترچه و تایپِ دستی همه از یک در می‌روند، پس
+                // اعتبارسنجیِ شبکهٔ مقصد برای همه یکی است و هیچ مسیرِ دومی برای ساختِ گیرنده نیست.
+                onAddressPicked = { swapViewModel.onEvent(SwapEvent.DestinationAddressChanged(it)) },
+                onScanRequested = { destinationScannerVisible = true },
+                onPaste = {
+                    val pasted = ClipboardUtils.getText().toString()
+                    if (pasted.isNotBlank()) {
+                        swapViewModel.onEvent(SwapEvent.DestinationAddressChanged(pasted))
                     }
-                } else {
-                    Text(
-                        text = "تبدیل",
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 26.sp,
-                        fontFamily = IranSansBoldMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = 20.dp)
-                    )
-                }
-            }
-        }
+                },
+                onConfirm = { destinationPickerVisible = false },
+                onDismiss = { dismissDestinationPicker() }
+            )
 
-        if (showClose) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 12.dp)
-                    .size(44.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onClose() }
+            // اسکنر روی شیت می‌نشیند و بعدِ خواندن به همان شیت برمی‌گردد؛ کاربر وسطِ انتخابِ
+            // گیرنده از فلو پرت نمی‌شود.
+            AnimatedVisibility(
+                visible = destinationScannerVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.zIndex(10000f)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "بستن",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(22.dp)
+                QrScannerScreen(
+                    onClose = { destinationScannerVisible = false },
+                    onAddressScanned = { scanned ->
+                        swapViewModel.onEvent(SwapEvent.DestinationAddressChanged(scanned))
+                        destinationScannerVisible = false
+                    }
                 )
             }
         }
     }
 }
 
-/** دکمهٔ ادامه؛ وقتی غیرفعال است زیرش دلیلش نوشته می‌شود، نه اینکه بی‌صدا کار نکند. */
+/**
+ * دکمهٔ ادامهٔ فازِ مبلغ — همان [PrimaryButton] که فازِ مبلغِ ارسال زیرِ صفحه‌کلید دارد.
+ * وقتی استعلام در جریان است متنش عوض می‌شود، نه اینکه بی‌صدا کار نکند.
+ */
 @Composable
 private fun SwapContinueButton(
     state: SwapUiState,
     intro: Float,
     onClick: () -> Unit
 ) {
-    val enabled = state.canContinueFromAmount
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -547,37 +575,11 @@ private fun SwapContinueButton(
             },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .clip(RoundedCornerShape(26.dp))
-                .background(
-                    if (enabled) {
-                        MaterialTheme.colorScheme.onBackground
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    }
-                )
-                .clickable(
-                    enabled = enabled,
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onClick() },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = if (state.quoteState is SwapQuoteState.Loading) "در حال استعلام…" else "ادامه",
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.background
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                fontSize = 16.sp,
-                fontFamily = IranSansBoldMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        PrimaryButton(
+            text = if (state.quoteState is SwapQuoteState.Loading) "در حال استعلام…" else "ادامه",
+            onClick = onClick,
+            enabled = state.canContinueFromAmount
+        )
     }
 }
 

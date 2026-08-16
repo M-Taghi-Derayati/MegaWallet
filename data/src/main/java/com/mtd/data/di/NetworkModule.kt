@@ -17,6 +17,7 @@ import com.mtd.data.service.GaslessApiService
 import com.mtd.data.service.GrowthApiService
 import com.mtd.data.service.MobileProxyApiService
 import com.mtd.data.service.NotificationApiService
+import com.mtd.data.service.SupportApiService
 import com.mtd.data.service.RelayerPriceApiService
 import com.mtd.data.service.SwapApiService
 import com.mtd.data.service.USDTApiService
@@ -323,6 +324,20 @@ object NetworkModule {
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
             .create(NotificationApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSupportApiService(
+        retrofitBuilder: Retrofit.Builder,
+        gson: Gson
+    ): SupportApiService {
+        return retrofitBuilder
+            .baseUrl(BuildConfig.RELAYER_BASE_URL)
+            .addConverterFactory(ScalarsConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(SupportApiService::class.java)
     }
 
 

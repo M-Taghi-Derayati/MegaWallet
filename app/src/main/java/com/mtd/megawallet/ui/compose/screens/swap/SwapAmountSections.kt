@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -27,17 +26,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mtd.common_ui.theme.HexAssetShape
+import com.mtd.common_ui.theme.InterBold
 import com.mtd.common_ui.theme.InterMedium
-import com.mtd.common_ui.theme.IranSansBoldMedium
-import com.mtd.common_ui.theme.IranSansLightLight
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansRegular
+import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.megawallet.ui.compose.components.AmountDisplaySection
-import com.mtd.megawallet.ui.compose.components.SearchInputField
 import com.mtd.megawallet.ui.compose.components.normalizeAmountForCalculation
 import com.mtd.megawallet.viewmodel.swap.SwapQuoteState
 import com.mtd.megawallet.viewmodel.swap.SwapUiState
@@ -59,18 +57,20 @@ fun SwapPayCardSection(
 ) {
     val token = state.payToken ?: return
 
+    // همان کارتِ داراییِ فازِ مبلغِ ارسال: سطحِ گِرد ۲۰، نامِ فارسیِ ارز بالا، موجودی زیرش، و
+    // «حداکثر» در انتها.
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             tokenSlot()
 
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
 
             Column(
                 modifier = Modifier
@@ -78,22 +78,21 @@ fun SwapPayCardSection(
                     .graphicsLayer { alpha = segment(intro, 0.1f, 0.35f) }
             ) {
                 Text(
-                    text = token.option.symbol,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontSize = 15.sp,
-                    fontFamily = InterMedium,
-                    fontWeight = FontWeight.SemiBold
+                    text = token.option.faName ?: token.option.symbol,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontSize = 16.sp,
+                    fontFamily = IranSansRegular
                 )
                 Text(
                     text = "${token.balanceDisplay} ${token.option.symbol}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onTertiary,
+                    fontSize = 13.sp,
                     fontFamily = InterMedium
                 )
             }
 
             SwapPillButton(
-                text = "همه",
+                text = "حداکثر",
                 onClick = onUseMax,
                 modifier = Modifier.graphicsLayer { alpha = segment(intro, 0.15f, 0.4f) }
             )
@@ -141,13 +140,13 @@ fun SwapReceiveCardSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(20.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) { onOpenSheet() }
-                .padding(14.dp)
+                .padding(16.dp)
                 .graphicsLayer { alpha = segment(intro, 0.35f, 0.75f) },
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -158,17 +157,16 @@ fun SwapReceiveCardSection(
             Column(Modifier.weight(1f)) {
                 Text(
                     text = state.receiveToken?.let { it.faName ?: it.name } ?: "دریافت",
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontSize = 15.sp,
-                    fontFamily = IranSansBoldMedium,
-                    fontWeight = FontWeight.SemiBold
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontSize = 16.sp,
+                    fontFamily = IranSansRegular
                 )
                 Text(
                     text = state.receiveToken?.let { "دریافت ${it.symbol} روی ${it.networkName}" }
                         ?: "یک ارز انتخاب کنید",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    fontFamily = IranSansLightLight
+                    color = MaterialTheme.colorScheme.onTertiary,
+                    fontSize = 13.sp,
+                    fontFamily = IranSansRegular
                 )
             }
 
@@ -203,9 +201,9 @@ private fun SwapReceiveAmountText(state: SwapUiState) {
 
     Text(
         text = text,
-        color = MaterialTheme.colorScheme.onBackground,
+        color = MaterialTheme.colorScheme.tertiary,
         fontSize = 16.sp,
-        fontFamily = InterMedium
+        fontFamily = InterBold
     )
 }
 
@@ -246,93 +244,100 @@ fun SwapQuoteStatusLine(
 }
 
 /**
- * آدرسِ گیرندهٔ خروجی.
+ * گیرندهٔ خروجی — یک سطرِ **قابلِ فشردن** که شیتِ انتخاب را باز می‌کند، نه یک فیلدِ آدرسِ خام.
  *
- * دو حالتِ کاملاً متفاوت که عمداً یک شکل نیستند:
- *  - **هم‌خانواده** (تبدیلِ درون‌زنجیره‌ای یا پلِ EVM→EVM): آدرس اختیاری است و پیش‌فرض همان
- *    کیف‌پولِ خودِ کاربر. فقط یک سطرِ جمع‌وجور با «تغییر» نشان داده می‌شود تا فلوی رایج شلوغ نشود.
- *  - **بین‌خانوادگی** (TRON ↔ EVM): آدرس **اجباری** است و ورودی از همان اول باز است. آدرسِ
- *    اتریومی روی ترون (و برعکس) اصلاً آدرس نیست، پس چیزی برای پیش‌فرض‌گرفتن از سمتِ مبدأ وجود
- *    ندارد و کیف‌پولِ خودِ کاربر روی زنجیرهٔ مقصد جای آن را می‌گیرد.
+ * فیلدِ آدرس فرضِ اشتباهی داشت: که کاربر آدرسی برای وارد کردن دارد. در بیشترِ تبدیل‌ها مقصد یکی از
+ * کیف‌پول‌های خودِ اوست و آن‌ها نام دارند؛ [SwapDestinationSheet] همان را یک ضربه می‌کند و آدرسِ
+ * دستی را به یک گزینهٔ صریح تبدیل می‌کند.
+ *
+ * دو حالت همچنان فرق دارند و عمداً یک متن ندارند:
+ *  - **هم‌خانواده** (تبدیلِ درون‌زنجیره‌ای یا پلِ EVM→EVM): پیش‌فرض کیف‌پولِ خودِ کاربر است و سطر
+ *    فقط تأیید می‌کند که کجا می‌رود.
+ *  - **بین‌خانوادگی** (TRON ↔ EVM): آدرس **اجباری** است و تا وقتی انتخاب نشده، سطر خودش می‌گوید
+ *    چه چیزی کم است. آدرسِ اتریومی روی ترون (و برعکس) اصلاً آدرس نیست، پس چیزی برای
+ *    پیش‌فرض‌گرفتن از سمتِ مبدأ وجود ندارد.
  */
 @Composable
 fun SwapDestinationSection(
     state: SwapUiState,
-    onAddressChange: (String) -> Unit,
-    onToggleEditor: () -> Unit,
-    onResetToOwnWallet: () -> Unit,
+    /**
+     * نامی که خودِ کاربر روی این گیرنده گذاشته — نامِ کیف‌پول یا مدخلِ دفترچه. `null` یعنی این
+     * آدرس در هیچ فهرستی نیست.
+     */
+    destinationName: String?,
+    onOpenPicker: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val receive = state.receiveToken ?: return
     val required = state.requiresDestinationAddress
-    val expanded = required || state.destinationEditing
+    val missing = required && state.usableDestinationAddress == null
 
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onOpenPicker() }
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "دریافت‌کننده",
-                    color = MaterialTheme.colorScheme.onBackground,
+                    text = "دارایی به کجا برسد؟",
+                    color = MaterialTheme.colorScheme.onTertiary,
                     fontSize = 13.sp,
-                    fontFamily = IranSansBoldMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontFamily = IranSansRegular
                 )
+                Spacer(Modifier.height(2.dp))
+                // نامِ واقعی، نه یک برچسبِ ثابت: کیف‌پولِ کاربر اسمی دارد که خودش گذاشته و همان
+                // چیزی است که در بقیهٔ اپ می‌بیند؛ «کیف پول من» برای کسی که کیفش را «کیف اتر»
+                // نامیده اصلاً همان کیف به نظر نمی‌رسد.
                 Text(
                     text = when {
-                        required && state.usableDestinationAddress == null ->
-                            "آدرس ${receive.networkName} را وارد کنید"
-                        state.destinationIsOwnWallet -> "کیف پول شما روی ${receive.networkName}"
-                        state.usableDestinationAddress != null -> "آدرس دلخواه روی ${receive.networkName}"
-                        else -> "کیف پول شما"
+                        missing -> "انتخاب کنید"
+                        destinationName != null -> destinationName
+                        state.usableDestinationAddress != null -> "آدرس ثبت‌نشده"
+                        else -> "انتخاب کنید"
                     },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    fontFamily = IranSansLightLight
+                    color = if (missing) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.tertiary
+                    },
+                    fontSize = 16.sp,
+                    fontFamily = IranSansBold
                 )
+                state.usableDestinationAddress?.let { address ->
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "${shortenAddress(address)} · ${receive.networkName}",
+                        color = MaterialTheme.colorScheme.onTertiary,
+                        fontSize = 12.sp,
+                        fontFamily = InterMedium
+                    )
+                }
             }
 
-            if (!required) {
-                SwapPillButton(
-                    text = if (state.destinationEditing) "بستن" else "تغییر",
-                    onClick = onToggleEditor
-                )
-            } else if (state.destinationOwnAddress != null && !state.destinationIsOwnWallet) {
-                SwapPillButton(text = "کیف پول خودم", onClick = onResetToOwnWallet)
-            }
-        }
+            Spacer(Modifier.width(8.dp))
 
-        if (expanded) {
-            Spacer(Modifier.height(10.dp))
-            SearchInputField(
-                value = state.destinationInput,
-                label = "آدرس مقصد",
-                placeholder = "آدرس روی ${receive.networkName}",
-                onValueChange = onAddressChange
-            )
-        } else {
-            state.usableDestinationAddress?.let { address ->
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = address,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp,
-                    fontFamily = InterMedium
-                )
-            }
+            // «تغییر» صریح می‌ماند: سطرِ قابلِ فشردن به‌تنهایی برای کسی که با این الگو آشنا نیست
+            // کافی نیست، و اینجا جایی نیست که کاربر باید حدس بزند.
+            SwapPillButton(text = if (missing) "انتخاب" else "تغییر", onClick = onOpenPicker)
         }
 
         state.destinationError?.let { error ->
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             SwapNotice(text = error, isError = true)
         }
 
         // ⚠️ پول به کیف‌پولی غیر از کیف‌پولِ خودِ کاربر می‌رود. پل‌زدن به آدرسی که هیچ کلیدی روی
         // آن زنجیره ندارد یعنی سوختنِ دارایی، و هیچ‌کس آن را برنمی‌گرداند.
         if (state.destinationError == null && state.recipientIsElsewhere) {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             SwapNotice(
                 text = "این دارایی به کیف پول شما واریز نمی‌شود. آدرس مقصد را دقیق بررسی کنید؛ " +
                     "ارسال به آدرس اشتباه برگشت‌پذیر نیست.",
@@ -374,16 +379,17 @@ fun SwapNotice(
     isError: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onTertiary
     Text(
         text = text,
         color = color,
         fontSize = 12.sp,
-        fontFamily = IranSansLightLight,
+        fontFamily = IranSansRegular,
         modifier = modifier.fillMaxWidth()
     )
 }
 
+/** قرصِ عملِ فرعی — همان «حداکثر»ِ کارتِ داراییِ صفحهٔ ارسال. */
 @Composable
 fun SwapPillButton(
     text: String,
@@ -392,8 +398,8 @@ fun SwapPillButton(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.background)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -403,30 +409,41 @@ fun SwapPillButton(
     ) {
         Text(
             text = text,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 12.sp,
-            fontFamily = IranSansBoldMedium,
-            fontWeight = FontWeight.SemiBold
+            color = MaterialTheme.colorScheme.tertiary,
+            fontSize = 14.sp,
+            fontFamily = IranSansRegular
         )
     }
 }
 
-/** جای خالیِ آیکونِ دریافت، تا وقتی ارزی انتخاب نشده. */
+/**
+ * جای خالیِ آیکونِ دریافت، تا وقتی ارزی انتخاب نشده.
+ *
+ * قابش همان شش‌ضلعیِ [HexAssetShape] است چون دقیقاً همان‌جا لحظه‌ای بعد یک آیکونِ ارز می‌نشیند؛
+ * دایره‌بودنش یعنی جابه‌جاییِ فرم درست وسطِ انتخابِ کاربر. فضایی که می‌گیرد هم به‌اندازهٔ
+ * آیکون **به‌علاوهٔ بجِ شبکه** است تا ردیف موقعِ انتخاب جابه‌جا نشود.
+ */
 @Composable
-fun SwapReceivePlaceholder(size: Dp = 38.dp) {
+fun SwapReceivePlaceholder(size: Dp = WalletScreenConstants.ASSET_ICON_MAIN_SIZE) {
     Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.Add,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(size * 0.5f)
+        modifier = Modifier.size(
+            size * (WalletScreenConstants.ASSET_ICON_SIZE / WalletScreenConstants.ASSET_ICON_MAIN_SIZE)
         )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(HexAssetShape)
+                .border(1.dp, MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.4f), HexAssetShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiary,
+                modifier = Modifier.size(size * 0.5f)
+            )
+        }
     }
 }
 
@@ -444,9 +461,9 @@ fun SwapSlippageRow(
     ) {
         Text(
             text = "لغزش مجاز",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp,
-            fontFamily = IranSansLightLight,
+            color = MaterialTheme.colorScheme.onTertiary,
+            fontSize = 14.sp,
+            fontFamily = IranSansRegular,
             modifier = Modifier.weight(1f)
         )
         SwapUiState.SLIPPAGE_CHOICES.forEach { bps ->
@@ -456,9 +473,9 @@ fun SwapSlippageRow(
                     .clip(RoundedCornerShape(12.dp))
                     .background(
                         if (selected) {
-                            MaterialTheme.colorScheme.primary
+                            MaterialTheme.colorScheme.surfaceVariant
                         } else {
-                            MaterialTheme.colorScheme.surface
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
                         }
                     )
                     .clickable(
@@ -470,9 +487,9 @@ fun SwapSlippageRow(
                 Text(
                     text = SwapFormat.percentFromBps(bps),
                     color = if (selected) {
-                        MaterialTheme.colorScheme.onPrimary
+                        MaterialTheme.colorScheme.tertiary
                     } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        MaterialTheme.colorScheme.onTertiary
                     },
                     fontSize = 12.sp,
                     fontFamily = InterMedium

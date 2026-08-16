@@ -23,15 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
@@ -44,14 +39,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mtd.common_ui.R
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.megawallet.ui.compose.animations.constants.AnimationConstants
 import com.mtd.megawallet.ui.compose.components.PrimaryButton
 import com.mtd.megawallet.ui.compose.screens.createwallet.WALLET_COLORS
-import com.mtd.common_ui.theme.IranSansBold
-import com.mtd.common_ui.theme.IranSansRegular
 
 @Composable
 fun WalletManagementMenuContent(
@@ -68,23 +64,33 @@ fun WalletManagementMenuContent(
         BackupStatusItem(isBackedUp = isBackedUp, onBackupClick = onBackupClick)
         Spacer(modifier = Modifier.height(24.dp))
 
-        DetailMenuItem(icon = Icons.Default.GridView, title = "اتصالات", onClick = {})
-        DetailDivider()
-        DetailMenuItem(icon = Icons.Default.VerifiedUser, title = "تاییدیه ها", onClick = {})
-        DetailDivider()
+        // تنها کارِ فعالِ این منو فعلاً حذفِ کیف پول است. بقیه دیده می‌شوند ولی غیرفعالند:
+        // «اتصالات» و «تاییدیه‌ها» از اول هم `onClick = {}` بودند، یعنی قابلِ کلیک به نظر
+        // می‌رسیدند و هیچ کاری نمی‌کردند — که بدتر از غیرفعالِ صریح است.
         DetailMenuItem(
-            icon = Icons.Default.Notifications,
-            title = "اعلان ها",
-            rightIcon = Icons.Default.MoreHoriz,
+            icon = R.drawable.ic_link,
+            title = "اتصالات",
+            isAvailable = false,
+            badge = "به زودی",
             onClick = {}
         )
         DetailDivider()
-        DetailMenuItem(icon = Icons.Default.Delete, title = "سطل زباله", onClick = onDelete)
+        DetailMenuItem(
+            icon = R.drawable.ic_approve,
+            title = "تاییدیه ها",
+            isAvailable = false,
+            badge = "به زودی",
+            onClick = {}
+        )
+        DetailDivider()
+        DetailMenuItem(icon = R.drawable.ic_delete, title = "حذف کیف پول", onClick = onDelete)
         DetailDivider()
         DetailMenuItem(
-            icon = Icons.Default.Menu,
+            icon = R.drawable.ic_menu,
             title = "گزینه ها",
             rightIcon = Icons.Default.MoreHoriz,
+            isAvailable = false,
+            badge = "به زودی",
             onClick = onSettings
         )
     }
@@ -323,32 +329,58 @@ private fun DetailDivider() {
 
 @Composable
 private fun DetailMenuItem(
-    icon: ImageVector,
+    icon: Int,
     title: String,
     tint: Color = MaterialTheme.colorScheme.onTertiary,
     rightIcon: ImageVector = Icons.Default.KeyboardArrowLeft,
+    /**
+     * ردیفِ غیرفعال دیده می‌شود ولی کار نمی‌کند — همان قراردادی که [RecoveryMethodItem] در همین
+     * فایل دارد: نصفِ شفافیت، بی‌اثر بودنِ کلیک، و یک نشانِ کوچک که دلیلش را می‌گوید. پنهان‌کردنِ
+     * ردیف انتخاب نشد چون کاربر باید بداند این قابلیت وجود دارد و بعداً می‌آید.
+     */
+    isAvailable: Boolean = true,
+    badge: String? = null,
     onClick: () -> Unit
 ) {
+    val alpha = if (isAvailable) 1f else 0.5f
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(enabled = isAvailable) { onClick() }
             .padding(horizontal = 4.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = tint.copy(alpha = alpha),
+            modifier = Modifier.size(24.dp)
+        )
         Spacer(modifier = Modifier.width(16.dp))
         Text(
             text = title,
-            color = MaterialTheme.colorScheme.tertiary,
+            color = MaterialTheme.colorScheme.tertiary.copy(alpha = alpha),
             style = MaterialTheme.typography.bodyLarge,
             fontFamily = IranSansRegular
         )
+        if (badge != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = badge,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.05f))
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                color = MaterialTheme.colorScheme.onTertiary.copy(alpha = alpha),
+                fontSize = 10.sp,
+                fontFamily = IranSansRegular
+            )
+        }
         Spacer(modifier = Modifier.weight(1f))
         Icon(
             rightIcon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onTertiary,
+            tint = MaterialTheme.colorScheme.onTertiary.copy(alpha = alpha),
             modifier = Modifier.size(if (rightIcon == Icons.Default.MoreHoriz) 20.dp else 18.dp)
         )
     }

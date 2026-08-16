@@ -46,11 +46,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.core.Animatable
-import com.mtd.common_ui.theme.IranSansBoldMedium
-import com.mtd.common_ui.theme.IranSansLightLight
+import com.mtd.common_ui.theme.IranSansBold
+import com.mtd.common_ui.theme.IranSansRegular
 import com.mtd.domain.model.AssetItem
 import com.mtd.megawallet.ui.compose.components.HintState
 import com.mtd.megawallet.ui.compose.components.SearchInputField
+import com.mtd.megawallet.ui.compose.components.ShimmerAssetList
 import com.mtd.megawallet.ui.compose.components.TokenList
 import com.mtd.megawallet.viewmodel.swap.SwapImportState
 import com.mtd.megawallet.viewmodel.swap.SwapTokenSearchState
@@ -110,9 +111,9 @@ fun SwapReceiveTokenSheet(
             ) {
                 Text(
                     text = "دریافت",
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = MaterialTheme.colorScheme.tertiary,
                     fontSize = 20.sp,
-                    fontFamily = IranSansBoldMedium,
+                    fontFamily = IranSansBold,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
@@ -130,7 +131,7 @@ fun SwapReceiveTokenSheet(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "بستن",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onTertiary,
                         modifier = Modifier.size(17.dp)
                     )
                 }
@@ -162,19 +163,18 @@ fun SwapReceiveTokenSheet(
             if (!searching && state.receiveListFellBack && state.receiveTokens.isNotEmpty()) {
                 Text(
                     text = "فهرست کامل ارزها در دسترس نیست؛ فعلاً فقط ارزهای اصلی نمایش داده می‌شوند.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onTertiary,
                     fontSize = 12.sp,
-                    fontFamily = IranSansLightLight,
+                    fontFamily = IranSansRegular,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                 )
             }
 
             when {
+                // جهانِ قابلِ تبدیل از سرور می‌آید و چند ثانیه طول می‌کشد؛ اسکلتِ ردیف‌ها ارتفاعِ
+                // فهرست را از قبل می‌گیرد تا شیت موقعِ رسیدنِ داده یک‌باره جهش نکند.
                 searchState is SwapTokenSearchState.Loading && state.receiveTokens.isEmpty() ->
-                    HintState(
-                        if (searching) "در حال جست‌وجو…" else "در حال آماده‌سازی فهرست ارزها…",
-                        Modifier.padding(horizontal = 20.dp)
-                    )
+                    ShimmerAssetList(modifier = Modifier.padding(horizontal = 20.dp))
 
                 searchState is SwapTokenSearchState.Failed && state.receiveTokens.isEmpty() ->
                     HintState(searchState.message, Modifier.padding(horizontal = 20.dp))
@@ -204,9 +204,9 @@ fun SwapReceiveTokenSheet(
             if (searchState is SwapTokenSearchState.Failed && state.receiveTokens.isNotEmpty()) {
                 Text(
                     text = searchState.message,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onTertiary,
                     fontSize = 12.sp,
-                    fontFamily = IranSansLightLight,
+                    fontFamily = IranSansRegular,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 )
             }
@@ -250,7 +250,7 @@ private fun SwapImportRow(
                     .clip(CircleShape)
                     .background(
                         if (enabled) {
-                            MaterialTheme.colorScheme.onBackground
+                            MaterialTheme.colorScheme.tertiary
                         } else {
                             MaterialTheme.colorScheme.surface
                         }
@@ -266,7 +266,7 @@ private fun SwapImportRow(
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onTertiary
                     )
                 } else {
                     Icon(
@@ -275,7 +275,7 @@ private fun SwapImportRow(
                         tint = if (enabled) {
                             MaterialTheme.colorScheme.background
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            MaterialTheme.colorScheme.onTertiary
                         },
                         modifier = Modifier.size(20.dp)
                     )
@@ -289,7 +289,7 @@ private fun SwapImportRow(
                 text = failed.message,
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 12.sp,
-                fontFamily = IranSansLightLight
+                fontFamily = IranSansRegular
             )
         }
     }
@@ -342,7 +342,7 @@ private fun SwapSheetSurface(
                     .width(38.dp)
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    .background(MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.4f))
             )
             Spacer(Modifier.height(14.dp))
             content()

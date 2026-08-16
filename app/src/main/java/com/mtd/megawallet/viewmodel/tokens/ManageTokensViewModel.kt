@@ -2,11 +2,15 @@ package com.mtd.megawallet.viewmodel.tokens
 
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.manager.ErrorSeverity
+import com.mtd.domain.interfaceRepository.IFiatCurrencyProvider
 import com.mtd.domain.interfaceRepository.IManageableAssetCatalog
 import com.mtd.domain.interfaceRepository.INetworkCatalog
 import com.mtd.domain.interfaceRepository.ITokenDiscoveryRepository
+import com.mtd.domain.interfaceRepository.IUsdToIrrRateProvider
 import com.mtd.domain.interfaceRepository.IUserTokenRepository
 import com.mtd.domain.interfaceRepository.ManageableAsset
+import com.mtd.domain.model.CurrencyRate
+import com.mtd.domain.model.FiatCurrency
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.assets.DiscoveredToken
 import com.mtd.domain.model.assets.UserToken
@@ -20,6 +24,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -116,6 +121,8 @@ class ManageTokensViewModel @Inject constructor(
     private val getActiveAddressForNetworkUseCase: GetActiveAddressForNetworkUseCase,
     private val observeActiveWalletIdUseCase: ObserveActiveWalletIdUseCase,
     private val ensureAuthenticatedUseCase: EnsureAuthenticatedUseCase,
+    fiatCurrencyProvider: IFiatCurrencyProvider,
+    usdToIrrRateProvider: IUsdToIrrRateProvider,
     errorManager: ErrorManager
 ) : BaseViewModel(errorManager) {
 
@@ -130,6 +137,16 @@ class ManageTokensViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ManageTokensUiState())
     val uiState = _uiState.asStateFlow()
+
+    /**
+     * واحدِ پولِ نمایش و نرخِ تبدیل — عیناً همان دو منبعی که لیستِ دارایی‌ها، ارسال و جزئیاتِ دارایی
+     * می‌خوانند، پس یک ضربه روی کلیدِ تومان/دلارِ هدر این شیت را هم با خودش می‌برد.
+     *
+     * بیرون از [uiState] می‌مانند و کپی نمی‌شوند: کپی‌کردنشان توی state دقیقاً همان ایرادی است که
+     * [IFiatCurrencyProvider] برای رفعش ساخته شد — هر مصرف‌کننده یک snapshot از یک لحظهٔ دلخواه.
+     */
+    val displayCurrency: StateFlow<FiatCurrency> = fiatCurrencyProvider.currency
+    val usdToIrrRate: StateFlow<CurrencyRate?> = usdToIrrRateProvider.rate
 
     private val queryFlow = MutableStateFlow("")
 
@@ -157,6 +174,12 @@ class ManageTokensViewModel @Inject constructor(
         observeQuery()
         observeSelection()
         observeWalletSwitch()
+
+        // هر دو محلی‌اند و به شبکه دست نمی‌زنند: `ensurePrimed` ترجیحِ ذخیره‌شده را می‌خواند و
+        // `ensureSeeded` آخرین نرخِ شناخته‌شده را منتشر می‌کند. عمداً `refresh()` صدا زده نمی‌شود —
+        // بازکردنِ شیتِ مدیریتِ توکن دلیلی برای زدن به سرویسِ نرخ نیست.
+        launchSafe(checkNetwork = false) { fiatCurrencyProvider.ensurePrimed() }
+        launchSafe(checkNetwork = false) { usdToIrrRateProvider.ensureSeeded() }
     }
 
     /**
