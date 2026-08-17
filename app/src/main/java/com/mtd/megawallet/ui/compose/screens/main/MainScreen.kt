@@ -195,9 +195,6 @@ private fun MainDashboardContent(
 
     var isHeaderExpanded by remember { mutableStateOf(false) }
     var isFabExpanded by remember { mutableStateOf(false) }
-    // TASK-15 — the full-screen overlays are navigation state, so they survive process death via
-    // rememberSaveable: a low-memory kill/restore lands back on the same screen instead of the
-    // dashboard. (Purely visual affordances like header/FAB expansion stay in plain remember.)
     var showSendScreen by rememberSaveable { mutableStateOf(false) }
     var sendInitialAssetId by rememberSaveable { mutableStateOf<String?>(null) }
     var showReceiveScreen by rememberSaveable { mutableStateOf(false) }
@@ -223,10 +220,6 @@ private fun MainDashboardContent(
     // ViewModel know when it's hidden so a wallet switch defers its refetch (items 1 & 6).
     LaunchedEffect(selectedTab) {
         if (selectedTab == MainTab.HISTORY) historyViewModel.onScreenShown() else historyViewModel.onScreenHidden()
-        // Item 4 note: the wallet screen is intentionally NOT gated on visibility. It writes the shared
-        // per-asset balance cache every other screen reads, so its balance signals must be processed live
-        // (see HomeViewModel.listenToGlobalEvents); deferring them would leave other screens showing a
-        // stale, pre-transaction balance.
     }
 
     val shouldShowMainFab = selectedTab == MainTab.WALLET &&
@@ -380,8 +373,6 @@ private fun MainDashboardContent(
                         walletColor = walletColor,
                         onWalletClick = { showMultiWalletScreen = true },
                         onScanClick = { showScanner = true },
-                        // ضربه: مدیریت توکن. نگه‌داشتن: تعویضِ DIRECT/PROXY — که کارِ قبلیِ همین
-                        // آیکون بود و حذف نشده، فقط از ضربه به نگه‌داشتن منتقل شده.
                         onSearchClick = { showManageTokens = true },
                         onToggleConnectionMode = { mainViewModel.toggleConnectionMode() },
                         onMoreOptionsClick = onMoreOptionsClick,
@@ -472,8 +463,6 @@ private fun MainDashboardContent(
                                 contentEnabled = true
                             )
                         }
-                        // The details sheet itself is rendered as a root-level overlay (see below), not here,
-                        // so it can draw over the bottom navigation and expand to the full screen height.
                     }
 
                     if (selectedTab == MainTab.EXPLORE) {

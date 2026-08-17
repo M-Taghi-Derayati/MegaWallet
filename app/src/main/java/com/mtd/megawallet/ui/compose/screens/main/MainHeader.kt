@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,9 +47,7 @@ internal fun MainHeader(
     walletColor: Color,
     onWalletClick: () -> Unit,
     onScanClick: () -> Unit,
-    /** ضربه روی ذره‌بین — بازکردنِ شیتِ مدیریتِ توکن. */
     onSearchClick: () -> Unit,
-    /** نگه‌داشتنِ ذره‌بین — تعویضِ DIRECT/PROXY (ابزارِ توسعه). */
     onToggleConnectionMode: () -> Unit,
     onMoreOptionsClick: () -> Unit,
     onCurrencyToggle: () -> Unit,
@@ -119,18 +115,13 @@ internal fun MainHeader(
                     modifier = Modifier.size(MainScreenConstants.HEADER_ICON_SIZE)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.MoreVert,
+                        painter = painterResource(R.drawable.ic_scan),
                         contentDescription = "More Options",
                         tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
                     )
                 }
-                // آیکون سرچ — ضربه: مدیریت توکن‌ها. نگه‌داشتن: تعویضِ حالتِ اتصال.
-                //
-                // این آیکون قبلاً فقط حالتِ اتصال را عوض می‌کرد؛ کارِ اصلی‌اش حالا جست‌وجو/مدیریتِ
-                // توکن است که همان چیزی است که شکلش وعده می‌دهد. تعویضِ DIRECT/PROXY یک ابزارِ
-                // توسعه است و روی نگه‌داشتن منتقل شده تا از دست نرود — رنگِ آیکون هنوز حالتِ فعال
-                // را نشان می‌دهد (سبز = PROXY).
+
                 val searchTint = when (connectionMode) {
                     BlockchainConnectionMode.PROXY -> Color(0xFF2E7D32) // green = relayer/proxy active
                     BlockchainConnectionMode.DIRECT -> MaterialTheme.colorScheme.tertiary
@@ -156,12 +147,7 @@ internal fun MainHeader(
                         modifier = Modifier.size(MainScreenConstants.HEADER_ICON_ICON_SIZE)
                     )
                 }
-                // TASK-56 — تغییر واحد نمایش بین دلار و تومان.
-                //
-                // The control shows the currency that is ACTIVE, not the one a tap would switch to: the
-                // header is the only indicator of which unit the balances on screen are in, so it has to
-                // answer "what am I looking at?" before "what does this button do?".
-                val currencyLabel = when (fiatCurrency) {
+                    val currencyLabel = when (fiatCurrency) {
                     FiatCurrency.USD -> "$"
                     FiatCurrency.TOMAN -> "تومان"
                 }

@@ -196,17 +196,17 @@ class MainActivityCompose : FragmentActivity() {
                         ) {
                             MainScreen(
                                 onNavigateToWalletManagement = {
-                                    // TODO: Navigate to wallet management screen
+                                  
                                 },
                                 onMoreOptionsClick = {},
                                 onFabClick = {
-                                    // TODO: Handle FAB click (e.g., show send/receive options)
+
                                 },
                                 onHistoryClick = {
-                                    // TODO: Navigate to history screen
+
                                 },
                                 onExploreClick = {
-                                    // TODO: Navigate to explore screen
+
                                 }
                             )
 

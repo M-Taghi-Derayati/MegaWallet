@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
@@ -37,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -175,25 +173,7 @@ fun PasscodeKeypadSheet(
                 )
 
                 Spacer(modifier = Modifier.height(22.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    repeat(AppLockManager.PASSCODE_LENGTH) { index ->
-                        val filled = index < digits.length
-                        Box(
-                            modifier = Modifier
-                                .size(14.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (filled) MaterialTheme.colorScheme.tertiary else Color.Transparent
-                                )
-                                .then(
-                                    if (!filled) Modifier
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f))
-                                    else Modifier
-                                )
-                        )
-                    }
-                }
+                PasscodeDots(filledCount = digits.length)
 
                 if (remainingLockoutSeconds > 0) {
                     Spacer(modifier = Modifier.height(15.dp))
@@ -216,50 +196,14 @@ fun PasscodeKeypadSheet(
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
-                val disabled = remainingLockoutSeconds > 0
-                KeypadRow(3, 2, 1, disabled) { digit ->
-                    if (digits.length < AppLockManager.PASSCODE_LENGTH) digits += digit
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                KeypadRow(6, 5, 4, disabled) { digit ->
-                    if (digits.length < AppLockManager.PASSCODE_LENGTH) digits += digit
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                KeypadRow(9, 8, 7, disabled) { digit ->
-                    if (digits.length < AppLockManager.PASSCODE_LENGTH) digits += digit
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .size(88.dp)
-                            .clickable(enabled = !disabled && digits.isNotEmpty(),indication = null, interactionSource = null) {
-                                digits = digits.dropLast(1)
-                            },
-                        shape = CircleShape,
-                        color = Color.Transparent
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Backspace,
-                                contentDescription = "حذف رقم",
-                                tint = if (!disabled && digits.isNotEmpty()) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)
-                            )
-                        }
-                    }
-                    KeypadDigit(
-                        label = "0",
-                        enabled = !disabled,
-                        onClick = {
-                            if (digits.length < AppLockManager.PASSCODE_LENGTH) digits += "0"
-                        }
-                    )
-                    Spacer(modifier = Modifier.size(88.dp))
-                }
+                PasscodeKeypad(
+                    enabled = remainingLockoutSeconds <= 0,
+                    canBackspace = digits.isNotEmpty(),
+                    onDigit = { digit ->
+                        if (digits.length < AppLockManager.PASSCODE_LENGTH) digits += digit
+                    },
+                    onBackspace = { digits = digits.dropLast(1) }
+                )
 
                 Spacer(modifier = Modifier.weight(1f))
                 Row(
@@ -286,48 +230,6 @@ fun PasscodeKeypadSheet(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
-        }
-    }
-}
-
-@Composable
-private fun KeypadRow(
-    first: Int,
-    second: Int,
-    third: Int,
-    disabled: Boolean,
-    onDigit: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        KeypadDigit(label = first.toString(), enabled = !disabled) { onDigit(first.toString()) }
-        KeypadDigit(label = second.toString(), enabled = !disabled) { onDigit(second.toString()) }
-        KeypadDigit(label = third.toString(), enabled = !disabled) { onDigit(third.toString()) }
-    }
-}
-
-@Composable
-private fun KeypadDigit(
-    label: String,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .size(88.dp)
-            .clickable(enabled = enabled, onClick = onClick,indication = null, interactionSource = null),
-        shape = CircleShape,
-        color =  MaterialTheme.colorScheme.surface
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.tertiary
-            )
         }
     }
 }

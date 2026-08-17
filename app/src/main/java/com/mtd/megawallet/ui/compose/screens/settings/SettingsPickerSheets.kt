@@ -235,10 +235,11 @@ fun NotificationPickerSheet(
 
 /** یک کلید در قابِ خاکستریِ گِرد: برچسب در ابتدا، کلید در انتها. */
 @Composable
-private fun SwitchRow(
+internal fun SwitchRow(
     label: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier
@@ -250,20 +251,25 @@ private fun SwitchRow(
     ) {
         Text(
             text = label,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
             fontFamily = IranSansBold,
             fontSize = 15.sp,
             modifier = Modifier.weight(1f)
         )
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            enabled = enabled
         )
     }
 }
 
 @Composable
-private fun SwitchCaption(text: String) {
+internal fun SwitchCaption(text: String) {
     Text(
         text = text,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -357,7 +363,7 @@ fun ConnectionModePickerSheet(
 }
 
 @Composable
-private fun PickerSheetBody(content: @Composable () -> Unit) {
+internal fun PickerSheetBody(content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -371,7 +377,7 @@ private fun PickerSheetBody(content: @Composable () -> Unit) {
 
 /** یک گزینهٔ انتخابگر: عنوان، یک خط توضیح، و تیکِ گزینهٔ فعلی. */
 @Composable
-private fun PickerOptionRow(
+internal fun PickerOptionRow(
     title: String,
     description: String,
     selected: Boolean,
