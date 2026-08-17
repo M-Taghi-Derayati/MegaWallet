@@ -20,7 +20,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -43,7 +45,6 @@ import com.mtd.megawallet.viewmodel.CreateWalletViewModel
 import com.mtd.megawallet.viewmodel.WalletImportViewModel
 import com.mtd.megawallet.viewmodel.WelcomeViewModel
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -155,16 +156,18 @@ class WelcomeActivityCompose : ComponentActivity() {
             }
         ) {
             composable("splash") {
-                val scope = rememberCoroutineScope()
-                SplashScreen {
-                    // بررسی می‌کنیم که آیا کیف پول از قبل ساخته شده یا خیر
-                    scope.launch {
-                        if (viewModelWelcome.hasWallet()) {
-                            onNavigateToHome()
-                        } else {
-                            navController.navigate("onboarding") {
-                                popUpTo("splash") { inclusive = true }
-                            }
+                // ⚠️ این پرسش **هم‌زمان** با انیمیشن شروع می‌شود، نه پس از آن. قبلاً اسپلش مکثِ
+                // ثابتِ خودش را می‌کرد و تازه بعدش از دیسک می‌پرسید، پس دو انتظار پشتِ سرِ هم
+                // جمع می‌شد. `null` یعنی «هنوز جواب نیامده».
+                var hasWallet by remember { mutableStateOf<Boolean?>(null) }
+                LaunchedEffect(Unit) { hasWallet = viewModelWelcome.hasWallet() }
+
+                SplashScreen(ready = hasWallet != null) {
+                    if (hasWallet == true) {
+                        onNavigateToHome()
+                    } else {
+                        navController.navigate("onboarding") {
+                            popUpTo("splash") { inclusive = true }
                         }
                     }
                 }

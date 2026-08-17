@@ -196,7 +196,7 @@ class MainActivityCompose : FragmentActivity() {
                         ) {
                             MainScreen(
                                 onNavigateToWalletManagement = {
-                                  
+
                                 },
                                 onMoreOptionsClick = {},
                                 onFabClick = {
