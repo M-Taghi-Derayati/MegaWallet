@@ -1,6 +1,7 @@
 package com.mtd.data.service
 
 import com.mtd.data.dto.SupportReportRequestDto
+import com.mtd.data.dto.SupportReportResponseDto
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
@@ -16,14 +17,15 @@ const val SUPPORT_REPORT_PATH = "api/v1/support/reports"
 /**
  * ثبتِ گزارشِ پشتیبانی روی رله.
  *
- * ⚠️ دربارهٔ احرازِ هویتِ این نقطه هیچ فرضی این‌جا گذاشته نشده. اگر سرور توکن بخواهد، همان
- * `AuthInterceptor`ِ host-scoped که به بقیهٔ مسیرهای رله وصل است خودش هدر را می‌گذارد؛ اگر
- * نخواهد، چیزی خراب نمی‌شود. تا وقتی قرارداد نیامده، هیچ هدرِ دستی‌ای این‌جا اضافه نمی‌شود.
+ * ⚠️ احراز هویتِ این نقطه **اختیاری** است و سمتِ سرور هم همین‌طور پیاده شده: فرم از حالتِ
+ * خارج‌شده هم در دسترس است. هدرِ `Authorization` را این‌جا دستی نمی‌گذاریم؛ اگر نشستِ معتبری
+ * باشد، همان `AuthInterceptor`ِ host-scoped خودش آن را می‌گذارد و سرور `userId` را به تیکت
+ * می‌چسباند. اگر نباشد، درخواست بدونِ هدر می‌رود و پذیرفته می‌شود.
  */
 interface SupportApiService {
 
     @POST(SUPPORT_REPORT_PATH)
     suspend fun submitReport(
         @Body body: SupportReportRequestDto
-    ): Response<Unit>
+    ): Response<SupportReportResponseDto>
 }

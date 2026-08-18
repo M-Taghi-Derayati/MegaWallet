@@ -76,7 +76,7 @@ object ApiErrorMessageMapper {
     }
 
     /**
-     * Machine-readable label for the "جزئیات" dialog and the log. Never shown as the primary
+     * Machine-readable label for the expanded snackbar and the log. Never shown as the primary
      * message — [farsiMessage] owns that — and never carries server-supplied free text.
      */
     fun technicalCode(error: ApiError): String = when (error) {
@@ -96,8 +96,12 @@ object ApiErrorMessageMapper {
         }
         return when (exception.apiError) {
             ApiError.UpstreamUnavailable,
-            ApiError.ServiceUnavailable,
-            is ApiError.RateLimited -> AppError.Network.ServerUnavailable
+            ApiError.ServiceUnavailable -> AppError.Network.ServerUnavailable
+
+            // ⚠️ عمداً در سطلِ Network نیست. محدودیتِ نرخ یعنی «شما زیاد فرستادید»، نه «سرور
+            // خراب است»: با نگاشتِ قبلی کاربر «سرور موقتاً در دسترس نیست» می‌دید و اسنک‌بار هم
+            // دلایلی دربارهٔ اینترنت و اختلالِ سرور پیشنهاد می‌کرد که هیچ‌کدام ربطی نداشت.
+            is ApiError.RateLimited -> AppError.Business.General(message = message)
 
             ApiError.InvalidAddress -> AppError.Business.InvalidAddress
             ApiError.InsufficientGasCredit -> AppError.Business.InsufficientFunds

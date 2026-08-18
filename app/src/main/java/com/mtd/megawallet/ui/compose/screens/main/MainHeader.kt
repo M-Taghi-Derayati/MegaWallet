@@ -109,7 +109,10 @@ internal fun MainHeader(
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
-                // آیکون سه نقطه
+                // ⚠️ [onScanClick] هیچ‌جای این هدر صدا زده نمی‌شود: آیکون شکلِ QR دارد ولی به
+                // [onMoreOptionsClick] وصل است، پس هدر هرگز اسکنر را باز نمی‌کند. اسکنر فقط از
+                // صفحهٔ ارسال و شیتِ مقصدِ سواپ در دسترس است. عمداً دست‌نخورده مانده تا رفتار
+                // عوض نشود؛ اگر قرار است این آیکون واقعاً اسکنر باشد، یک تصمیمِ جداست.
                 IconButton(
                     onClick = onMoreOptionsClick,
                     modifier = Modifier.size(MainScreenConstants.HEADER_ICON_SIZE)

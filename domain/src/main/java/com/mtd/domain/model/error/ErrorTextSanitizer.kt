@@ -8,7 +8,7 @@ package com.mtd.domain.model.error
  * an RPC error echoes the `from`/`to` address, a broadcast failure echoes the signed payload, a
  * derivation failure can echo a mnemonic. The user-facing *short* message never comes from here
  * (it is always curated Persian copy from [ApiErrorMessageMapper] / [ErrorMapper]); this only
- * guards the technical text shown behind the "جزئیات" dialog and written to the log.
+ * guards the technical text shown inside the expanded snackbar and written to the log.
  *
  * Pure Kotlin, no Android deps — unit-tested in `ErrorTextSanitizerTest`.
  */

@@ -1,22 +1,28 @@
 package com.mtd.megawallet.viewmodel.settings
 
+import android.os.Build
 import com.mtd.core.manager.ErrorManager
 import com.mtd.core.manager.ErrorSeverity
 import com.mtd.domain.interfaceRepository.IActiveWalletProvider
+import com.mtd.domain.interfaceRepository.IBlockchainConnectionModeProvider
 import com.mtd.domain.interfaceRepository.ISupportRepository
 import com.mtd.domain.model.ResultResponse
 import com.mtd.domain.model.core.NetworkType
 import com.mtd.domain.model.error.ErrorSurface
 import com.mtd.domain.model.support.SupportArea
 import com.mtd.domain.model.support.SupportCategory
+import com.mtd.domain.model.support.SupportClientInfo
+import com.mtd.domain.model.support.SupportLimits
 import com.mtd.domain.model.support.SupportReportRequest
 import com.mtd.domain.usecase.wallet.ExpandWalletKeysToNetworksUseCase
 import com.mtd.domain.usecase.wallet.GetAllWalletsUseCase
 import com.mtd.domain.usecase.wallet.GetWalletKeysForWalletsUseCase
+import com.mtd.megawallet.BuildConfig
 import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -31,6 +37,7 @@ class SupportViewModel @Inject constructor(
     private val getWalletKeysForWalletsUseCase: GetWalletKeysForWalletsUseCase,
     private val expandWalletKeysToNetworksUseCase: ExpandWalletKeysToNetworksUseCase,
     private val activeWalletProvider: IActiveWalletProvider,
+    private val connectionModeProvider: IBlockchainConnectionModeProvider,
     private val supportRepository: ISupportRepository,
     errorManager: ErrorManager
 ) : BaseViewModel(errorManager) {
@@ -52,7 +59,14 @@ class SupportViewModel @Inject constructor(
     sealed interface SubmitState {
         data object Idle : SubmitState
         data object Submitting : SubmitState
-        data object Sent : SubmitState
+
+        /**
+         * ثبت شد.
+         *
+         * [ticketId] شمارهٔ پیگیری است و می‌تواند `null` باشد؛ گزارش در هر صورت ثبت شده و
+         * نبودنش فقط یعنی جملهٔ کوتاه‌تری به کاربر نشان می‌دهیم.
+         */
+        data class Sent(val ticketId: String?, val duplicate: Boolean) : SubmitState
 
         /** [message] متنِ آمادهٔ نمایش است، نه متنِ خامِ استثنا. */
         data class Failed(val message: String) : SubmitState
@@ -93,12 +107,15 @@ class SupportViewModel @Inject constructor(
         _category.value = value
     }
 
+    // ⚠️ سقفِ طول همین‌جا اعمال می‌شود و نه در فیلدِ متنی: این تنها قیفی است که همهٔ ورودی از آن
+    // رد می‌شود. سرور هم همین حدود را دارد، و اجازه دادن به تایپِ بیشتر یعنی کاربر چهار گام را
+    // پر کند و آخرش `VALIDATION_ERROR` بگیرد.
     fun setSubject(value: String) {
-        _subject.value = value
+        _subject.value = value.take(SupportLimits.SUBJECT)
     }
 
     fun setDescription(value: String) {
-        _description.value = value
+        _description.value = value.take(SupportLimits.DESCRIPTION)
     }
 
     fun toggleArea(area: SupportArea) {
@@ -108,11 +125,11 @@ class SupportViewModel @Inject constructor(
     }
 
     fun setName(value: String) {
-        _name.value = value
+        _name.value = value.take(SupportLimits.NAME)
     }
 
     fun setEmail(value: String) {
-        _email.value = value
+        _email.value = value.take(SupportLimits.EMAIL)
     }
 
     fun selectWallet(walletId: String) {
@@ -153,7 +170,8 @@ class SupportViewModel @Inject constructor(
             areas = _areas.value.toList(),
             name = _name.value,
             email = _email.value,
-            walletAddress = selectedWallet()?.evmAddress
+            walletAddress = selectedWallet()?.evmAddress,
+            client = clientInfo()
         )
 
         // ⚠️ «در حال ارسال» **داخلِ** بلوک ست می‌شود، نه بیرونش: اگر دستگاه آفلاین باشد
@@ -163,7 +181,16 @@ class SupportViewModel @Inject constructor(
             _submitState.value = SubmitState.Submitting
 
             when (val result = supportRepository.submitReport(request)) {
-                is ResultResponse.Success -> _submitState.value = SubmitState.Sent
+                is ResultResponse.Success -> {
+                    val receipt = result.data
+                    _submitState.value = SubmitState.Sent(
+                        ticketId = receipt.ticketId,
+                        duplicate = receipt.duplicate
+                    )
+                    // شیت با رسیدنِ `Sent` بسته می‌شود، پس شمارهٔ پیگیری جایی جز اسنک‌بار برای
+                    // دیده‌شدن ندارد.
+                    showSuccess(receiptMessage(receipt.ticketId, receipt.duplicate))
+                }
 
                 is ResultResponse.Error -> {
                     _submitState.value = SubmitState.Failed(
@@ -185,6 +212,35 @@ class SupportViewModel @Inject constructor(
 
     fun selectedWallet(): SupportWallet? =
         _wallets.value.firstOrNull { it.id == _selectedWalletId.value }
+
+    /**
+     * نسخه و دستگاه، همراهِ گزارش.
+     *
+     * ⚠️ هیچ شناسهٔ پایداری این‌جا نیست. اینها برای بازتولیدِ یک اشکال‌اند: بدونِ نسخهٔ برنامه
+     * بیشترِ گزارش‌ها غیرقابلِ پیگیری‌اند، و [connectionMode] تعیین می‌کند خواندن‌ها از RPC
+     * مستقیم آمده یا از پراکسی — که خودش نیمی از اشکال‌های «موجودی اشتباه است» را توضیح می‌دهد.
+     */
+    private fun clientInfo(): SupportClientInfo = SupportClientInfo(
+        appVersion = BuildConfig.VERSION_NAME,
+        appBuild = BuildConfig.VERSION_CODE,
+        platform = "android",
+        osVersion = Build.VERSION.RELEASE.orEmpty(),
+        deviceModel = Build.MODEL.orEmpty(),
+        locale = Locale.getDefault().toLanguageTag(),
+        connectionMode = connectionModeProvider.currentMode().name
+    )
+
+    /**
+     * جملهٔ رسید.
+     *
+     * ⚠️ حالتِ تکراری جملهٔ خودش را دارد. برای کاربر شکست نیست — گزارشش ثبت شده — ولی اگر همان
+     * «گزارش ثبت شد» را ببیند، فکر می‌کند دو تیکت ساخته و دوباره پیگیری می‌کند.
+     */
+    private fun receiptMessage(ticketId: String?, duplicate: Boolean): String = when {
+        ticketId.isNullOrBlank() -> "گزارش شما ثبت شد."
+        duplicate -> "این گزارش پیش‌تر ثبت شده بود. شمارهٔ پیگیری: $ticketId"
+        else -> "گزارش شما ثبت شد. شمارهٔ پیگیری: $ticketId"
+    }
 
     /**
      * کیف‌پول‌ها با آدرسِ EVMشان.

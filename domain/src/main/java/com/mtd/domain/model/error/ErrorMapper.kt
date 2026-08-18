@@ -9,7 +9,7 @@ import java.net.UnknownHostException
  *
  * Contract: [getUserMessage] always returns curated Persian copy, never a raw exception or DTO
  * string. Technical text is produced separately by [getTechnicalDetail], PII-scrubbed by
- * [ErrorTextSanitizer], and only ever rendered behind the "جزئیات" dialog. [present] bundles both
+ * [ErrorTextSanitizer], and only ever rendered inside the expanded snackbar. [present] bundles both
  * with an [ErrorSurface] so a call site declares *how loud* the failure is in one place.
  */
 object ErrorMapper {
@@ -67,11 +67,18 @@ object ErrorMapper {
     }
 
     /**
-     * Technical text for the "جزئیات" dialog and the log. Carries the machine code / exception type
+     * Technical text for the expanded snackbar and the log. Carries the machine code / exception type
      * so a support conversation is possible, with every address, key, hash and payload redacted.
      */
     fun getTechnicalDetail(throwable: Throwable): String {
         val cause = unwrap(throwable)
+
+        // شاخهٔ Business خطای واقعی زیرِ خودش ندارد؛ پیامش از قبل همان جملهٔ کاربرپسند است.
+        // برگرداندنِ «نوع: General» به‌عنوانِ جزئیاتِ فنی فقط همان جمله را تکرار می‌کرد — و حالا
+        // که وجودِ جزئیات تعیین می‌کند اسنک‌بار باز بشود یا نه، قرص را بی‌دلیل باز شدنی می‌کند.
+        // خطاهای تایپ‌دارِ سرور از این شاخه رد نمی‌شوند: آن‌ها `ApiException` می‌مانند.
+        if (cause is AppError.Business) return ""
+
         val parts = mutableListOf<String>()
 
         if (cause is ApiException) {
@@ -111,7 +118,8 @@ object ErrorMapper {
         title = title,
         shortMessage = userMessage(throwable, fallbackMessage),
         technicalDetail = getTechnicalDetail(throwable),
-        surface = surface
+        surface = surface,
+        reasons = ErrorReason.of(map(throwable))
     )
 
     /** Digs the original failure out of the [AppError] wrappers so the detail stays informative. */

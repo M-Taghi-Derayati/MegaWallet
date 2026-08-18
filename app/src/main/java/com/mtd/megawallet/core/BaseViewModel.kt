@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  *
  * Never build a user-facing string from an exception. Call [reportError] with the [ErrorSurface]
  * that matches the situation (see the policy table on [ErrorSurface]); it maps the failure to
- * curated Persian copy, hides the scrubbed technical text behind the "جزئیات" dialog, and logs.
+ * curated Persian copy, tucks the scrubbed technical text inside the expanded snackbar, and logs.
  * For a message you have already written yourself, use [showErrorSnackbar] / [showSuccess].
  *
  * Messages are emitted on the app-wide [ErrorManager.uiMessages] bus, not on a per-ViewModel
@@ -115,7 +115,8 @@ abstract class BaseViewModel(
 
     /**
      * Shows an error snackbar from copy **you wrote**. [shortMessage] must be user-facing Persian;
-     * put anything technical in [detailedMessage], which is rendered only behind "جزئیات".
+     * put anything technical in [detailedMessage], which is rendered only once the user opens the
+     * snackbar.
      */
     protected suspend fun showErrorSnackbar(
         shortMessage: String,

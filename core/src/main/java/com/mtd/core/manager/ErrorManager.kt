@@ -141,7 +141,8 @@ class ErrorManager @Inject constructor(
                 UiEvent.ShowErrorSnackbar(
                     shortMessage = presentation.shortMessage,
                     detailedMessage = presentation.technicalDetail,
-                    errorTitle = presentation.title
+                    errorTitle = presentation.title,
+                    reasons = presentation.reasons
                 )
             )
 

@@ -289,6 +289,48 @@ class ErrorMapperTest {
         assertTrue(ErrorMapper.getTechnicalDetail(RuntimeException()).isNotBlank())
     }
 
+    @Test
+    fun `getTechnicalDetail - blank for the Business branch, which has no real cause`() {
+        // Its "detail" would only ever be the class name plus the user-facing sentence again.
+        // The snackbar decides whether to offer an expansion from this, so noise here costs a tap.
+        assertEquals("", ErrorMapper.getTechnicalDetail(AppError.Business.InsufficientFunds))
+        assertEquals("", ErrorMapper.getTechnicalDetail(AppError.Business.InvalidAddress))
+        assertEquals(
+            "",
+            ErrorMapper.getTechnicalDetail(AppError.Business.General(message = "این شبکه پشتیبانی نمی‌شود."))
+        )
+    }
+
+    @Test
+    fun `toAppError - rate limiting is not dressed up as a server outage`() {
+        val mapped = ApiErrorMessageMapper.toAppError(
+            ApiException(apiError = ApiError.RateLimited(60), httpStatus = 429)
+        )
+        assertTrue("rate limiting must not land in the Network bucket", mapped is AppError.Business)
+        assertEquals(
+            ApiErrorMessageMapper.farsiMessage(ApiError.RateLimited(60)),
+            ErrorMapper.getUserMessage(mapped)
+        )
+        // No reasons to guess at: the message already says exactly what happened.
+        assertTrue(ErrorReason.of(mapped).isEmpty())
+    }
+
+    @Test
+    fun `present - reasons follow the taxonomy, and stay empty when we have nothing to add`() {
+        assertEquals(
+            listOf(ErrorReason.CONNECTION, ErrorReason.SERVER, ErrorReason.OTHER),
+            ErrorMapper.present(UnknownHostException("host")).reasons
+        )
+        assertEquals(
+            listOf(ErrorReason.BALANCE),
+            ErrorMapper.present(AppError.Business.InsufficientFunds).reasons
+        )
+        // Curated copy written by a call site — guessing at causes adds nothing.
+        assertTrue(
+            ErrorMapper.present(AppError.Business.General(message = "دلیلِ دقیق")).reasons.isEmpty()
+        )
+    }
+
     // ── 5. Fallback + presentation ──────────────────────────────────────────
 
     @Test

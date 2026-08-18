@@ -22,10 +22,10 @@ import com.mtd.domain.model.ui.UiEvent
 
 /**
  * Helper class for displaying custom top snackbar in View-based UI (Activity/Fragment)
- * Similar to CustomTopSnackbar in Compose
+ * Similar to AppSnackbar in Compose
  *
  * NOTE (TASK-57): the app is 100% Compose and nothing currently calls this — the live path is
- * `AppMessageHost` + `CustomTopSnackbar`. It is kept for View-based hosts and mirrors the same
+ * `AppMessageHost` + `AppSnackbar`. It is kept for View-based hosts and mirrors the same
  * error/success styling policy so the two cannot drift.
  */
 class TopSnackbarViewHelper private constructor() {

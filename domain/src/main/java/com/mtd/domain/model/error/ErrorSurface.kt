@@ -12,7 +12,8 @@ package com.mtd.domain.model.error
  *   screen and the next tick retries.
  * - [SNACKBAR] — the user started something that failed but nothing was lost and they can retry:
  *   loading a list, switching wallets, connecting cloud backup, validating input. Shows the top
- *   snackbar with curated Persian copy; the technical text sits behind the "جزئیات" dialog.
+ *   snackbar with curated Persian copy; the likely [ErrorReason]s and the technical text sit one
+ *   tap away, inside the card it unfolds into.
  * - [BLOCKING] — money, keys, or data are at stake and the user must acknowledge before moving on:
  *   a failed send/broadcast, a failed gasless submit, wallet deletion, backup delete, seed reveal.
  *   Shows a modal dialog.
@@ -25,12 +26,16 @@ enum class ErrorSurface {
 
 /**
  * A failure already turned into something safe to render: curated Persian [shortMessage], a
- * PII-scrubbed [technicalDetail] for the "جزئیات" dialog, and the [surface] that decides how
- * loudly to show it. Produced by [ErrorMapper.present]; never build one from a raw exception.
+ * PII-scrubbed [technicalDetail], the likely [reasons] behind it, and the [surface] that decides
+ * how loudly to show it. Produced by [ErrorMapper.present]; never build one from a raw exception.
+ *
+ * [reasons] and [technicalDetail] are what the snackbar shows once the user taps it open; when
+ * both are empty the message stays a plain pill and simply times out.
  */
 data class ErrorPresentation(
     val title: String,
     val shortMessage: String,
     val technicalDetail: String,
-    val surface: ErrorSurface
+    val surface: ErrorSurface,
+    val reasons: List<ErrorReason> = emptyList()
 )

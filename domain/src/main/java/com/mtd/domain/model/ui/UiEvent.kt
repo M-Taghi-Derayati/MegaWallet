@@ -1,14 +1,20 @@
 package com.mtd.domain.model.ui
 
+import com.mtd.domain.model.error.ErrorReason
+
 sealed class UiEvent {
     /**
-     * Error-styled top snackbar. [detailedMessage] is the PII-scrubbed technical text; when it is
-     * non-empty the snackbar grows a "جزئیات" affordance that opens `ErrorDetailDialog`.
+     * Error-styled top snackbar.
+     *
+     * The pill shows [shortMessage] alone. [reasons] and [detailedMessage] (the PII-scrubbed
+     * technical text) are what it unfolds into when tapped; when both are empty there is nothing
+     * to unfold and the pill is a plain, self-dismissing message.
      */
     data class ShowErrorSnackbar(
         val shortMessage: String,
         val detailedMessage: String="",
-        val errorTitle: String = "خطا"
+        val errorTitle: String = "خطا",
+        val reasons: List<ErrorReason> = emptyList()
     ) : UiEvent()
 
     /**

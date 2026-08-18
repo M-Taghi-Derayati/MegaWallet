@@ -1135,7 +1135,7 @@ class SendViewModel @Inject constructor(
      *
      * Wrapping it in [AppError.Business.General] makes `ErrorMapper` pass the text through
      * verbatim instead of flattening it to the generic message, while the original failure is kept
-     * as the cause so the "جزئیات" dialog (and `shouldRetryGasless`) still see the typed error.
+     * as the cause so the expanded snackbar (and `shouldRetryGasless`) still see the typed error.
      */
     private fun sendFailure(message: String, cause: Throwable? = null): Nothing {
         val error = AppError.Business.General(message = message)
