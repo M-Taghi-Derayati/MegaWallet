@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import com.mtd.common_ui.theme.HexAssetShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -181,13 +182,16 @@ private fun HistoryShimmerItem(
         ),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // ⚠️ فرمِ جای‌خالی باید همان فرمِ چیزی باشد که لحظه‌ای بعد جایش می‌نشیند، وگرنه لیست
+        // موقعِ بارگذاری دایره است و بعد شش‌ضلعی می‌شود. تنها استثنا بجِ ارسال/دریافت است که
+        // در ردیفِ واقعی هم دایره است.
         Box(modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_SIZE)) {
             ShimmerBlock(
                 brushProvider = brushProvider,
                 modifier = Modifier
                     .size(WalletScreenConstants.ASSET_ICON_SIZE)
                     .align(Alignment.Center),
-                shape = CircleShape
+                shape = HexAssetShape
             )
             ShimmerBlock(
                 brushProvider = brushProvider,
@@ -201,7 +205,7 @@ private fun HistoryShimmerItem(
                 modifier = Modifier
                     .size(WalletScreenConstants.ASSET_ICON_NETWORK_SIZE_SMALE)
                     .align(Alignment.BottomEnd),
-                shape = CircleShape
+                shape = HexAssetShape
             )
         }
 

@@ -14,7 +14,15 @@ sealed class UiEvent {
         val shortMessage: String,
         val detailedMessage: String="",
         val errorTitle: String = "خطا",
-        val reasons: List<ErrorReason> = emptyList()
+        val reasons: List<ErrorReason> = emptyList(),
+        /**
+         * پیام خودش نمی‌رود و منتظرِ کاربر می‌ماند.
+         *
+         * برای `ErrorSurface.BLOCKING` است: جایی که پول یا کلید در میان بوده و کاربر باید خبر
+         * را دیده باشد. پیش‌تر این حالت یک مودالِ جدا بود؛ حالا همان قرص است، فقط بی‌تایمر — پس
+         * همهٔ خطاها یک شکل دارند بی‌آنکه یک شکستِ ارسال از جلوی چشم رد شود.
+         */
+        val sticky: Boolean = false
     ) : UiEvent()
 
     /**

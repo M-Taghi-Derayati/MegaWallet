@@ -62,8 +62,10 @@ private const val SCRIM_ALPHA = 0.45f
  * بدهید. سه سطحِ سیاستِ شدت را می‌کشد:
  *
  * - `ShowErrorSnackbar` → قرصِ بالای صفحه؛ با ضربه به کارتِ دلایل باز می‌شود، وگرنه خودش می‌رود.
+ *   با `sticky` (یعنی `ErrorSurface.BLOCKING`) تایمر ندارد و منتظرِ کاربر می‌ماند.
  * - `ShowSuccessSnackbar` → همان قرص با آیکونِ سبز؛ هرگز باز نمی‌شود.
- * - `ShowDialog` → مودالِ مسدودکننده که کاربر باید تأیید کند.
+ * - `ShowDialog` → مودال. ⚠️ دیگر خطاها از این‌جا رد نمی‌شوند: فقط برای انتخابِ واقعی با
+ *   دکمه‌های بله/خیر است، نه برای خبر دادنِ یک شکست.
  *
  * `SILENT` هرگز به اینجا نمی‌رسد؛ `ErrorManager` لاگ می‌کند و می‌ایستد.
  *
@@ -108,7 +110,8 @@ fun AppMessageHost(
                         message = event.shortMessage,
                         detail = event.detailedMessage,
                         reasons = event.reasons,
-                        style = TopSnackbarStyle.ERROR
+                        style = TopSnackbarStyle.ERROR,
+                        sticky = event.sticky
                     )
                 )
 
@@ -118,7 +121,8 @@ fun AppMessageHost(
                         message = event.message,
                         detail = "",
                         reasons = emptyList(),
-                        style = TopSnackbarStyle.SUCCESS
+                        style = TopSnackbarStyle.SUCCESS,
+                        sticky = false
                     )
                 )
 
@@ -137,6 +141,10 @@ fun AppMessageHost(
     LaunchedEffect(current?.id, visible, expanded, collapsing) {
         val active = current ?: return@LaunchedEffect
         if (!visible || expanded || collapsing) return@LaunchedEffect
+        // ⚠️ پیامِ چسبان تایمر ندارد. این‌ها همان‌هایی‌اند که پیش‌تر مودالِ مسدودکننده بودند —
+        // شکستِ ارسال، برداشت، افشای عبارتِ بازیابی — و رفتنِ خودبه‌خودشان یعنی کاربر ممکن است
+        // اصلاً نفهمد پولش جابه‌جا نشده.
+        if (active.sticky) return@LaunchedEffect
         delay(
             when (active.style) {
                 TopSnackbarStyle.SUCCESS -> SUCCESS_SNACKBAR_DURATION_MS
@@ -245,5 +253,7 @@ private data class SnackbarMessage(
     val message: String,
     val detail: String,
     val reasons: List<ErrorReason>,
-    val style: TopSnackbarStyle
+    val style: TopSnackbarStyle,
+    /** بدونِ تایمر؛ فقط با بستنِ کاربر می‌رود. */
+    val sticky: Boolean
 )

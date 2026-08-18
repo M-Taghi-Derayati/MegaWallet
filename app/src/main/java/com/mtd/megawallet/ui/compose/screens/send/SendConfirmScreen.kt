@@ -4,12 +4,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -419,35 +421,46 @@ private fun InternalSendConfirmScreen(
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
+                // ⚠️ نوارِ انتخابِ روشِ ارسال با کشیده‌شدنِ دکمه از صفحه می‌رود.
+                // پس از آن لحظه دیگر انتخابی وجود ندارد — تراکنش امضا و فرستاده شده — و ماندنِ
+                // این تب‌ها یعنی دعوت به زدنِ چیزی که هیچ اثری ندارد. جمع می‌شود، نه اینکه فقط
+                // محو شود، وگرنه یک جای خالی وسطِ صفحه باقی می‌ماند.
+                AnimatedVisibility(
+                    visible = !isProcessing,
+                    enter = fadeIn(tween(200)) + expandVertically(tween(220)),
+                    exit = fadeOut(tween(150)) + shrinkVertically(tween(220))
+                ) {
+                    Column {
+                        Spacer(Modifier.height(12.dp))
 
-                // Tab Bar
-                FeeTabBar(
-                    selectedMode = selectedMode,
-                    onModeChange = { mode ->
-                        selectedMode = mode
-                        if (mode == FeeMode.SMART) viewModel.refreshGaslessPreviewIfNeeded()
-                    },
-                    tabStates = mapOf(
-                        FeeMode.DIRECT to TabState.READY,
-                        FeeMode.SMART to when (gaslessAvailability) {
-                            is GaslessAvailability.Loading -> TabState.LOADING
-                            is GaslessAvailability.Available ->
-                                if (gaslessPreviewState is GaslessPreviewState.Loading) TabState.LOADING else TabState.READY
-                            is GaslessAvailability.Unavailable -> TabState.DISABLED
-                        },
-                        // اعتباری: هنوز فعال نشده (بخش اعتبار)
-                        FeeMode.CREDIT to TabState.DISABLED
-                    ),
-                    getTabFee = { mode ->
-                        when (mode) {
-                            // نمایشِ مستقلِ کارمزدِ مستقیم، حتی وقتی تبِ هوشمند فعال است
-                            FeeMode.DIRECT -> feeOptions.getOrNull(selectedFeeIndex)?.feeAmountUsdDisplay ?: "..."
-                            FeeMode.SMART -> gaslessPreview?.let { it.gaslessPolicy?.displayUsd ?: it.smartFee?.feeUsd } ?: "..."
-                            FeeMode.CREDIT -> "..."
-                        }
+                        FeeTabBar(
+                            selectedMode = selectedMode,
+                            onModeChange = { mode ->
+                                selectedMode = mode
+                                if (mode == FeeMode.SMART) viewModel.refreshGaslessPreviewIfNeeded()
+                            },
+                            tabStates = mapOf(
+                                FeeMode.DIRECT to TabState.READY,
+                                FeeMode.SMART to when (gaslessAvailability) {
+                                    is GaslessAvailability.Loading -> TabState.LOADING
+                                    is GaslessAvailability.Available ->
+                                        if (gaslessPreviewState is GaslessPreviewState.Loading) TabState.LOADING else TabState.READY
+                                    is GaslessAvailability.Unavailable -> TabState.DISABLED
+                                },
+                                // اعتباری: هنوز فعال نشده (بخش اعتبار)
+                                FeeMode.CREDIT to TabState.DISABLED
+                            ),
+                            getTabFee = { mode ->
+                                when (mode) {
+                                    // نمایشِ مستقلِ کارمزدِ مستقیم، حتی وقتی تبِ هوشمند فعال است
+                                    FeeMode.DIRECT -> feeOptions.getOrNull(selectedFeeIndex)?.feeAmountUsdDisplay ?: "..."
+                                    FeeMode.SMART -> gaslessPreview?.let { it.gaslessPolicy?.displayUsd ?: it.smartFee?.feeUsd } ?: "..."
+                                    FeeMode.CREDIT -> "..."
+                                }
+                            }
+                        )
                     }
-                )
+                }
 
 
 

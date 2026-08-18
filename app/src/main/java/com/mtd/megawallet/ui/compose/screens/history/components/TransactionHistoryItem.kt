@@ -37,13 +37,13 @@ import com.mtd.domain.model.TransactionRecord
 import com.mtd.domain.model.TransactionStatus
 import com.mtd.megawallet.ui.compose.animations.constants.WalletScreenConstants
 import com.mtd.common_ui.theme.AssetIcon
+import com.mtd.common_ui.theme.SymbolAvatar
 import com.mtd.common_ui.theme.getLocalIconResId
 import com.mtd.common_ui.theme.NetworkIcon
 import com.mtd.common_ui.theme.Green
 import com.mtd.megawallet.viewmodel.history.TransactionHistoryViewModel
 import com.mtd.common_ui.theme.InterMedium
 import com.mtd.common_ui.theme.InterRegular
-import com.mtd.common_ui.theme.IranSansBoldBold
 import com.mtd.common_ui.theme.IranSansLight
 import com.mtd.common_ui.theme.IranSansRegularBold
 
@@ -269,18 +269,14 @@ internal fun AssetAvatar(
             modifier = Modifier.size(WalletScreenConstants.ASSET_ICON_MAIN_SIZE)
         )
     } else {
-        Box(
+        // ⚠️ این‌جا کپیِ محلیِ خودش را داشت: یک دایره با رنگ‌های ثابتِ کدشده. یعنی هر ردیفی که
+        // آیکون نداشت در سابقه دایره می‌شد در حالی که همان توکن در لیستِ دارایی و صفحهٔ ارسال
+        // شش‌ضلعی بود — و رنگ‌های ثابت در تمِ تیره هم بد می‌نشستند. حالا همان [SymbolAvatar]ِ
+        // مشترک است: شش‌ضلعی، با رنگی که از نمادِ ارز مشتق می‌شود پس همه‌جا یکی است.
+        SymbolAvatar(
+            symbol = symbol.ifBlank { fallbackLabel },
+            contentDescription = "${fallbackLabel.ifBlank { symbol }} icon",
             modifier = modifier
-                .clip(CircleShape)
-                .background(Color(0xFFF1F1F3)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = fallbackLabel.take(1).uppercase(),
-                fontSize = 18.sp,
-                fontFamily = IranSansBoldBold,
-                color = Color(0xFF222222)
-            )
-        }
+        )
     }
 }

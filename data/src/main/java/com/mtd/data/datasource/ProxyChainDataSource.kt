@@ -152,7 +152,7 @@ class ProxyChainDataSource(
                     FeeData(
                         level = level,
                         feeInSmallestUnit = feeRaw.toBigDecimal(),
-                        estimatedTime = tier.estimatedSeconds?.let { "~ ${it}s" }.orEmpty(),
+                        estimatedTime = estimatedTimeLabel(tier.estimatedSeconds, level),
                         gasPrice = tier.gasPrice,
                         gasLimit = evmGasLimit,
                         feeInCoin = normalize(feeRaw, network.decimals, network.networkType),
@@ -641,6 +641,28 @@ class ProxyChainDataSource(
         // networkType is irrelevant for a base-10 BigInteger input; reusing normalize() keeps the
         // formatting (strip-trailing-zeros, fixed scale) consistent with the single-network toAsset().
         return Asset(name ?: symbol.orEmpty(), symbol.orEmpty(), d, contractAddress, normalize(raw, d, network.networkType))
+    }
+
+    /**
+     * برچسبِ زمانِ تقریبیِ یک ردهٔ کارمزد.
+     *
+     * ⚠️ هرگز رشتهٔ تهی برنمی‌گرداند. پیش‌تر `estimatedSeconds` نبودن یعنی `""` و صفحهٔ تأیید یک
+     * `Text` خالی می‌کشید — یعنی زمانِ ارسال «گاهی» دیده می‌شد و گاهی نه، بسته به اینکه سرور آن
+     * فیلد را فرستاده باشد یا نه. مسیرِ مستقیم (`EvmDataSource.getFeeOptions`) همیشه یک متن دارد،
+     * و قرارِ پروژه این است که دو حالتِ DIRECT و PROXY رفتارِ یکسان داشته باشند.
+     *
+     * وقتی سرور عددی نداده، همان تخمین‌های مسیرِ مستقیم استفاده می‌شوند — حدس‌اند، ولی همان
+     * حدسی که کاربر در حالتِ دیگر هم می‌بیند.
+     */
+    private fun estimatedTimeLabel(seconds: Long?, level: String): String {
+        // ⚠️ این سه برچسب همان‌هایی‌اند که بالا به `tiers.slow/standard/fast` داده می‌شوند؛
+        // اگر آن‌جا عوض شدند، این‌جا هم باید عوض شوند.
+        val secs = seconds?.takeIf { it > 0L } ?: return when (level) {
+            "کند" -> "~ ۲ دقیقه"
+            "سریع" -> "~ ۱۵ ثانیه"
+            else -> "~ ۳۰ ثانیه"
+        }
+        return if (secs < 60L) "~ $secs ثانیه" else "~ ${secs / 60L} دقیقه"
     }
 
     private companion object {

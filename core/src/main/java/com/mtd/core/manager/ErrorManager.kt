@@ -146,14 +146,22 @@ class ErrorManager @Inject constructor(
                 )
             )
 
+            // همان قرصِ همیشگی، فقط بی‌تایمر.
+            //
+            // ⚠️ پیش‌تر این شاخه یک `ShowDialog` می‌ساخت و یک مودالِ متریال وسطِ صفحه می‌آمد — که
+            // نه با بقیهٔ برنامه هم‌شکل بود و نه دلایل را نشان می‌داد. اهمیتِ این سطح در «باید
+            // دیده شود» است، نه در «باید مودال باشد»، و [UiEvent.ShowErrorSnackbar.sticky] همان
+            // را تأمین می‌کند: تا کاربر نبندد نمی‌رود.
+            //
+            // `ShowDialog` هنوز وجود دارد ولی فقط برای [showBlockingDialog] — جایی که واقعاً
+            // انتخابی با دکمه‌های بله/خیر پیشِ رویِ کاربر گذاشته می‌شود، نه صرفاً خبرِ یک شکست.
             ErrorSurface.BLOCKING -> _uiMessages.emit(
-                UiEvent.ShowDialog(
-                    title = presentation.title,
-                    message = if (presentation.technicalDetail.isBlank()) {
-                        presentation.shortMessage
-                    } else {
-                        "${presentation.shortMessage}\n\n${presentation.technicalDetail}"
-                    }
+                UiEvent.ShowErrorSnackbar(
+                    shortMessage = presentation.shortMessage,
+                    detailedMessage = presentation.technicalDetail,
+                    errorTitle = presentation.title,
+                    reasons = presentation.reasons,
+                    sticky = true
                 )
             )
         }

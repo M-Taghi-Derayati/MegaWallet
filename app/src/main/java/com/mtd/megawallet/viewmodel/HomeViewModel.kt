@@ -41,6 +41,7 @@ import com.mtd.domain.usecase.wallet.LoadExistingWalletUseCase
 import com.mtd.domain.usecase.wallet.ObserveActiveWalletUseCase
 import com.mtd.megawallet.core.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,6 +86,20 @@ class HomeViewModel @Inject constructor(
     companion object {
          const val CACHE_KEY_PREFIX = "asset_balance_"
         private fun getAssetCacheKey(walletId: String, assetId: String) = "$CACHE_KEY_PREFIX${walletId}_$assetId"
+
+        /**
+         * فاصله‌های تلاش برای خواندنِ موجودی پس از یک رویدادِ «این دارایی عوض شده».
+         *
+         * ⚠️ یک بار خواندن کافی نیست و این ریشهٔ «موجودی به‌روز نمی‌شود» بود: رویداد در لحظهٔ
+         * **برودکست** فرستاده می‌شود، یعنی وقتی تراکنش هنوز ماین نشده. آن یک خواندن ناگزیر همان
+         * عددِ قبلی را برمی‌گرداند و همان در کش می‌نشست؛ و چون خواندنِ دومی زمان‌بندی نمی‌شد،
+         * عدد تا رفرشِ دستیِ کاربر کهنه می‌ماند. برای واریز هم همین است: سیگنالِ `tx.new` وقتی
+         * می‌رسد که ممکن است نودی که ما می‌پرسیم هنوز بلاک را ندیده باشد.
+         *
+         * حلقه به‌محضِ عوض شدنِ عدد می‌ایستد، پس در حالتِ عادی روی شبکه‌های سریع یک یا دو
+         * خواندن بیشتر نیست. سقفش هم بسته است تا روی یک رویدادِ بی‌ربط، RPC را نکوبد.
+         */
+        private val BALANCE_SETTLE_DELAYS_MS = longArrayOf(0L, 2_500L, 5_000L, 10_000L)
     }
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
@@ -592,38 +607,55 @@ class HomeViewModel @Inject constructor(
         launchSafe(connectivitySurface = ErrorSurface.SILENT) {
             _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = true) else it }
 
+            // موجودیِ پیش از رویداد، تا بفهمیم خواندنِ تازه واقعاً چیزی را عوض کرده یا نه.
+            val before = targetConfigs.associate { it.id to currentBalanceOf(it.id) }
+
             try {
-                when (val result = getBalancesForMultipleWalletsUseCase(network.id, listOf(wallet.id))) {
-                    is ResultResponse.Success -> {
-                        val walletAssets = result.data[wallet.id].orEmpty()
-                        targetConfigs.forEach { config ->
-                            val refreshed = walletAssets.firstOrNull { asset ->
-                                asset.symbol.equals(config.symbol, ignoreCase = true) &&
-                                    (config.contractAddress?.equals(asset.contractAddress, true)
-                                        ?: asset.contractAddress.isNullOrBlank())
-                            }
-                            updateAssetItemAndTotal(
-                                walletId = wallet.id,
-                                assetConfig = config,
-                                balance = refreshed?.balance ?: BigDecimal.ZERO,
-                                pricesMap = emptyMap(),
-                            )
-                        }
+                for (waitMs in BALANCE_SETTLE_DELAYS_MS) {
+                    if (waitMs > 0L) delay(waitMs)
+
+                    val result = getBalancesForMultipleWalletsUseCase(network.id, listOf(wallet.id))
+                    if (result is ResultResponse.Error) {
+                        // Realtime-driven background refresh: the previous figure stays on screen and
+                        // the next event retries, so this logs and stops (ErrorSurface.SILENT).
+                        reportError(
+                            throwable = result.exception,
+                            userAction = "targetedBalanceRefresh(${event.networkId}/${event.assetId})",
+                            surface = ErrorSurface.SILENT,
+                            severity = ErrorSeverity.LOW
+                        )
+                        break
                     }
 
-                    // Realtime-driven background refresh: the previous figure stays on screen and
-                    // the next event retries, so this logs and stops (ErrorSurface.SILENT).
-                    is ResultResponse.Error -> reportError(
-                        throwable = result.exception,
-                        userAction = "targetedBalanceRefresh(${event.networkId}/${event.assetId})",
-                        surface = ErrorSurface.SILENT,
-                        severity = ErrorSeverity.LOW
-                    )
+                    val walletAssets = (result as ResultResponse.Success).data[wallet.id].orEmpty()
+                    targetConfigs.forEach { config ->
+                        val refreshed = walletAssets.firstOrNull { asset ->
+                            asset.symbol.equals(config.symbol, ignoreCase = true) &&
+                                (config.contractAddress?.equals(asset.contractAddress, true)
+                                    ?: asset.contractAddress.isNullOrBlank())
+                        }
+                        updateAssetItemAndTotal(
+                            walletId = wallet.id,
+                            assetConfig = config,
+                            balance = refreshed?.balance ?: BigDecimal.ZERO,
+                            pricesMap = emptyMap(),
+                        )
+                    }
+
+                    // کیف‌پول وسطِ کار عوض شده — این حلقه دیگر صاحبِ صفحه نیست.
+                    if (wallet.id != currentWalletId) break
+                    // چیزی عوض شد: کارِ ما تمام است.
+                    if (targetConfigs.any { currentBalanceOf(it.id) != before[it.id] }) break
                 }
             } finally {
                 _uiState.update { if (it is HomeUiState.Success) it.copy(isUpdating = false) else it }
             }
         }
+    }
+
+    /** موجودیِ فعلیِ یک دارایی در همان فهرستی که صفحه از آن می‌خواند. */
+    private fun currentBalanceOf(assetId: String): BigDecimal? = synchronized(assetsLock) {
+        fullRawAssets.firstOrNull { it.id == assetId }?.balanceRaw
     }
 
     private fun updateAssetItemAndTotal(

@@ -670,21 +670,54 @@ class TransactionHistoryViewModel @Inject constructor(
         val active = pending.filter { rec ->
             rec.hash.lowercase(Locale.US) !in loadedHashes &&
                 !isPendingExpired(rec, nowSec) &&
-                pendingMatchesCurrentFilter(rec)
+                pendingMatchesCurrentFilter(rec) &&
+                pendingBelongsToCurrentWallet(rec)
         }
         if (active.isEmpty()) return loaded
         return normalizeTransactionHistoryUseCase(active + loaded, currentUserAddress)
     }
 
+    /**
+     * سنِ یک ردیفِ خوش‌بینانه از [TransactionRecord.submittedAt] خوانده می‌شود، نه `timestamp`.
+     *
+     * ⚠️ `timestamp` روی این ردیف‌ها **همیشه صفر** است و این عمدی است: هنوز ماین نشده‌اند و زمانِ
+     * تأییدی وجود ندارد (`BuildPendingHistoryTransactionUseCase` صریحاً `timestamp = 0L`
+     * می‌گذارد و لحظهٔ ارسال را در `submittedAt`). نسخهٔ قبلی همین `timestamp` را می‌خواند و صفر
+     * را «تازه» تفسیر می‌کرد، پس سقفِ ۳۰ دقیقه‌ای دقیقاً برای همان ردیف‌هایی که برایشان نوشته
+     * شده بود هرگز اجرا نمی‌شد و یک «در حال ارسال» می‌توانست تا پایانِ عمرِ پروسه سرِ صفحه بماند.
+     */
     private fun isPendingExpired(rec: TransactionRecord, nowSec: Long): Boolean {
-        // A pending with an unset/zero timestamp is treated as fresh (never expire on a missing ts).
-        return rec.timestamp > 0L && (nowSec - rec.timestamp) >= pendingLocalTtlSeconds
+        val startedAt = rec.submittedAt?.takeIf { it > 0L }
+            ?: rec.timestamp.takeIf { it > 0L }
+            ?: return false
+        return (nowSec - startedAt) >= pendingLocalTtlSeconds
     }
 
     /** Only surface a local pending in views it belongs to: all-networks, or its own network. */
     private fun pendingMatchesCurrentFilter(rec: TransactionRecord): Boolean {
         val net = currentNetworkNameStr ?: return true // "all networks" view shows every pending
         return rec.networkId?.equals(net, ignoreCase = true) == true
+    }
+
+    /**
+     * آیا این ردیفِ خوش‌بینانه مالِ کیف‌پولی است که الان باز است؟
+     *
+     * ⚠️ بدونِ این بررسی، ردیفِ کیف‌پولِ A در سابقهٔ کیف‌پولِ B هم دیده می‌شد: فیلترِ نمایش فقط
+     * شبکه را می‌سنجید و [resetHistoryStateForWalletChange] هم `_localPending` را پاک نمی‌کند
+     * (عمداً — یک ارسالِ واقعاً در جریان نباید با یک سوییچِ رفت‌وبرگشت گم شود). و چون هَشِ آن
+     * تراکنش هرگز در سابقهٔ B ظاهر نمی‌شود، [retireSupersededPendings] هم هیچ‌وقت بازنشسته‌اش
+     * نمی‌کرد: یک «در حال ارسال» جاودانه در کیف‌پولِ اشتباه.
+     *
+     * ⚠️ مقایسه **دقیق** است و نه بی‌توجه به بزرگی و کوچکیِ حروف. هر دو طرف از همان
+     * `WalletKey.address` می‌آیند پس عیناً یکی‌اند، و آدرسِ base58 ترون به حروف حساس است —
+     * `ignoreCase` می‌توانست دو آدرسِ متفاوت را یکی بشمارد.
+     */
+    private fun pendingBelongsToCurrentWallet(rec: TransactionRecord): Boolean {
+        val pairs = currentPairs
+        // هنوز چیزی بار نشده (مثلاً کاربر همین حالا فرستاده و سابقه باز نشده): پنهانش نکن.
+        if (pairs.isEmpty()) return true
+        val from = rec.fromAddress?.takeIf { it.isNotBlank() } ?: return true
+        return pairs.any { it.address == from }
     }
 
     private fun applyHistoryRefreshEvent(event: AppEvent.TransactionHistoryNeedsRefresh) {
